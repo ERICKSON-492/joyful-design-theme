@@ -1,76 +1,72 @@
-import { Facebook, Instagram, Youtube, Phone } from 'lucide-react'
-import mawuLogo from '@/assets/mawu-logo.png'
+import { Link } from 'react-router-dom'
+import { Instagram, Facebook, Phone, Mail } from 'lucide-react'
 
 export function Footer() {
-  const footerLinks = {
-    Shop: [
-      'Corporate Gifting Catalog',
-      'Hotel & Lodges Catalog',
-      'Shop Retail',
-      'Track my order',
-    ],
-    Sell: [
-      'Sell on Mawu',
-      'Seller Login',
-      'Seller FAQ',
-      'Seller Policies',
-    ],
-    Policies: [
-      'Terms of Service',
-      'Privacy & Sharing',
-      'Return & Refund Policy',
-      'Shipping & Delivery',
-    ],
-    Company: [
-      'About Us',
-      'Contact Us',
-      'Maker Stories',
-      'Experience Africa',
-    ],
-  }
-
   return (
-    <footer className="bg-foreground text-background/80 pt-16 pb-8">
+    <footer className="bg-foreground text-white/70 pt-16 pb-8">
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
-          {/* Logo & Contact */}
-          <div className="lg:col-span-1">
-            <img src={mawuLogo} alt="Mawu Africa" className="h-12 w-auto mb-4 brightness-200" />
-            <p className="text-sm leading-relaxed mb-4 font-body">
-              +254 790 867 733
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
+          {/* Brand */}
+          <div>
+            <Link to="/" className="font-display text-xl font-bold text-white tracking-wide block mb-4">
+              USHANGA <span className="font-light">CHRONICLES</span>
+            </Link>
+            <p className="text-sm leading-relaxed mb-4">
+              One bead. A thousand stories. Handcrafted African jewelry, home decor, 
+              and accessories made in Nairobi, Kenya.
             </p>
-            <p className="text-sm mb-6 font-body">sales@mawuafrica.com</p>
             <div className="flex items-center gap-4">
-              <a href="#" aria-label="Facebook"><Facebook className="w-4 h-4 hover:text-white transition-colors" /></a>
-              <a href="#" aria-label="Instagram"><Instagram className="w-4 h-4 hover:text-white transition-colors" /></a>
-              <a href="#" aria-label="Youtube"><Youtube className="w-4 h-4 hover:text-white transition-colors" /></a>
-              <a href="#" aria-label="WhatsApp"><Phone className="w-4 h-4 hover:text-white transition-colors" /></a>
+              <a href="https://www.instagram.com/ushanga_chronicles/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-primary transition-colors">
+                <Instagram className="w-5 h-5" />
+              </a>
+              <a href="#" aria-label="Facebook" className="hover:text-primary transition-colors">
+                <Facebook className="w-5 h-5" />
+              </a>
+              <a href="https://wa.me/254748207000" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="hover:text-primary transition-colors">
+                <Phone className="w-5 h-5" />
+              </a>
+              <a href="mailto:admin@ushangachronicles.com" aria-label="Email" className="hover:text-primary transition-colors">
+                <Mail className="w-5 h-5" />
+              </a>
             </div>
           </div>
 
-          {/* Link columns */}
-          {Object.entries(footerLinks).map(([heading, links]) => (
-            <div key={heading}>
-              <h4 className="text-white font-body font-semibold text-sm mb-4 uppercase tracking-wider">
-                {heading}
-              </h4>
-              <ul className="space-y-2">
-                {links.map((link) => (
-                  <li key={link}>
-                    <a href="#" className="text-sm font-body hover:text-white transition-colors">
-                      {link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {/* Shop */}
+          <div>
+            <h4 className="text-white font-bold text-sm mb-4 uppercase tracking-wider">Shop</h4>
+            <ul className="space-y-2 text-sm">
+              <li><Link to="/shop?cat=wear-it" className="hover:text-primary transition-colors">Wear It</Link></li>
+              <li><Link to="/shop?cat=live-with-it" className="hover:text-primary transition-colors">Live With It</Link></li>
+              <li><Link to="/shop?cat=table" className="hover:text-primary transition-colors">For Your Table</Link></li>
+              <li><Link to="/shop?cat=collectibles" className="hover:text-primary transition-colors">Collectibles</Link></li>
+              <li><Link to="/shop?cat=pet" className="hover:text-primary transition-colors">For Your Pet</Link></li>
+            </ul>
+          </div>
+
+          {/* Company */}
+          <div>
+            <h4 className="text-white font-bold text-sm mb-4 uppercase tracking-wider">Company</h4>
+            <ul className="space-y-2 text-sm">
+              <li><Link to="/about-us" className="hover:text-primary transition-colors">The Chronicle</Link></li>
+              <li><Link to="/custom-order" className="hover:text-primary transition-colors">Create Yours</Link></li>
+              <li><Link to="/tribe-looks" className="hover:text-primary transition-colors">Tribe Looks</Link></li>
+              <li><Link to="/wholesale-gifting" className="hover:text-primary transition-colors">Wholesale & Gifting</Link></li>
+            </ul>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <h4 className="text-white font-bold text-sm mb-4 uppercase tracking-wider">Start a Conversation</h4>
+            <ul className="space-y-2 text-sm">
+              <li>+254 748 207 000</li>
+              <li>admin@ushangachronicles.com</li>
+              <li>Nairobi, Kenya</li>
+            </ul>
+          </div>
         </div>
 
-        <div className="border-t border-background/20 pt-6 text-center">
-          <p className="text-xs font-body text-background/50">
-            © MAWU AFRICA 2023. All rights reserved.
-          </p>
+        <div className="border-t border-white/10 pt-6 text-center text-xs">
+          <p>© {new Date().getFullYear()} Ushanga Chronicles. One bead. A thousand stories.</p>
         </div>
       </div>
     </footer>

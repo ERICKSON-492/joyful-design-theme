@@ -13,13 +13,12 @@ export default {
         md: '768px',
         lg: '1024px',
         xl: '1280px',
-        '2xl': '1400px',
       },
     },
     extend: {
       fontFamily: {
-        display: ['Cormorant Garamond', 'serif'],
-        body: ['Montserrat', 'sans-serif'],
+        display: ['Playfair Display', 'serif'],
+        body: ['Inter', 'sans-serif'],
       },
       colors: {
         border: "var(--border)",
@@ -55,11 +54,6 @@ export default {
           DEFAULT: "var(--card)",
           foreground: "var(--card-foreground)",
         },
-        gold: {
-          DEFAULT: "var(--accent-gold)",
-          light: "var(--accent-gold-light)",
-          dark: "var(--accent-gold-dark)",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -75,15 +69,10 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        "slide": {
-          "0%": { transform: "translateX(0)" },
-          "100%": { transform: "translateX(-50%)" },
-        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "slide": "slide 30s linear infinite",
       },
     },
   },

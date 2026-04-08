@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=Montserrat:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -8,35 +8,29 @@
 
 :root {
   --font-size: 16px;
-  --background: #ffffff;
-  --foreground: #1a1a1a;
-  --card: #faf8f5;
-  --card-foreground: #1a1a1a;
-  --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
-  --primary: #c8912a;
-  --primary-foreground: #ffffff;
-  --secondary: #f5f0e8;
-  --secondary-foreground: #1a1a1a;
-  --muted: #f5f0e8;
-  --muted-foreground: #6b6b6b;
-  --accent: #f5f0e8;
-  --accent-foreground: #1a1a1a;
+  --background: #F5F5F0;
+  --foreground: #1A1A1A;
+  --card: #FFFFFF;
+  --card-foreground: #1A1A1A;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A1A1A;
+  --primary: #D4A017;
+  --primary-foreground: #1A1A1A;
+  --secondary: #F5F5F0;
+  --secondary-foreground: #1A1A1A;
+  --muted: #F0EDE6;
+  --muted-foreground: #444444;
+  --accent: #F0EDE6;
+  --accent-foreground: #1A1A1A;
   --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #e8e0d4;
-  --input: #f5f0e8;
-  --input-background: #ffffff;
-  --switch-background: #e8e0d4;
+  --destructive-foreground: #FFFFFF;
+  --border: #E5E0D5;
+  --input: #F0EDE6;
+  --input-background: #FFFFFF;
+  --switch-background: #E5E0D5;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #c8912a;
-  
-  --accent-gold: #c8912a;
-  --accent-gold-light: #d4a43d;
-  --accent-gold-dark: #a67720;
-  --accent-warm: #8b6914;
-  
+  --ring: #D4A017;
   --radius: 0.5rem;
 }
 
@@ -62,10 +56,6 @@
   --color-input-background: var(--input-background);
   --color-switch-background: var(--switch-background);
   --color-ring: var(--ring);
-  --color-gold: var(--accent-gold);
-  --color-gold-light: var(--accent-gold-light);
-  --color-gold-dark: var(--accent-gold-dark);
-  
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -80,17 +70,13 @@
 
   body {
     @apply bg-background text-foreground overflow-x-hidden;
-    font-family: 'Montserrat', sans-serif;
+    font-family: 'Inter', sans-serif;
     width: 100%;
     max-width: 100vw;
   }
 
-  .font-display {
-    font-family: 'Cormorant Garamond', serif;
-  }
-
-  .font-body {
-    font-family: 'Montserrat', sans-serif;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
   }
 }
 
@@ -99,22 +85,11 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Clean scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--background);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ring);
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--background); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ring); }
 
-/* Performance */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
