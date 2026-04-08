@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
@@ -6,6 +6,50 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin } from 'lucide-react'
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
+
+/* ─── sub-components ─── */
+
+function AuthLoading() {
+  return (
+    <div className="bg-background min-h-screen pt-24 pb-16 flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  )
+}
+
+function EmptyCart() {
+  return (
+    <div className="bg-background min-h-screen pt-24 pb-16">
+      <div className="container mx-auto px-4 text-center py-20">
+        <ShoppingBag className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+        <h1 className="font-display text-2xl font-bold text-foreground mb-2">Your cart is empty</h1>
+        <p className="text-muted-foreground mb-6">Add some items before checking out</p>
+        <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase">
+          Go to Shop
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function SuccessScreen() {
+  return (
+    <div className="bg-background min-h-screen pt-24 pb-16">
+      <div className="container mx-auto px-4 text-center py-20 max-w-md">
+        <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
+        <h1 className="font-display text-3xl font-bold text-foreground mb-3">Payment Successful!</h1>
+        <p className="text-muted-foreground mb-8">
+          Your order has been confirmed. We'll prepare your items and reach out via WhatsApp for delivery details.
+        </p>
+        <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase">
+          Continue Shopping
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+/* ─── main ─── */
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart, totalItems } = useCart()
@@ -22,8 +66,7 @@ export default function CheckoutPage() {
   const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) {
         toast.error('Please log in or create an account to checkout')
         navigate('/auth', { state: { returnTo: '/checkout' } })
@@ -33,11 +76,10 @@ export default function CheckoutPage() {
       setName(session.user.user_metadata?.full_name || '')
       setEmail(session.user.email || '')
       setAuthLoading(false)
-    }
-    checkAuth()
-  }, [])
+    })
+  }, [navigate])
 
-  const handleMpesaPayment = async () => {
+  const handleMpesaPayment = useCallback(async () => {
     if (!phone || phone.length < 9) {
       setError('Please enter a valid M-Pesa phone number')
       return
@@ -52,12 +94,8 @@ export default function CheckoutPage() {
     setStatus('creating')
 
     try {
-      // 1. Create order in database
       const orderItems = items.map(i => ({
-        id: i.id,
-        name: i.name,
-        price: i.price,
-        quantity: i.quantity,
+        id: i.id, name: i.name, price: i.price, quantity: i.quantity,
       }))
 
       const { data: order, error: orderError } = await supabase
@@ -74,11 +112,8 @@ export default function CheckoutPage() {
         .select('id')
         .single()
 
-      if (orderError || !order) {
-        throw new Error('Failed to create order')
-      }
+      if (orderError || !order) throw new Error('Failed to create order')
 
-      // 2. Initiate STK Push
       setStatus('pushing')
       const { data: stkData, error: stkError } = await supabase.functions.invoke(
         'mpesa-stk-push',
@@ -90,7 +125,6 @@ export default function CheckoutPage() {
         throw new Error(stkData?.ResponseDescription || 'Failed to initiate M-Pesa payment')
       }
 
-      // 3. Poll for payment status
       setStatus('polling')
       const checkoutRequestId = stkData.CheckoutRequestID
 
@@ -114,7 +148,6 @@ export default function CheckoutPage() {
           }
 
           if (queryData?.ResultCode && queryData.ResultCode !== '0') {
-            // Check if it's "still processing" vs actual failure
             if (queryData.errorCode === '500.001.1001' || queryData.ResultCode === '1032') {
               setStatus('failed')
               setError('Payment was cancelled. Please try again.')
@@ -122,13 +155,12 @@ export default function CheckoutPage() {
             }
           }
         } catch {
-          // Ignore polling errors, keep trying
+          // Ignore polling errors
         }
 
         if (attempts < maxAttempts) {
           setTimeout(poll, pollInterval)
         } else {
-          // Final check via DB
           const { data: orderCheck } = await supabase
             .from('orders')
             .select('status')
@@ -152,47 +184,14 @@ export default function CheckoutPage() {
       setError(err.message || 'Something went wrong')
       toast.error('Payment failed')
     }
-  }
+  }, [phone, name, items, totalPrice, userId, address, city, postalCode, email, clearCart])
 
-  if (authLoading) {
-    return (
-      <div className="bg-background min-h-screen pt-24 pb-16 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    )
-  }
+  if (authLoading) return <AuthLoading />
+  if (items.length === 0 && status !== 'success') return <EmptyCart />
+  if (status === 'success') return <SuccessScreen />
 
-  if (items.length === 0 && status !== 'success') {
-    return (
-      <div className="bg-background min-h-screen pt-24 pb-16">
-        <div className="container mx-auto px-4 text-center py-20">
-          <ShoppingBag className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-          <h1 className="font-display text-2xl font-bold text-foreground mb-2">Your cart is empty</h1>
-          <p className="text-muted-foreground mb-6">Add some items before checking out</p>
-          <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase">
-            Go to Shop
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (status === 'success') {
-    return (
-      <div className="bg-background min-h-screen pt-24 pb-16">
-        <div className="container mx-auto px-4 text-center py-20 max-w-md">
-          <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
-          <h1 className="font-display text-3xl font-bold text-foreground mb-3">Payment Successful!</h1>
-          <p className="text-muted-foreground mb-8">
-            Your order has been confirmed. We'll prepare your items and reach out via WhatsApp for delivery details.
-          </p>
-          <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase">
-            Continue Shopping
-          </Link>
-        </div>
-      </div>
-    )
-  }
+  const isProcessing = status === 'creating' || status === 'pushing' || status === 'polling'
+  const inputDisabled = isProcessing
 
   return (
     <div className="bg-background min-h-screen pt-24 pb-16">
@@ -232,85 +231,46 @@ export default function CheckoutPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Your Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Linda Amollo"
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Linda Amollo"
                 className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary"
-                disabled={status !== 'idle' && status !== 'failed'}
-              />
+                disabled={inputDisabled} />
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">M-Pesa Phone Number</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="0748207000 or 254748207000"
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0748207000 or 254748207000"
                 className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary"
-                disabled={status !== 'idle' && status !== 'failed'}
-              />
+                disabled={inputDisabled} />
               <p className="text-xs text-muted-foreground mt-1">You'll receive an STK push prompt on this number</p>
             </div>
 
-            {/* Shipping Address */}
+            {/* Shipping */}
             <div className="border-t border-border pt-4 mt-4">
               <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-primary" />
-                Shipping Address
+                <MapPin className="w-4 h-4 text-primary" /> Shipping Address
               </h3>
               <div className="space-y-3">
-                <input
-                  type="text"
-                  value={address}
-                  onChange={e => setAddress(e.target.value)}
-                  placeholder="Street address / building / estate"
-                  className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  disabled={status !== 'idle' && status !== 'failed'}
-                />
+                <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street address / building / estate"
+                  className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" disabled={inputDisabled} />
                 <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={e => setCity(e.target.value)}
-                    placeholder="City / Town"
-                    className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    disabled={status !== 'idle' && status !== 'failed'}
-                  />
-                  <input
-                    type="text"
-                    value={postalCode}
-                    onChange={e => setPostalCode(e.target.value)}
-                    placeholder="Postal code"
-                    className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    disabled={status !== 'idle' && status !== 'failed'}
-                  />
+                  <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City / Town"
+                    className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" disabled={inputDisabled} />
+                  <input type="text" value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="Postal code"
+                    className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" disabled={inputDisabled} />
                 </div>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="Email for order updates (optional)"
-                  className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  disabled={status !== 'idle' && status !== 'failed'}
-                />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email for order updates (optional)"
+                  className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" disabled={inputDisabled} />
               </div>
             </div>
 
             {error && (
               <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
-                <XCircle className="w-4 h-4 flex-shrink-0" />
-                {error}
+                <XCircle className="w-4 h-4 flex-shrink-0" /> {error}
               </div>
             )}
 
-            <button
-              onClick={handleMpesaPayment}
-              disabled={status === 'creating' || status === 'pushing' || status === 'polling'}
+            <button onClick={handleMpesaPayment} disabled={isProcessing}
               className="w-full bg-green-600 hover:bg-green-700 text-white py-4 font-bold text-sm tracking-wider uppercase rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-              style={{ minHeight: '52px' }}
-            >
+              style={{ minHeight: '52px' }}>
               {status === 'creating' && <><Loader2 className="w-5 h-5 animate-spin" /> Creating order...</>}
               {status === 'pushing' && <><Loader2 className="w-5 h-5 animate-spin" /> Sending STK push...</>}
               {status === 'polling' && <><Loader2 className="w-5 h-5 animate-spin" /> Waiting for payment...</>}

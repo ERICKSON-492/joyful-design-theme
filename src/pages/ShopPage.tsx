@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
+import { useSearchParams } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag } from 'lucide-react'
+import { fetchPublicTable } from '@/lib/publicContent'
 
 const categoryList = ['All', 'Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
 
@@ -32,16 +32,24 @@ export default function ShopPage() {
   }, [catParam])
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    let mounted = true
+    const loadProducts = async () => {
       setLoading(true)
-      let query = supabase.from('products').select('id, name, price, image_url, stock, category').eq('is_active', true)
-      if (activeCategory !== 'All') query = query.eq('category', activeCategory)
-      if (searchQuery) query = query.ilike('name', `%${searchQuery}%`)
-      const { data } = await query.order('created_at', { ascending: false })
-      setProducts(data || [])
-      setLoading(false)
+      try {
+        let query = 'select=id,name,price,image_url,stock,category&is_active=eq.true&order=created_at.desc'
+        if (activeCategory !== 'All') query += `&category=eq.${encodeURIComponent(activeCategory)}`
+        if (searchQuery) query += `&name=ilike.*${encodeURIComponent(searchQuery)}*`
+
+        const data = await fetchPublicTable<Product>('products', query)
+        if (mounted) setProducts(data || [])
+      } catch {
+        if (mounted) setProducts([])
+      } finally {
+        if (mounted) setLoading(false)
+      }
     }
-    fetchProducts()
+    loadProducts()
+    return () => { mounted = false }
   }, [activeCategory, searchQuery])
 
   return (
