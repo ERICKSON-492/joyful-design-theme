@@ -79,7 +79,7 @@ export function HeroSection() {
           const img = new window.Image()
           img.onload = () => { if (isMounted) setReady(true) }
           img.onerror = () => { if (isMounted) setReady(true) }
-          img.src = optimizeImageUrl(normalized[0].image_url, isMobile ? 800 : 1920)
+          img.src = optimizeImageUrl(normalized[0].image_url)
         } else {
           setReady(true)
         }
