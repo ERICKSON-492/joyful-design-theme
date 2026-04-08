@@ -64,7 +64,7 @@ export default function CheckoutPage() {
           items: orderItems as any,
           status: 'pending',
           user_id: userId,
-          shipping_address: { address, city, postal_code: postalCode },
+          shipping_address: { address, city, postal_code: postalCode, email },
         })
         .select('id')
         .single()
