@@ -226,6 +226,45 @@ export type Database = {
         }
         Relationships: []
       }
+      orders: {
+        Row: {
+          created_at: string
+          customer_name: string | null
+          id: string
+          items: Json
+          mpesa_checkout_request_id: string | null
+          mpesa_receipt_number: string | null
+          phone: string
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name?: string | null
+          id?: string
+          items?: Json
+          mpesa_checkout_request_id?: string | null
+          mpesa_receipt_number?: string | null
+          phone: string
+          status?: string
+          total_amount: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string | null
+          id?: string
+          items?: Json
+          mpesa_checkout_request_id?: string | null
+          mpesa_receipt_number?: string | null
+          phone?: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           category: string

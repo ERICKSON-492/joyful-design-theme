@@ -13,6 +13,7 @@ import AdminDashboard from '../pages/AdminDashboard'
 import AdminProducts from '../pages/AdminProducts'
 import AdminEnquiries from '../pages/AdminEnquiries'
 import AdminHeroSlides from '../pages/AdminHeroSlides'
+import CheckoutPage from '../pages/CheckoutPage'
 import NotFound from '../pages/NotFound'
 
 export function AnimatedRoutes() {
@@ -42,6 +43,7 @@ export function AnimatedRoutes() {
         <Route path="/custom-order" element={<PageTransition><CustomOrderPage /></PageTransition>} />
         <Route path="/tribe-looks" element={<PageTransition><TribeLooksPage /></PageTransition>} />
         <Route path="/wholesale-gifting" element={<PageTransition><WholesalePage /></PageTransition>} />
+        <Route path="/checkout" element={<PageTransition><CheckoutPage /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>
