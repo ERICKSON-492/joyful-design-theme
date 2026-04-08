@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { useCart } from '@/contexts/CartContext'
-import { ScrollReveal, StaggerContainer, StaggerItem } from './ScrollReveal'
 import { ShoppingBag } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 interface Product {
   id: string
@@ -43,12 +43,15 @@ export function FeaturedProducts() {
   return (
     <section className="py-16 md:py-24 bg-background">
       <div className="container mx-auto px-4">
-        <ScrollReveal>
-          <h2 className="font-display text-3xl md:text-5xl font-bold text-center text-foreground mb-14">Crafted This Week</h2>
-        </ScrollReveal>
-        <StaggerContainer className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto" staggerDelay={0.1}>
-          {products.map((product) => (
-            <StaggerItem key={product.id}>
+        <h2 className="font-display text-3xl md:text-5xl font-bold text-center text-foreground mb-14">Crafted This Week</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
+          {products.map((product, i) => (
+            <motion.div
+              key={product.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: i * 0.1 }}
+            >
               <div className="group">
                 <div className="overflow-hidden bg-card mb-4">
                   {product.image_url ? (
@@ -69,16 +72,14 @@ export function FeaturedProducts() {
                   {product.stock === 0 ? 'Sold Out' : 'Add to Cart'}
                 </button>
               </div>
-            </StaggerItem>
+            </motion.div>
           ))}
-        </StaggerContainer>
-        <ScrollReveal delay={0.3}>
-          <div className="text-center mt-12">
-            <Link to="/shop" className="inline-block border-2 border-foreground text-foreground hover:bg-foreground hover:text-white px-10 py-3 text-sm font-bold tracking-widest uppercase transition-colors">
-              See All Products
-            </Link>
-          </div>
-        </ScrollReveal>
+        </div>
+        <div className="text-center mt-12">
+          <Link to="/shop" className="inline-block border-2 border-foreground text-foreground hover:bg-foreground hover:text-white px-10 py-3 text-sm font-bold tracking-widest uppercase transition-colors">
+            See All Products
+          </Link>
+        </div>
       </div>
     </section>
   )
