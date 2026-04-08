@@ -1,0 +1,98 @@
+import { useEffect, useState } from 'react'
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { supabase } from '@/integrations/supabase/client'
+import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft } from 'lucide-react'
+import type { User } from '@supabase/supabase-js'
+
+const navItems = [
+  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { label: 'Products', href: '/admin/products', icon: Package },
+  { label: 'Enquiries', href: '/admin/enquiries', icon: MessageSquare },
+]
+
+export default function AdminLayout() {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+      if (!session?.user) navigate('/admin/login')
+    })
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+      if (!session?.user) navigate('/admin/login')
+    })
+    return () => subscription.unsubscribe()
+  }, [navigate])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    navigate('/admin/login')
+  }
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><p className="text-muted-foreground">Loading...</p></div>
+  if (!user) return null
+
+  return (
+    <div className="min-h-screen bg-background flex">
+      {/* Sidebar */}
+      <aside className="w-64 bg-card border-r border-border flex flex-col shrink-0 hidden md:flex">
+        <div className="p-6 border-b border-border">
+          <h2 className="font-display text-lg font-bold text-foreground">USHANGA</h2>
+          <p className="text-xs text-muted-foreground">Admin Panel</p>
+        </div>
+        <nav className="flex-1 p-4 space-y-1">
+          {navItems.map(item => (
+            <Link
+              key={item.href}
+              to={item.href}
+              className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-md transition-colors ${
+                location.pathname === item.href
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+            >
+              <item.icon className="w-4 h-4" />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="p-4 border-t border-border space-y-2">
+          <Link to="/" className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <ChevronLeft className="w-4 h-4" /> Back to Site
+          </Link>
+          <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:text-destructive/80 transition-colors w-full">
+            <LogOut className="w-4 h-4" /> Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+        <h2 className="font-display text-sm font-bold">USHANGA Admin</h2>
+        <div className="flex items-center gap-2">
+          {navItems.map(item => (
+            <Link
+              key={item.href}
+              to={item.href}
+              className={`p-2 rounded-md ${location.pathname === item.href ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+            >
+              <item.icon className="w-5 h-5" />
+            </Link>
+          ))}
+          <button onClick={handleLogout} className="p-2 text-destructive"><LogOut className="w-5 h-5" /></button>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-auto md:p-8 p-4 pt-16 md:pt-8">
+        <Outlet />
+      </main>
+    </div>
+  )
+}
