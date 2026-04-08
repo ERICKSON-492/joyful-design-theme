@@ -30,6 +30,7 @@ export function AnimatedRoutes() {
           <Route path="products" element={<AdminProducts />} />
           <Route path="hero" element={<AdminHeroSlides />} />
           <Route path="enquiries" element={<AdminEnquiries />} />
+          <Route path="orders" element={<AdminOrders />} />
         </Route>
       </Routes>
     )

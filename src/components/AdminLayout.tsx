@@ -8,6 +8,7 @@ const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Products', href: '/admin/products', icon: Package },
   { label: 'Hero Slides', href: '/admin/hero', icon: Image },
+  { label: 'Orders', href: '/admin/orders', icon: ShoppingBag },
   { label: 'Enquiries', href: '/admin/enquiries', icon: MessageSquare },
 ]
 
