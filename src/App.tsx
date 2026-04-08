@@ -3,6 +3,8 @@ import { Navbar } from './components/Navbar'
 import { Footer } from './components/Footer'
 import { WhatsAppButton } from './components/WhatsAppButton'
 import { AnimatedRoutes } from './components/AnimatedRoutes'
+import { CartProvider } from './contexts/CartContext'
+import { CartDrawer } from './components/CartDrawer'
 
 function AppContent() {
   const location = useLocation()
@@ -16,6 +18,7 @@ function AppContent() {
       </main>
       {!isAdmin && <Footer />}
       {!isAdmin && <WhatsAppButton />}
+      {!isAdmin && <CartDrawer />}
     </div>
   )
 }
@@ -23,7 +26,9 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <CartProvider>
+        <AppContent />
+      </CartProvider>
     </BrowserRouter>
   )
 }

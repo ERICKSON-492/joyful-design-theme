@@ -12,6 +12,7 @@ import AdminLayout from '../components/AdminLayout'
 import AdminDashboard from '../pages/AdminDashboard'
 import AdminProducts from '../pages/AdminProducts'
 import AdminEnquiries from '../pages/AdminEnquiries'
+import AdminHeroSlides from '../pages/AdminHeroSlides'
 import NotFound from '../pages/NotFound'
 
 export function AnimatedRoutes() {
@@ -25,6 +26,7 @@ export function AnimatedRoutes() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="products" element={<AdminProducts />} />
+          <Route path="hero" element={<AdminHeroSlides />} />
           <Route path="enquiries" element={<AdminEnquiries />} />
         </Route>
       </Routes>

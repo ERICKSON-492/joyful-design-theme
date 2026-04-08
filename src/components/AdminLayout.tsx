@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
-import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft } from 'lucide-react'
+import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Products', href: '/admin/products', icon: Package },
+  { label: 'Hero Slides', href: '/admin/hero', icon: Image },
   { label: 'Enquiries', href: '/admin/enquiries', icon: MessageSquare },
 ]
 
@@ -17,17 +18,22 @@ export default function AdminLayout() {
   const location = useLocation()
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+    const checkAccess = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) { navigate('/admin/login'); setLoading(false); return }
+      
+      // Check if user is in admin_users table
+      const { data: adminRecord } = await supabase.from('admin_users').select('id').eq('user_id', authUser.id).maybeSingle()
+      if (!adminRecord) {
+        await supabase.auth.signOut()
+        navigate('/admin/login')
+        setLoading(false)
+        return
+      }
+      setUser(authUser)
       setLoading(false)
-      if (!session?.user) navigate('/admin/login')
-    })
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-      if (!session?.user) navigate('/admin/login')
-    })
-    return () => subscription.unsubscribe()
+    }
+    checkAccess()
   }, [navigate])
 
   const handleLogout = async () => {
