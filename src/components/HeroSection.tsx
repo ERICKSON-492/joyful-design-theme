@@ -3,6 +3,20 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/integrations/supabase/client'
 
+/**
+ * Convert a Supabase storage URL to a resized/optimized version.
+ * Uses Supabase Image Transforms (render endpoint) for much smaller files.
+ */
+function optimizeImageUrl(url: string, width: number, quality = 75): string {
+  if (!url) return url
+  // Only transform Supabase storage URLs
+  const match = url.match(
+    /^(https:\/\/[^/]+\/storage\/v1\/object\/public\/)(.+)$/
+  )
+  if (!match) return url
+  return `${match[1].replace('/object/', '/render/image/')}${match[2]}?width=${width}&quality=${quality}`
+}
+
 interface Slide {
   id: string
   image_url: string
@@ -42,6 +56,8 @@ export function HeroSection() {
   const [slides, setSlides] = useState<Slide[]>(fallbackSlides)
   const [current, setCurrent] = useState(0)
   const [ready, setReady] = useState(false)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const imgWidth = isMobile ? 800 : 1920
 
   useEffect(() => {
     let isMounted = true
@@ -69,7 +85,7 @@ export function HeroSection() {
           const img = new window.Image()
           img.onload = () => { if (isMounted) setReady(true) }
           img.onerror = () => { if (isMounted) setReady(true) }
-          img.src = normalized[0].image_url
+          img.src = optimizeImageUrl(normalized[0].image_url, isMobile ? 800 : 1920)
         } else {
           setReady(true)
         }
@@ -78,7 +94,7 @@ export function HeroSection() {
         normalized.slice(1).forEach((slide) => {
           if (slide.image_url) {
             const img = new window.Image()
-            img.src = slide.image_url
+            img.src = optimizeImageUrl(slide.image_url, isMobile ? 800 : 1920)
           }
         })
       } catch {
@@ -132,7 +148,7 @@ export function HeroSection() {
         return slide.image_url ? (
           <motion.img
             key={slide.id}
-            src={slide.image_url}
+            src={optimizeImageUrl(slide.image_url, imgWidth)}
             alt={slide.subtitle}
             loading={index === 0 ? 'eager' : 'lazy'}
             fetchPriority={index === 0 ? 'high' : 'auto'}
