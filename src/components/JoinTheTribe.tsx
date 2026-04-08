@@ -1,15 +1,35 @@
 import { useState } from 'react'
 import { ScrollReveal } from './ScrollReveal'
+import { supabase } from '@/integrations/supabase/client'
+import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 
 export function JoinTheTribe() {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (email.trim()) {
+    if (!email.trim()) return
+    setSubmitting(true)
+    try {
+      const { error } = await supabase.from('newsletter_subscribers').insert({ email: email.trim() })
+      if (error) {
+        if (error.code === '23505') {
+          toast.info("You're already part of the Tribe! 🎉")
+          setSubmitted(true)
+          return
+        }
+        throw error
+      }
       setSubmitted(true)
       setEmail('')
+    } catch (err) {
+      console.error('Newsletter signup error:', err)
+      toast.error('Something went wrong. Please try again.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -29,7 +49,8 @@ export function JoinTheTribe() {
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email address" required maxLength={255} className="flex-1 px-5 py-4 bg-white/10 border border-white/20 text-white placeholder:text-white/40 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" style={{ minHeight: '44px' }} />
-              <button type="submit" className="bg-primary hover:bg-[#c49515] text-primary-foreground px-8 py-4 text-sm font-bold tracking-widest uppercase transition-colors whitespace-nowrap" style={{ minHeight: '44px' }}>
+              <button type="submit" disabled={submitting} className="bg-primary hover:bg-[#c49515] text-primary-foreground px-8 py-4 text-sm font-bold tracking-widest uppercase transition-colors whitespace-nowrap disabled:opacity-50 flex items-center justify-center gap-2" style={{ minHeight: '44px' }}>
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Join the Tribe
               </button>
             </form>
