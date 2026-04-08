@@ -38,43 +38,64 @@ export default function AdminOrders() {
 
   useEffect(() => { fetchOrders() }, [])
 
-  const updateStatus = async (id: string, newStatus: string) => {
-    setUpdating(id)
-    const order = orders.find(o => o.id === id)
-    await supabase.from('orders').update({ status: newStatus }).eq('id', id)
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
-    setUpdating(null)
+  const getCustomerEmail = (order: Order) => {
+    if (!order.shipping_address || typeof order.shipping_address !== 'object' || Array.isArray(order.shipping_address)) {
+      return null
+    }
 
-    // Send email notification if the order has a user_id (registered user)
-    if (order?.user_id) {
-      try {
-        // Look up user email from profiles or use shipping address email
-        const shippingAddr = order.shipping_address as Record<string, any> | null
-        const customerEmail = shippingAddr?.email
-        if (customerEmail) {
-          await supabase.functions.invoke('send-transactional-email', {
-            body: {
-              templateName: 'order-status-update',
-              recipientEmail: customerEmail,
-              idempotencyKey: `order-status-${id}-${newStatus}`,
-              templateData: {
-                customerName: order.customer_name || 'Customer',
-                orderId: id,
-                status: newStatus,
-                trackingNumber: order.tracking_number || '',
-                totalAmount: Number(order.total_amount).toLocaleString(),
-              },
-            },
-          })
-          toast.success('Status updated & email notification sent')
-        } else {
-          toast.success('Status updated (no email on file)')
-        }
-      } catch {
-        toast.success('Status updated (email notification failed)')
+    const email = (order.shipping_address as Record<string, unknown>).email
+    return typeof email === 'string' && email.trim() ? email.trim() : null
+  }
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    const order = orders.find(o => o.id === id)
+    if (!order || order.status === newStatus) return
+
+    setUpdating(id)
+
+    try {
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', id)
+
+      if (updateError) throw updateError
+
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
+
+      const customerEmail = getCustomerEmail(order)
+      if (!customerEmail) {
+        toast.success('Status updated (no email on file)')
+        return
       }
-    } else {
-      toast.success('Order status updated')
+
+      const { error: emailError } = await supabase.functions.invoke('send-transactional-email', {
+        body: {
+          templateName: 'order-status-update',
+          recipientEmail: customerEmail,
+          idempotencyKey: `order-status-${id}-${newStatus}`,
+          templateData: {
+            customerName: order.customer_name || 'Customer',
+            orderId: id,
+            status: newStatus,
+            trackingNumber: order.tracking_number || '',
+            totalAmount: Number(order.total_amount).toLocaleString(),
+          },
+        },
+      })
+
+      if (emailError) {
+        console.error('Order status email failed', emailError)
+        toast.error('Status updated, but email notification failed')
+        return
+      }
+
+      toast.success('Status updated & email notification sent')
+    } catch (error) {
+      console.error('Order status update failed', error)
+      toast.error('Failed to update order status')
+    } finally {
+      setUpdating(null)
     }
   }
 
