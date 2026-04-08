@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Menu, X, Search, ShoppingBag } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useCart } from '@/contexts/CartContext'
 
 const navLinks = [
   { label: 'Home', href: '/' },
@@ -15,7 +16,10 @@ const navLinks = [
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const location = useLocation()
+  const { totalItems, setIsOpen: setCartOpen } = useCart()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -23,10 +27,17 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Close mobile menu on route change
   useEffect(() => {
     setIsOpen(false)
+    setSearchOpen(false)
   }, [location.pathname])
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      window.location.href = `/shop?search=${encodeURIComponent(searchQuery.trim())}`
+    }
+  }
 
   return (
     <nav
@@ -38,12 +49,10 @@ export function Navbar() {
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo */}
           <Link to="/" className="font-display text-xl md:text-2xl font-bold text-foreground tracking-wide">
             USHANGA <span className="font-light">CHRONICLES</span>
           </Link>
 
-          {/* Desktop Nav */}
           <div className="hidden lg:flex items-center gap-8">
             {navLinks.map((link) => (
               <Link
@@ -65,15 +74,26 @@ export function Navbar() {
             ))}
           </div>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-1">
-            <button className="p-2.5 hover:bg-accent rounded-full transition-colors" aria-label="Search">
+            <button
+              onClick={() => setSearchOpen(!searchOpen)}
+              className="p-2.5 hover:bg-accent rounded-full transition-colors"
+              aria-label="Search"
+            >
               <Search className="w-5 h-5" />
             </button>
-            <Link to="/shop" className="p-2.5 hover:bg-accent rounded-full transition-colors relative" aria-label="Cart">
+            <button
+              onClick={() => setCartOpen(true)}
+              className="p-2.5 hover:bg-accent rounded-full transition-colors relative"
+              aria-label="Cart"
+            >
               <ShoppingBag className="w-5 h-5" />
-              <span className="absolute top-0.5 right-0.5 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">0</span>
-            </Link>
+              {totalItems > 0 && (
+                <span className="absolute top-0.5 right-0.5 bg-primary text-primary-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  {totalItems > 9 ? '9+' : totalItems}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="lg:hidden p-2.5 hover:bg-accent rounded-full transition-colors"
@@ -83,9 +103,41 @@ export function Navbar() {
             </button>
           </div>
         </div>
+
+        {/* Search Bar */}
+        <AnimatePresence>
+          {searchOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <form onSubmit={handleSearch} className="pb-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search products..."
+                    className="flex-1 h-10 px-4 rounded-md border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    className="h-10 px-6 bg-primary text-primary-foreground text-sm font-bold rounded-md hover:bg-primary/90 transition-colors"
+                  >
+                    Search
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Full-screen Mobile Menu */}
+      {/* Mobile Menu */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
