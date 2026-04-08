@@ -205,7 +205,7 @@ export default function AuthPage() {
               </form>
             </div>
           </div>
-        )
+        )}
 
         <p className="text-center text-sm text-muted-foreground mt-6">
           {isLogin ? "Don't have an account? " : 'Already have an account? '}
