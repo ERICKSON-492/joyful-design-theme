@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft } from 'lucide-react'
+import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin } from 'lucide-react'
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
@@ -14,6 +14,21 @@ export default function CheckoutPage() {
   const [name, setName] = useState('')
   const [status, setStatus] = useState<PaymentStatus>('idle')
   const [error, setError] = useState('')
+  const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [postalCode, setPostalCode] = useState('')
+  const [userId, setUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        setUserId(session.user.id)
+        setName(session.user.user_metadata?.full_name || '')
+      }
+    }
+    getUser()
+  }, [])
 
   const handleMpesaPayment = async () => {
     if (!phone || phone.length < 9) {
@@ -46,6 +61,8 @@ export default function CheckoutPage() {
           total_amount: totalPrice,
           items: orderItems as any,
           status: 'pending',
+          user_id: userId,
+          shipping_address: { address, city, postal_code: postalCode },
         })
         .select('id')
         .single()
@@ -220,6 +237,42 @@ export default function CheckoutPage() {
                 disabled={status !== 'idle' && status !== 'failed'}
               />
               <p className="text-xs text-muted-foreground mt-1">You'll receive an STK push prompt on this number</p>
+            </div>
+
+            {/* Shipping Address */}
+            <div className="border-t border-border pt-4 mt-4">
+              <h3 className="font-display font-semibold text-foreground mb-3 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary" />
+                Shipping Address
+              </h3>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={address}
+                  onChange={e => setAddress(e.target.value)}
+                  placeholder="Street address / building / estate"
+                  className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  disabled={status !== 'idle' && status !== 'failed'}
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={e => setCity(e.target.value)}
+                    placeholder="City / Town"
+                    className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    disabled={status !== 'idle' && status !== 'failed'}
+                  />
+                  <input
+                    type="text"
+                    value={postalCode}
+                    onChange={e => setPostalCode(e.target.value)}
+                    placeholder="Postal code"
+                    className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    disabled={status !== 'idle' && status !== 'failed'}
+                  />
+                </div>
+              </div>
             </div>
 
             {error && (

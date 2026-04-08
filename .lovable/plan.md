@@ -1,22 +1,24 @@
-## Plan
 
-### 1. Database Migration
-- Create `products` table (name, price, category, image_url, stock, description)
-- Create `enquiry_messages` table for customer chat (with reply support)
-- Create storage bucket for product images
-- Add admin role system
+## Plan: Auth, Shipping & Order Tracking
 
-### 2. Fix Header Overlay
-- Ensure navbar doesn't overlay page content on scroll
+### 1. User Authentication
+- Add login/signup pages with email + password
+- Enable Google sign-in via Lovable Cloud
+- Create a `profiles` table to store user display name and phone
+- Auto-create profile on signup via database trigger
+- Protect order history behind authentication
 
-### 3. Admin Panel Pages
-- `/admin` - Dashboard with overview
-- Product management: add, edit, delete products with image upload
-- Enquiry inbox: view customer messages and reply
+### 2. Shipping & Checkout Enhancement
+- Add shipping address fields to checkout (name, address, city, postal code)
+- Add a `shipping_address` column to the `orders` table
+- Save shipping info with each order
 
-### 4. Authentication
-- Admin login page
-- Protected admin routes
+### 3. Order Tracking for Customers
+- Add a "My Orders" page where logged-in users can view their order history and status
+- Link orders to user accounts via `user_id`
+- Show order status timeline (pending → confirmed → shipped → delivered)
+- Add a link to "My Orders" in the navbar for logged-in users
 
-### 5. Connect Shop Page
-- Load products from database instead of hardcoded data
+### What stays the same
+- Admin dashboard and admin order management remain unchanged
+- M-Pesa and WhatsApp checkout options stay as-is
