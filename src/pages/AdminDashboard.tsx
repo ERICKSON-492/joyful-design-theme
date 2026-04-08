@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
-import { Package, MessageSquare, Users, TrendingUp } from 'lucide-react'
+import { Package, MessageSquare, Users, TrendingUp, ShoppingBag } from 'lucide-react'
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({ products: 0, enquiries: 0, unread: 0, subscribers: 0 })
