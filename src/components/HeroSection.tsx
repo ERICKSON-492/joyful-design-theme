@@ -7,14 +7,8 @@ import { supabase } from '@/integrations/supabase/client'
  * Convert a Supabase storage URL to a resized/optimized version.
  * Uses Supabase Image Transforms (render endpoint) for much smaller files.
  */
-function optimizeImageUrl(url: string, width: number, quality = 75): string {
-  if (!url) return url
-  // Only transform Supabase storage URLs
-  const match = url.match(
-    /^(https:\/\/[^/]+\/storage\/v1\/object\/public\/)(.+)$/
-  )
-  if (!match) return url
-  return `${match[1].replace('/object/', '/render/image/')}${match[2]}?width=${width}&quality=${quality}`
+function optimizeImageUrl(url: string): string {
+  return url || ''
 }
 
 interface Slide {
@@ -85,7 +79,7 @@ export function HeroSection() {
           const img = new window.Image()
           img.onload = () => { if (isMounted) setReady(true) }
           img.onerror = () => { if (isMounted) setReady(true) }
-          img.src = optimizeImageUrl(normalized[0].image_url, isMobile ? 800 : 1920)
+          img.src = optimizeImageUrl(normalized[0].image_url)
         } else {
           setReady(true)
         }
@@ -94,7 +88,7 @@ export function HeroSection() {
         normalized.slice(1).forEach((slide) => {
           if (slide.image_url) {
             const img = new window.Image()
-            img.src = optimizeImageUrl(slide.image_url, isMobile ? 800 : 1920)
+            img.src = optimizeImageUrl(slide.image_url)
           }
         })
       } catch {
@@ -148,7 +142,7 @@ export function HeroSection() {
         return slide.image_url ? (
           <motion.img
             key={slide.id}
-            src={optimizeImageUrl(slide.image_url, imgWidth)}
+            src={optimizeImageUrl(slide.image_url)}
             alt={slide.subtitle}
             loading={index === 0 ? 'eager' : 'lazy'}
             fetchPriority={index === 0 ? 'high' : 'auto'}
