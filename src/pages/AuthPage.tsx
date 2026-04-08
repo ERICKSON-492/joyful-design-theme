@@ -18,7 +18,7 @@ export default function AuthPage() {
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session) navigate('/')
+      if (session) navigate(returnTo)
     }
     checkSession()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
