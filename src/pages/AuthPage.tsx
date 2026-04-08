@@ -22,7 +22,7 @@ export default function AuthPage() {
     }
     checkSession()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) navigate('/')
+      if (session) navigate(returnTo)
     })
     return () => subscription.unsubscribe()
   }, [navigate])
