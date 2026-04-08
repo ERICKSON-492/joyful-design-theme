@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { format } from 'date-fns'
-import { Eye, ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { Eye, ChevronDown, ChevronUp, Search, Mail } from 'lucide-react'
+import { toast } from 'sonner'
 import type { Tables } from '@/integrations/supabase/types'
 
 type Order = Tables<'orders'>
