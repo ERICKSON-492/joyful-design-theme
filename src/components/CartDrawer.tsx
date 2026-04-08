@@ -111,14 +111,27 @@ export function CartDrawer() {
                   <span className="font-display font-semibold text-foreground">Total</span>
                   <span className="font-bold text-lg text-primary">KSh {totalPrice.toLocaleString()}</span>
                 </div>
-                <Link
-                  to="/checkout"
-                  onClick={() => setIsOpen(false)}
-                  className="block w-full bg-green-600 hover:bg-green-700 text-white text-center py-3 font-bold text-sm tracking-wider uppercase transition-colors rounded-lg"
-                  style={{ minHeight: '44px' }}
-                >
-                  Pay with M-Pesa
-                </Link>
+                {isLoggedIn ? (
+                  <Link
+                    to="/checkout"
+                    onClick={() => setIsOpen(false)}
+                    className="block w-full bg-green-600 hover:bg-green-700 text-white text-center py-3 font-bold text-sm tracking-wider uppercase transition-colors rounded-lg"
+                    style={{ minHeight: '44px' }}
+                  >
+                    Pay with M-Pesa
+                  </Link>
+                ) : (
+                  <Link
+                    to="/auth"
+                    state={{ returnTo: '/checkout' }}
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center justify-center gap-2 w-full bg-primary hover:bg-primary/90 text-primary-foreground text-center py-3 font-bold text-sm tracking-wider uppercase transition-colors rounded-lg"
+                    style={{ minHeight: '44px' }}
+                  >
+                    <LogIn className="w-4 h-4" />
+                    Log In to Checkout
+                  </Link>
+                )}
                 <a
                   href={`https://wa.me/254748207000?text=${encodeURIComponent(
                     `Hi! I'd like to order:\n${items.map(i => `• ${i.name} x${i.quantity} — KSh ${(i.price * i.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KSh ${totalPrice.toLocaleString()}`
