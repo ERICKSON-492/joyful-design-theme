@@ -1,16 +1,16 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import tribeTess from '@/assets/tribe-tess.jpeg'
+import tribeAnne from '@/assets/tribe-anne.jpeg'
+import tribeLuna from '@/assets/tribe-luna.jpeg'
 import tribe1 from '@/assets/tribe-1.jpg'
-import tribe2 from '@/assets/tribe-2.jpg'
-import tribe3 from '@/assets/tribe-3.jpg'
-import tribe4 from '@/assets/tribe-4.jpg'
 import { ScrollReveal } from './ScrollReveal'
 
 const tribeLooks = [
+  { image: tribeTess, name: 'Tess', piece: 'Beaded Waist Chain' },
+  { image: tribeAnne, name: 'Anne', piece: 'Beaded Watch Cuff' },
+  { image: tribeLuna, name: 'Luna', piece: 'Beaded Dog Collar' },
   { image: tribe1, name: 'Amani K.', piece: 'Layered Beaded Necklace' },
-  { image: tribe2, name: 'Wanjiku M.', piece: 'Mandala Drop Earrings' },
-  { image: tribe3, name: 'David O.', piece: 'Beaded Sun Mirror' },
-  { image: tribe4, name: 'Nasra A.', piece: 'Stacked Bead Bracelets' },
 ]
 
 const cardVariants = {
