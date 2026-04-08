@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/integrations/supabase/client'
@@ -13,61 +13,105 @@ interface Slide {
 }
 
 const fallbackSlides: Slide[] = [
-  { id: '1', image_url: '', title: 'USHANGA CHRONICLES', subtitle: 'One bead. A thousand stories.', cta_text: 'Explore the Tribe', cta_link: '/shop' },
+  {
+    id: 'fallback-hero',
+    image_url: '',
+    title: 'USHANGA CHRONICLES',
+    subtitle: 'One bead. A thousand stories.',
+    cta_text: 'Explore the Tribe',
+    cta_link: '/shop',
+  },
 ]
+
+const normalizeSlides = (data: Partial<Slide>[] | null | undefined): Slide[] => {
+  if (!data || data.length === 0) return fallbackSlides
+
+  const cleanedSlides = data.map((slide, index) => ({
+    id: slide.id || `hero-slide-${index}`,
+    image_url: slide.image_url || '',
+    title: slide.title?.trim() || fallbackSlides[0].title,
+    subtitle: slide.subtitle?.trim() || fallbackSlides[0].subtitle,
+    cta_text: slide.cta_text?.trim() || fallbackSlides[0].cta_text,
+    cta_link: slide.cta_link?.trim() || fallbackSlides[0].cta_link,
+  }))
+
+  return cleanedSlides.length > 0 ? cleanedSlides : fallbackSlides
+}
 
 export function HeroSection() {
   const [slides, setSlides] = useState<Slide[]>(fallbackSlides)
   const [current, setCurrent] = useState(0)
 
   useEffect(() => {
-    const fetch = async () => {
-      const { data } = await supabase
+    let isMounted = true
+
+    const fetchSlides = async () => {
+      const { data, error } = await supabase
         .from('hero_slides')
         .select('id, image_url, title, subtitle, cta_text, cta_link')
         .eq('is_active', true)
         .order('display_order')
-      setSlides(data && data.length > 0 ? data : fallbackSlides)
+
+      if (!isMounted) return
+
+      if (error) {
+        setSlides(fallbackSlides)
+        return
+      }
+
+      setSlides(normalizeSlides(data))
     }
-    fetch()
+
+    fetchSlides()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
-  const nextSlide = useCallback(() => {
-    setCurrent((prev) => (prev + 1) % (slides.length || 1))
-  }, [slides.length])
+  const safeSlides = useMemo(() => (slides.length > 0 ? slides : fallbackSlides), [slides])
+  const activeIndex = current < safeSlides.length ? current : 0
+  const activeSlide = safeSlides[activeIndex] || fallbackSlides[0]
 
   useEffect(() => {
-    if (slides.length <= 1) return
-    const timer = setInterval(nextSlide, 4500)
-    return () => clearInterval(timer)
-  }, [nextSlide, slides.length])
+    if (current >= safeSlides.length) {
+      setCurrent(0)
+    }
+  }, [current, safeSlides.length])
 
-  if (slides.length === 0) return null
+  const nextSlide = useCallback(() => {
+    setCurrent((prev) => (prev + 1) % safeSlides.length)
+  }, [safeSlides.length])
 
-  const slide = slides[current]
+  useEffect(() => {
+    if (safeSlides.length <= 1) return
+
+    const timer = window.setInterval(nextSlide, 4500)
+    return () => window.clearInterval(timer)
+  }, [nextSlide, safeSlides.length])
 
   return (
     <section className="relative w-full h-[85vh] md:h-screen overflow-hidden bg-foreground">
-      {slides.map((s, i) => (
-        s.image_url ? (
+      {safeSlides.map((slide, index) => (
+        slide.image_url ? (
           <motion.img
-            key={s.id}
-            src={s.image_url}
-            alt={s.subtitle}
-            className="absolute inset-0 w-full h-full object-cover"
+            key={slide.id}
+            src={slide.image_url}
+            alt={slide.subtitle}
+            className="absolute inset-0 h-full w-full object-cover"
             initial={false}
             animate={{
-              opacity: i === current ? 1 : 0,
-              scale: i === current ? 1 : 1.05,
+              opacity: index === activeIndex ? 1 : 0,
+              scale: index === activeIndex ? 1 : 1.04,
             }}
             transition={{ duration: 0.6, ease: 'easeInOut' }}
-            style={{ zIndex: i === current ? 1 : 0 }}
+            style={{ zIndex: index === activeIndex ? 1 : 0 }}
           />
         ) : (
           <div
-            key={s.id}
-            className="absolute inset-0 w-full h-full bg-foreground"
-            style={{ zIndex: i === current ? 1 : 0 }}
+            key={slide.id}
+            className="absolute inset-0 h-full w-full bg-foreground"
+            style={{ zIndex: index === activeIndex ? 1 : 0 }}
           />
         )
       ))}
@@ -79,44 +123,44 @@ export function HeroSection() {
         }}
       />
 
-      <div className="absolute inset-0 z-[3] flex items-center justify-center text-center px-6">
+      <div className="absolute inset-0 z-[3] flex items-center justify-center px-6 text-center">
         <div className="max-w-3xl">
-          <AnimatePresence mode="wait">
+          <AnimatePresence initial={false} mode="sync">
             <motion.div
-              key={current}
+              key={activeSlide.id}
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
               <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-4 leading-[1.1] tracking-wide drop-shadow-lg">
-                {slide.title}
+                {activeSlide.title}
               </h1>
               <p className="text-primary text-xl md:text-2xl lg:text-3xl font-display italic mb-10 drop-shadow-md">
-                {slide.subtitle}
+                {activeSlide.subtitle}
               </p>
               <Link
-                to={slide.cta_link}
+                to={activeSlide.cta_link}
                 className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-10 py-4 text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 style={{ minHeight: '44px' }}
               >
-                {slide.cta_text}
+                {activeSlide.cta_text}
               </Link>
             </motion.div>
           </AnimatePresence>
         </div>
       </div>
 
-      {slides.length > 1 && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3 z-[4]">
-          {slides.map((_, i) => (
+      {safeSlides.length > 1 && (
+        <div className="absolute bottom-8 left-1/2 z-[4] flex -translate-x-1/2 gap-3">
+          {safeSlides.map((slide, index) => (
             <button
-              key={i}
-              onClick={() => setCurrent(i)}
+              key={slide.id}
+              onClick={() => setCurrent(index)}
               className={`h-1.5 rounded-full transition-all duration-500 ${
-                i === current ? 'w-10 bg-primary shadow-md' : 'w-5 bg-white/40 hover:bg-white/60'
+                index === activeIndex ? 'w-10 bg-primary shadow-md' : 'w-5 bg-white/40 hover:bg-white/60'
               }`}
-              aria-label={`Go to slide ${i + 1}`}
+              aria-label={`Go to slide ${index + 1}`}
             />
           ))}
         </div>
