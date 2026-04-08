@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package } from 'lucide-react'
+import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package, Home, BookOpen, Store, Palette, Users, Truck } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
@@ -238,70 +238,134 @@ export function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile Menu */}
+      {/* Mobile Sidebar Menu */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.25 }}
-            className="lg:hidden fixed inset-0 top-[106px] bg-background z-50 flex flex-col"
-          >
-            <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8">
-              {navLinks.map((link, i) => (
-                <motion.div
-                  key={link.label}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.06, duration: 0.3 }}
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="lg:hidden fixed inset-0 bg-black/40 z-50"
+              onClick={() => setIsOpen(false)}
+            />
+            {/* Sidebar */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              className="lg:hidden fixed inset-y-0 left-0 w-[280px] bg-background z-50 flex flex-col shadow-2xl"
+            >
+              {/* Sidebar Header */}
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <Link to="/" onClick={() => setIsOpen(false)} className="flex-shrink-0">
+                  <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-10 w-auto" />
+                </Link>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 hover:bg-accent rounded-full transition-colors"
+                  aria-label="Close menu"
                 >
-                  <Link
-                    to={link.href}
-                    onClick={() => setIsOpen(false)}
-                    className={`text-2xl font-display font-semibold transition-colors ${
-                      location.pathname === link.href ? 'text-primary' : 'text-foreground'
-                    }`}
-                    style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}
-                  >
-                    {link.label}
-                  </Link>
-                </motion.div>
-              ))}
-              {/* Mobile auth links */}
-              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: navLinks.length * 0.06 }}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Nav Links */}
+              <nav className="flex-1 overflow-y-auto py-4">
+                {[
+                  { ...navLinks[0], icon: Home },
+                  { ...navLinks[1], icon: BookOpen },
+                  { ...navLinks[2], icon: Store },
+                  { ...navLinks[3], icon: Palette },
+                  { ...navLinks[4], icon: Users },
+                  { ...navLinks[5], icon: Truck },
+                ].map((link) => {
+                  const Icon = link.icon
+                  return (
+                    <Link
+                      key={link.label}
+                      to={link.href}
+                      onClick={() => setIsOpen(false)}
+                      className={`flex items-center gap-3 px-5 py-3.5 text-base font-medium transition-colors ${
+                        location.pathname === link.href
+                          ? 'text-primary bg-primary/10 border-r-2 border-primary'
+                          : 'text-foreground hover:bg-accent'
+                      }`}
+                      style={{ minHeight: '44px' }}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {link.label}
+                    </Link>
+                  )
+                })}
+
+                <div className="my-3 mx-5 border-t border-border" />
+
+                {/* Auth links */}
                 {user ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <Link to="/my-orders" onClick={() => setIsOpen(false)} className="text-2xl font-display font-semibold text-foreground" style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+                  <>
+                    <Link
+                      to="/my-orders"
+                      onClick={() => setIsOpen(false)}
+                      className={`flex items-center gap-3 px-5 py-3.5 text-base font-medium transition-colors ${
+                        location.pathname === '/my-orders' ? 'text-primary bg-primary/10 border-r-2 border-primary' : 'text-foreground hover:bg-accent'
+                      }`}
+                      style={{ minHeight: '44px' }}
+                    >
+                      <Package className="w-5 h-5 flex-shrink-0" />
                       My Orders
                     </Link>
                     <button
                       onClick={async () => { await supabase.auth.signOut(); setUser(null); setIsOpen(false) }}
-                      className="text-lg text-muted-foreground"
+                      className="flex items-center gap-3 px-5 py-3.5 text-base font-medium text-muted-foreground hover:bg-accent w-full text-left transition-colors"
                       style={{ minHeight: '44px' }}
                     >
+                      <LogOut className="w-5 h-5 flex-shrink-0" />
                       Sign Out
                     </button>
-                  </div>
+                  </>
                 ) : (
-                  <Link to="/auth" onClick={() => setIsOpen(false)} className="text-2xl font-display font-semibold text-primary" style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+                  <Link
+                    to="/auth"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-5 py-3.5 text-base font-medium text-primary hover:bg-accent transition-colors"
+                    style={{ minHeight: '44px' }}
+                  >
+                    <User className="w-5 h-5 flex-shrink-0" />
                     Sign In
                   </Link>
                 )}
-              </motion.div>
-            </div>
-            <div className="p-8 text-center">
-              <a
-                href="https://wa.me/254748207000"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block bg-primary text-primary-foreground px-8 py-4 font-semibold text-sm w-full"
-                style={{ minHeight: '44px' }}
-              >
-                Start a Conversation
-              </a>
-            </div>
-          </motion.div>
+              </nav>
+
+              {/* Bottom CTA */}
+              <div className="p-4 border-t border-border">
+                <a
+                  href="https://wa.me/254748207000"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-3 font-semibold text-sm w-full rounded-md"
+                  style={{ minHeight: '44px' }}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Start a Conversation
+                </a>
+                <div className="flex items-center justify-center gap-4 mt-4">
+                  <a href="https://www.instagram.com/ushanga_chronicles/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Instagram">
+                    <Instagram className="w-5 h-5" />
+                  </a>
+                  <a href="https://www.facebook.com/ushangachronicles" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Facebook">
+                    <Facebook className="w-5 h-5" />
+                  </a>
+                  <a href="https://www.youtube.com/@ushangachronicles" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="YouTube">
+                    <Youtube className="w-5 h-5" />
+                  </a>
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </header>
