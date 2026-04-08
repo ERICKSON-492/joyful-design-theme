@@ -13,6 +13,7 @@ import AdminDashboard from '../pages/AdminDashboard'
 import AdminProducts from '../pages/AdminProducts'
 import AdminEnquiries from '../pages/AdminEnquiries'
 import AdminHeroSlides from '../pages/AdminHeroSlides'
+import AdminOrders from '../pages/AdminOrders'
 import CheckoutPage from '../pages/CheckoutPage'
 import NotFound from '../pages/NotFound'
 
