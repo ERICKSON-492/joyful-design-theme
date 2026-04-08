@@ -1,10 +1,25 @@
+import { useState, useEffect } from 'react'
 import { useCart } from '@/contexts/CartContext'
-import { X, Plus, Minus, Trash2, ShoppingBag } from 'lucide-react'
+import { X, Plus, Minus, Trash2, ShoppingBag, LogIn } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { supabase } from '@/integrations/supabase/client'
 
 export function CartDrawer() {
   const { items, isOpen, setIsOpen, removeFromCart, updateQuantity, totalItems, totalPrice, clearCart } = useCart()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+
+  useEffect(() => {
+    const check = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setIsLoggedIn(!!session)
+    }
+    check()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setIsLoggedIn(!!session)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   return (
     <AnimatePresence>
