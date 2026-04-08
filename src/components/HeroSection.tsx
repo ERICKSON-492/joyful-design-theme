@@ -41,40 +41,49 @@ const normalizeSlides = (data: Partial<Slide>[] | null | undefined): Slide[] => 
 export function HeroSection() {
   const [slides, setSlides] = useState<Slide[]>(fallbackSlides)
   const [current, setCurrent] = useState(0)
-  const [imagesLoaded, setImagesLoaded] = useState<Set<string>>(new Set())
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let isMounted = true
 
     const fetchSlides = async () => {
-      const { data, error } = await supabase
-        .from('hero_slides')
-        .select('id, image_url, title, subtitle, cta_text, cta_link')
-        .eq('is_active', true)
-        .order('display_order')
+      try {
+        const { data, error } = await supabase
+          .from('hero_slides')
+          .select('id, image_url, title, subtitle, cta_text, cta_link')
+          .eq('is_active', true)
+          .order('display_order')
 
-      if (!isMounted) return
+        if (!isMounted) return
 
-      if (error) {
-        setSlides(fallbackSlides)
-        return
-      }
-
-      const normalized = normalizeSlides(data)
-      setSlides(normalized)
-
-      // Preload all images
-      normalized.forEach((slide) => {
-        if (slide.image_url) {
-          const img = new Image()
-          img.onload = () => {
-            if (isMounted) {
-              setImagesLoaded((prev) => new Set(prev).add(slide.image_url))
-            }
-          }
-          img.src = slide.image_url
+        if (error) {
+          setReady(true)
+          return
         }
-      })
+
+        const normalized = normalizeSlides(data)
+        setSlides(normalized)
+
+        // Preload first image eagerly, rest in background
+        if (normalized[0]?.image_url) {
+          const img = new window.Image()
+          img.onload = () => { if (isMounted) setReady(true) }
+          img.onerror = () => { if (isMounted) setReady(true) }
+          img.src = normalized[0].image_url
+        } else {
+          setReady(true)
+        }
+
+        // Preload remaining images in background
+        normalized.slice(1).forEach((slide) => {
+          if (slide.image_url) {
+            const img = new window.Image()
+            img.src = slide.image_url
+          }
+        })
+      } catch {
+        if (isMounted) setReady(true)
+      }
     }
 
     fetchSlides()
@@ -112,7 +121,8 @@ export function HeroSection() {
   }, [activeIndex, safeSlides.length])
 
   return (
-    <section className="relative w-full h-[85vh] md:h-screen overflow-hidden bg-foreground">
+    <section className="relative w-full h-[85vh] md:h-screen overflow-hidden bg-foreground" aria-label="Hero">
+      {/* Instant fallback text visible while images load */}
       {safeSlides.map((slide, index) => {
         if (!visibleIndices.has(index)) return null
         const isActive = index === activeIndex
