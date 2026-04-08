@@ -19,17 +19,22 @@ export default function CheckoutPage() {
   const [postalCode, setPostalCode] = useState('')
   const [email, setEmail] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    const getUser = async () => {
+    const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        setUserId(session.user.id)
-        setName(session.user.user_metadata?.full_name || '')
-        setEmail(session.user.email || '')
+      if (!session?.user) {
+        toast.error('Please log in or create an account to checkout')
+        navigate('/auth', { state: { returnTo: '/checkout' } })
+        return
       }
+      setUserId(session.user.id)
+      setName(session.user.user_metadata?.full_name || '')
+      setEmail(session.user.email || '')
+      setAuthLoading(false)
     }
-    getUser()
+    checkAuth()
   }, [])
 
   const handleMpesaPayment = async () => {
