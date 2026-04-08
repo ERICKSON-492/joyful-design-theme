@@ -12,6 +12,8 @@ export default function AuthPage() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = (location.state as any)?.returnTo || '/'
 
   useEffect(() => {
     const checkSession = async () => {
