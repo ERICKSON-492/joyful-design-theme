@@ -121,8 +121,11 @@ export function HeroSection() {
   }, [activeIndex, safeSlides.length])
 
   return (
-    <section className="relative w-full h-[85vh] md:h-screen overflow-hidden bg-foreground" aria-label="Hero">
-      {/* Instant fallback text visible while images load */}
+    <section
+      className="relative w-full h-[85vh] md:h-screen overflow-hidden"
+      aria-label="Hero"
+      style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)' }}
+    >
       {safeSlides.map((slide, index) => {
         if (!visibleIndices.has(index)) return null
         const isActive = index === activeIndex
@@ -139,13 +142,14 @@ export function HeroSection() {
               opacity: isActive ? 1 : 0,
               scale: isActive ? 1 : 1.04,
             }}
-            transition={{ duration: 0.6, ease: 'easeInOut' }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
             style={{ zIndex: isActive ? 1 : 0 }}
           />
         ) : (
           <div
             key={slide.id}
-            className="absolute inset-0 h-full w-full bg-foreground"
+            className="absolute inset-0 h-full w-full"
+            style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)' }}
             style={{ zIndex: isActive ? 1 : 0 }}
           />
         )
