@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_users: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      cart_items: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          quantity: number
+          session_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          quantity?: number
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          quantity?: number
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cart_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_messages: {
         Row: {
           created_at: string
@@ -116,6 +172,42 @@ export type Database = {
         }
         Relationships: []
       }
+      hero_slides: {
+        Row: {
+          created_at: string
+          cta_link: string
+          cta_text: string
+          display_order: number
+          id: string
+          image_url: string
+          is_active: boolean
+          subtitle: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          cta_link?: string
+          cta_text?: string
+          display_order?: number
+          id?: string
+          image_url: string
+          is_active?: boolean
+          subtitle?: string
+          title?: string
+        }
+        Update: {
+          created_at?: string
+          cta_link?: string
+          cta_text?: string
+          display_order?: number
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          subtitle?: string
+          title?: string
+        }
+        Relationships: []
+      }
       newsletter_subscribers: {
         Row: {
           created_at: string
@@ -178,7 +270,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
