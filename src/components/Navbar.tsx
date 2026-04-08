@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Menu, X, Search, ShoppingBag } from 'lucide-react'
+import { Menu, X, Search, ShoppingBag, Shield } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
+import { supabase } from '@/integrations/supabase/client'
 
 const navLinks = [
   { label: 'Home', href: '/' },
@@ -18,8 +19,22 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const location = useLocation()
   const { totalItems, setIsOpen: setCartOpen } = useCart()
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        const { data } = await supabase.from('admin_users').select('id').eq('user_id', session.user.id).maybeSingle()
+        setIsAdmin(!!data)
+      }
+    }
+    checkAdmin()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => checkAdmin())
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -75,6 +90,16 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center gap-1">
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="p-2.5 hover:bg-accent rounded-full transition-colors text-primary"
+                aria-label="Admin Panel"
+                title="Admin Panel"
+              >
+                <Shield className="w-5 h-5" />
+              </Link>
+            )}
             <button
               onClick={() => setSearchOpen(!searchOpen)}
               className="p-2.5 hover:bg-accent rounded-full transition-colors"
