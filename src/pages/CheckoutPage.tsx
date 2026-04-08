@@ -19,17 +19,22 @@ export default function CheckoutPage() {
   const [postalCode, setPostalCode] = useState('')
   const [email, setEmail] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    const getUser = async () => {
+    const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        setUserId(session.user.id)
-        setName(session.user.user_metadata?.full_name || '')
-        setEmail(session.user.email || '')
+      if (!session?.user) {
+        toast.error('Please log in or create an account to checkout')
+        navigate('/auth', { state: { returnTo: '/checkout' } })
+        return
       }
+      setUserId(session.user.id)
+      setName(session.user.user_metadata?.full_name || '')
+      setEmail(session.user.email || '')
+      setAuthLoading(false)
     }
-    getUser()
+    checkAuth()
   }, [])
 
   const handleMpesaPayment = async () => {
@@ -147,6 +152,14 @@ export default function CheckoutPage() {
       setError(err.message || 'Something went wrong')
       toast.error('Payment failed')
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="bg-background min-h-screen pt-24 pb-16 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   if (items.length === 0 && status !== 'success') {
