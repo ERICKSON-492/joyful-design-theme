@@ -17,6 +17,7 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [postalCode, setPostalCode] = useState('')
+  const [email, setEmail] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
