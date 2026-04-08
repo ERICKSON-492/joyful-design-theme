@@ -16,6 +16,8 @@ import AdminHeroSlides from '../pages/AdminHeroSlides'
 import AdminOrders from '../pages/AdminOrders'
 import CheckoutPage from '../pages/CheckoutPage'
 import NotFound from '../pages/NotFound'
+import AuthPage from '../pages/AuthPage'
+import MyOrdersPage from '../pages/MyOrdersPage'
 
 export function AnimatedRoutes() {
   const location = useLocation()
@@ -46,6 +48,8 @@ export function AnimatedRoutes() {
         <Route path="/tribe-looks" element={<PageTransition><TribeLooksPage /></PageTransition>} />
         <Route path="/wholesale-gifting" element={<PageTransition><WholesalePage /></PageTransition>} />
         <Route path="/checkout" element={<PageTransition><CheckoutPage /></PageTransition>} />
+        <Route path="/auth" element={<PageTransition><AuthPage /></PageTransition>} />
+        <Route path="/my-orders" element={<PageTransition><MyOrdersPage /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>

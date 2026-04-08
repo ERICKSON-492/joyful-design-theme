@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle } from 'lucide-react'
+import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
@@ -19,20 +19,24 @@ export function Navbar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [user, setUser] = useState<any>(null)
   const location = useLocation()
   const navigate = useNavigate()
   const { totalItems, setIsOpen: setCartOpen } = useCart()
 
   useEffect(() => {
-    const checkAdmin = async () => {
+    const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
+      setUser(session?.user ?? null)
       if (session?.user) {
         const { data } = await supabase.from('admin_users').select('id').eq('user_id', session.user.id).maybeSingle()
         setIsAdmin(!!data)
+      } else {
+        setIsAdmin(false)
       }
     }
-    checkAdmin()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => checkAdmin())
+    checkAuth()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => checkAuth())
     return () => subscription.unsubscribe()
   }, [])
 
@@ -149,6 +153,32 @@ export function Navbar() {
                 </Link>
               )}
 
+              {/* User Account */}
+              {user ? (
+                <div className="hidden lg:flex items-center gap-1">
+                  <Link to="/my-orders" className="p-2.5 hover:bg-accent rounded-full transition-colors" aria-label="My Orders" title="My Orders">
+                    <Package className="w-5 h-5" />
+                  </Link>
+                  <button
+                    onClick={async () => { await supabase.auth.signOut(); setUser(null); setIsAdmin(false) }}
+                    className="p-2.5 hover:bg-accent rounded-full transition-colors text-muted-foreground"
+                    aria-label="Sign Out"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/auth"
+                  className="hidden lg:flex p-2.5 hover:bg-accent rounded-full transition-colors"
+                  aria-label="Sign In"
+                  title="Sign In"
+                >
+                  <User className="w-5 h-5" />
+                </Link>
+              )}
+
               {/* Cart */}
               <button
                 onClick={() => setCartOpen(true)}
@@ -238,6 +268,27 @@ export function Navbar() {
                   </Link>
                 </motion.div>
               ))}
+              {/* Mobile auth links */}
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: navLinks.length * 0.06 }}>
+                {user ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <Link to="/my-orders" onClick={() => setIsOpen(false)} className="text-2xl font-display font-semibold text-foreground" style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+                      My Orders
+                    </Link>
+                    <button
+                      onClick={async () => { await supabase.auth.signOut(); setUser(null); setIsOpen(false) }}
+                      className="text-lg text-muted-foreground"
+                      style={{ minHeight: '44px' }}
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  <Link to="/auth" onClick={() => setIsOpen(false)} className="text-2xl font-display font-semibold text-primary" style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+                    Sign In
+                  </Link>
+                )}
+              </motion.div>
             </div>
             <div className="p-8 text-center">
               <a
