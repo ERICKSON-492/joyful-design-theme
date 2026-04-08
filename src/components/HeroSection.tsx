@@ -44,14 +44,14 @@ export function HeroSection() {
   const slide = slides[current]
 
   return (
-    <section className="relative w-full h-[85vh] md:h-screen overflow-hidden">
+    <section className="relative w-full h-[85vh] md:h-screen overflow-hidden bg-black">
       {/* Sliding background images */}
       <AnimatePresence mode="wait">
         <motion.img
           key={current}
           src={slide.image}
           alt={slide.subtitle}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-contain"
           initial={{ scale: 1.1, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ opacity: 0 }}
