@@ -9,7 +9,7 @@ export function Footer() {
           {/* Brand */}
           <div>
             <Link to="/" className="block mb-4">
-              <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-14 w-auto brightness-0 invert" />
+              <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-14 w-auto rounded-md" />
             </Link>
             <p className="text-sm leading-relaxed mb-4">
               One bead. A thousand stories. Handcrafted African jewelry, home decor, 
