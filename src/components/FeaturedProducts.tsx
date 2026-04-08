@@ -14,10 +14,11 @@ interface Product {
 }
 
 export function FeaturedProducts() {
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<Product[] | null>(null)
   const { addToCart } = useCart()
 
   useEffect(() => {
+    let mounted = true
     const loadProducts = async () => {
       try {
         const { data, error } = await supabase
@@ -26,19 +27,24 @@ export function FeaturedProducts() {
           .eq('is_active', true)
           .order('created_at', { ascending: false })
           .limit(4)
+        if (!mounted) return
         if (error) {
           console.error('FeaturedProducts fetch error:', error)
+          setProducts([])
           return
         }
+        console.log('FeaturedProducts loaded:', data?.length, 'products')
         setProducts(data || [])
       } catch (err) {
         console.error('FeaturedProducts exception:', err)
+        if (mounted) setProducts([])
       }
     }
     loadProducts()
+    return () => { mounted = false }
   }, [])
 
-  if (products.length === 0) return null
+  if (products === null || products.length === 0) return null
 
   return (
     <section className="py-16 md:py-24 bg-background">
