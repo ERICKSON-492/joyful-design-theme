@@ -33,7 +33,6 @@ export function FeaturedProducts() {
           setProducts([])
           return
         }
-        console.log('FeaturedProducts loaded:', data?.length, 'products')
         setProducts(data || [])
       } catch (err) {
         console.error('FeaturedProducts exception:', err)
