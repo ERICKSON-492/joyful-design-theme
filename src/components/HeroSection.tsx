@@ -149,8 +149,7 @@ export function HeroSection() {
           <div
             key={slide.id}
             className="absolute inset-0 h-full w-full"
-            style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)' }}
-            style={{ zIndex: isActive ? 1 : 0 }}
+            style={{ zIndex: isActive ? 1 : 0, background: 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)' }}
           />
         )
       })}
