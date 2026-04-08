@@ -41,6 +41,7 @@ const normalizeSlides = (data: Partial<Slide>[] | null | undefined): Slide[] => 
 export function HeroSection() {
   const [slides, setSlides] = useState<Slide[]>(fallbackSlides)
   const [current, setCurrent] = useState(0)
+  const [imagesLoaded, setImagesLoaded] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let isMounted = true
@@ -59,7 +60,21 @@ export function HeroSection() {
         return
       }
 
-      setSlides(normalizeSlides(data))
+      const normalized = normalizeSlides(data)
+      setSlides(normalized)
+
+      // Preload all images
+      normalized.forEach((slide) => {
+        if (slide.image_url) {
+          const img = new Image()
+          img.onload = () => {
+            if (isMounted) {
+              setImagesLoaded((prev) => new Set(prev).add(slide.image_url))
+            }
+          }
+          img.src = slide.image_url
+        }
+      })
     }
 
     fetchSlides()
@@ -90,31 +105,41 @@ export function HeroSection() {
     return () => window.clearInterval(timer)
   }, [nextSlide, safeSlides.length])
 
+  // Only render the active slide and the next one for performance
+  const visibleIndices = useMemo(() => {
+    const next = (activeIndex + 1) % safeSlides.length
+    return new Set([activeIndex, next])
+  }, [activeIndex, safeSlides.length])
+
   return (
     <section className="relative w-full h-[85vh] md:h-screen overflow-hidden bg-foreground">
-      {safeSlides.map((slide, index) => (
-        slide.image_url ? (
+      {safeSlides.map((slide, index) => {
+        if (!visibleIndices.has(index)) return null
+        const isActive = index === activeIndex
+        return slide.image_url ? (
           <motion.img
             key={slide.id}
             src={slide.image_url}
             alt={slide.subtitle}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            fetchPriority={index === 0 ? 'high' : 'auto'}
             className="absolute inset-0 h-full w-full object-cover"
             initial={false}
             animate={{
-              opacity: index === activeIndex ? 1 : 0,
-              scale: index === activeIndex ? 1 : 1.04,
+              opacity: isActive ? 1 : 0,
+              scale: isActive ? 1 : 1.04,
             }}
             transition={{ duration: 0.6, ease: 'easeInOut' }}
-            style={{ zIndex: index === activeIndex ? 1 : 0 }}
+            style={{ zIndex: isActive ? 1 : 0 }}
           />
         ) : (
           <div
             key={slide.id}
             className="absolute inset-0 h-full w-full bg-foreground"
-            style={{ zIndex: index === activeIndex ? 1 : 0 }}
+            style={{ zIndex: isActive ? 1 : 0 }}
           />
         )
-      ))}
+      })}
 
       <div
         className="absolute inset-0 z-[2]"
