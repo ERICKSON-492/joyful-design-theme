@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
-import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft } from 'lucide-react'
+import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Products', href: '/admin/products', icon: Package },
+  { label: 'Hero Slides', href: '/admin/hero', icon: Image },
   { label: 'Enquiries', href: '/admin/enquiries', icon: MessageSquare },
 ]
 
