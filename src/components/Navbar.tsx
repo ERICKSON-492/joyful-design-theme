@@ -55,7 +55,7 @@ export function Navbar() {
       <div className="bg-primary text-primary-foreground">
         <div className="container mx-auto px-4 flex items-center justify-between h-10">
           <div className="hidden md:flex items-center gap-3">
-            <a href="https://www.instagram.com/ushangachronicles" target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity" aria-label="Instagram">
+            <a href="https://www.instagram.com/ushanga_chronicles/" target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity" aria-label="Instagram">
               <Instagram className="w-3.5 h-3.5" />
             </a>
             <a href="https://www.facebook.com/ushangachronicles" target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity" aria-label="Facebook">
