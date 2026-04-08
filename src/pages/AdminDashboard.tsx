@@ -7,17 +7,19 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const [products, enquiries, unread, subs] = await Promise.all([
+      const [products, enquiries, unread, subs, orders] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('enquiry_messages').select('id', { count: 'exact', head: true }),
         supabase.from('enquiry_messages').select('id', { count: 'exact', head: true }).eq('is_read', false).eq('is_from_admin', false),
         supabase.from('newsletter_subscribers').select('id', { count: 'exact', head: true }),
+        supabase.from('orders').select('id', { count: 'exact', head: true }),
       ])
       setStats({
         products: products.count || 0,
         enquiries: enquiries.count || 0,
         unread: unread.count || 0,
         subscribers: subs.count || 0,
+        orders: orders.count || 0,
       })
     }
     fetchStats()
