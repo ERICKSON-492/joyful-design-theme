@@ -174,6 +174,39 @@ export default function AuthPage() {
           </button>
         </form>
 
+        {/* Forgot Password Modal */}
+        {showForgot && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" onClick={() => setShowForgot(false)}>
+            <div className="bg-card rounded-xl p-6 w-full max-w-sm shadow-lg" onClick={e => e.stopPropagation()}>
+              <h2 className="font-display text-xl font-bold text-foreground mb-2">Reset Password</h2>
+              <p className="text-sm text-muted-foreground mb-4">Enter your email and we'll send you a reset link.</p>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="Email address"
+                    required
+                    className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {forgotLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Send Reset Link'}
+                </button>
+                <button type="button" onClick={() => setShowForgot(false)} className="w-full text-sm text-muted-foreground hover:text-foreground">
+                  Cancel
+                </button>
+              </form>
+            </div>
+          </div>
+        )
+
         <p className="text-center text-sm text-muted-foreground mt-6">
           {isLogin ? "Don't have an account? " : 'Already have an account? '}
           <button
