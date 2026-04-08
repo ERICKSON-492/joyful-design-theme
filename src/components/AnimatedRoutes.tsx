@@ -51,6 +51,7 @@ export function AnimatedRoutes() {
         <Route path="/checkout" element={<PageTransition><CheckoutPage /></PageTransition>} />
         <Route path="/auth" element={<PageTransition><AuthPage /></PageTransition>} />
         <Route path="/my-orders" element={<PageTransition><MyOrdersPage /></PageTransition>} />
+        <Route path="/reset-password" element={<PageTransition><ResetPasswordPage /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>
