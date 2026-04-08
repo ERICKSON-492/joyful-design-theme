@@ -88,7 +88,7 @@ export function HeroSection() {
         normalized.slice(1).forEach((slide) => {
           if (slide.image_url) {
             const img = new window.Image()
-            img.src = optimizeImageUrl(slide.image_url, isMobile ? 800 : 1920)
+            img.src = optimizeImageUrl(slide.image_url)
           }
         })
       } catch {
