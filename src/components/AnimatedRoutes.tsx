@@ -19,6 +19,7 @@ import NotFound from '../pages/NotFound'
 import AuthPage from '../pages/AuthPage'
 import MyOrdersPage from '../pages/MyOrdersPage'
 import ResetPasswordPage from '../pages/ResetPasswordPage'
+import UnsubscribePage from '../pages/UnsubscribePage'
 
 export function AnimatedRoutes() {
   const location = useLocation()
