@@ -90,6 +90,16 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center gap-1">
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="p-2.5 hover:bg-accent rounded-full transition-colors text-primary"
+                aria-label="Admin Panel"
+                title="Admin Panel"
+              >
+                <Shield className="w-5 h-5" />
+              </Link>
+            )}
             <button
               onClick={() => setSearchOpen(!searchOpen)}
               className="p-2.5 hover:bg-accent rounded-full transition-colors"
