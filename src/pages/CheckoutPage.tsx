@@ -21,8 +21,18 @@ export default function CheckoutPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
 
-  // Non-blocking auth check — form renders immediately
+  // Auth check using onAuthStateChange (more reliable than getSession alone)
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id)
+        setName(prev => prev || session.user.user_metadata?.full_name || '')
+        setEmail(prev => prev || session.user.email || '')
+        setAuthChecked(true)
+      }
+    })
+
+    // Also call getSession to handle already-authenticated users
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) {
         toast.error('Please log in or create an account to checkout')
@@ -30,10 +40,12 @@ export default function CheckoutPage() {
         return
       }
       setUserId(session.user.id)
-      setName(session.user.user_metadata?.full_name || '')
-      setEmail(session.user.email || '')
+      setName(prev => prev || session.user.user_metadata?.full_name || '')
+      setEmail(prev => prev || session.user.email || '')
       setAuthChecked(true)
     })
+
+    return () => subscription.unsubscribe()
   }, [navigate])
 
   const handleMpesaPayment = useCallback(async () => {
