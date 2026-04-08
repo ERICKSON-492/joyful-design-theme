@@ -84,8 +84,8 @@ export function Navbar() {
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16 md:h-[70px]">
             {/* Logo */}
-            <Link to="/" className="font-display text-xl md:text-2xl font-bold text-foreground tracking-wide flex-shrink-0">
-              USHANGA <span className="font-light">CHRONICLES</span>
+            <Link to="/" className="flex-shrink-0">
+              <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-12 md:h-14 w-auto" />
             </Link>
 
             {/* Desktop Nav Links — centered */}
