@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
+import { supabase } from '@/integrations/supabase/client'
+import { toast } from 'sonner'
 
 const steps = ['Category', 'Your Vision', 'Colors & Materials', 'Inspiration', 'Your Details']
 
@@ -21,6 +23,7 @@ const colorSwatches = [
 export default function CustomOrderPage() {
   const [currentStep, setCurrentStep] = useState(0)
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     category: '',
     vision: '',
@@ -45,9 +48,27 @@ export default function CustomOrderPage() {
     }))
   }
 
-  const handleSubmit = () => {
-    if (formData.name.trim() && formData.phone.trim()) {
+  const handleSubmit = async () => {
+    if (!formData.name.trim() || !formData.phone.trim()) return
+    setSubmitting(true)
+    try {
+      const { error } = await supabase.from('custom_orders').insert({
+        category: formData.category,
+        vision: formData.vision || null,
+        colors: formData.colors.length > 0 ? formData.colors : null,
+        materials: formData.materials || null,
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim() || null,
+        delivery_location: formData.location.trim() || null,
+      })
+      if (error) throw error
       setSubmitted(true)
+    } catch (err) {
+      console.error('Custom order submission error:', err)
+      toast.error('Something went wrong. Please try again or reach out via WhatsApp.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -114,14 +135,7 @@ export default function CustomOrderPage() {
                 <h3 className="font-display text-xl font-bold mb-4">What are you looking for?</h3>
                 {categoryOptions.map((opt) => (
                   <label key={opt} className="flex items-center gap-3 p-4 border border-border cursor-pointer hover:border-primary transition-colors" style={{ minHeight: '44px' }}>
-                    <input
-                      type="radio"
-                      name="category"
-                      value={opt}
-                      checked={formData.category === opt}
-                      onChange={() => setFormData({ ...formData, category: opt })}
-                      className="accent-[#D4A017] w-5 h-5"
-                    />
+                    <input type="radio" name="category" value={opt} checked={formData.category === opt} onChange={() => setFormData({ ...formData, category: opt })} className="accent-[#D4A017] w-5 h-5" />
                     <span className="text-sm font-medium">{opt}</span>
                   </label>
                 ))}
@@ -131,15 +145,7 @@ export default function CustomOrderPage() {
             {currentStep === 1 && (
               <div>
                 <h3 className="font-display text-xl font-bold mb-4">Describe your vision</h3>
-                <textarea
-                  value={formData.vision}
-                  onChange={(e) => setFormData({ ...formData, vision: e.target.value })}
-                  placeholder="Tell us what you're dreaming of. The more detail, the better."
-                  maxLength={2000}
-                  rows={6}
-                  className="w-full p-4 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                  style={{ minHeight: '160px' }}
-                />
+                <textarea value={formData.vision} onChange={(e) => setFormData({ ...formData, vision: e.target.value })} placeholder="Tell us what you're dreaming of. The more detail, the better." maxLength={2000} rows={6} className="w-full p-4 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" style={{ minHeight: '160px' }} />
               </div>
             )}
 
@@ -149,47 +155,21 @@ export default function CustomOrderPage() {
                 <p className="text-sm text-muted-foreground mb-4">Select your preferred colors</p>
                 <div className="flex flex-wrap gap-3 mb-6">
                   {colorSwatches.map((swatch) => (
-                    <button
-                      key={swatch.name}
-                      onClick={() => toggleColor(swatch.name)}
-                      className={`w-10 h-10 rounded-full border-2 transition-all ${
-                        formData.colors.includes(swatch.name) ? 'border-foreground scale-110' : 'border-transparent'
-                      }`}
-                      style={{ backgroundColor: swatch.color }}
-                      aria-label={swatch.name}
-                    />
+                    <button key={swatch.name} onClick={() => toggleColor(swatch.name)} className={`w-10 h-10 rounded-full border-2 transition-all ${formData.colors.includes(swatch.name) ? 'border-foreground scale-110' : 'border-transparent'}`} style={{ backgroundColor: swatch.color }} aria-label={swatch.name} />
                   ))}
                 </div>
-                <label className="text-sm font-medium block mb-2">
-                  Any specific materials? (e.g. sisal, beads, leather, cowrie shells)
-                </label>
-                <input
-                  type="text"
-                  value={formData.materials}
-                  onChange={(e) => setFormData({ ...formData, materials: e.target.value })}
-                  maxLength={200}
-                  className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  style={{ minHeight: '44px' }}
-                />
+                <label className="text-sm font-medium block mb-2">Any specific materials? (e.g. sisal, beads, leather, cowrie shells)</label>
+                <input type="text" value={formData.materials} onChange={(e) => setFormData({ ...formData, materials: e.target.value })} maxLength={200} className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" style={{ minHeight: '44px' }} />
               </div>
             )}
 
             {currentStep === 3 && (
               <div>
                 <h3 className="font-display text-xl font-bold mb-4">Inspiration Photo</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Upload a photo for inspiration (optional) — accepts JPG/PNG
-                </p>
+                <p className="text-sm text-muted-foreground mb-4">Upload a photo for inspiration (optional) — accepts JPG/PNG</p>
                 <label className="flex flex-col items-center justify-center border-2 border-dashed border-border p-10 cursor-pointer hover:border-primary transition-colors" style={{ minHeight: '120px' }}>
-                  <span className="text-muted-foreground text-sm">
-                    {formData.file ? formData.file.name : 'Click to upload or drag & drop'}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png"
-                    className="hidden"
-                    onChange={(e) => setFormData({ ...formData, file: e.target.files?.[0] || null })}
-                  />
+                  <span className="text-muted-foreground text-sm">{formData.file ? formData.file.name : 'Click to upload or drag & drop'}</span>
+                  <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => setFormData({ ...formData, file: e.target.files?.[0] || null })} />
                 </label>
               </div>
             )}
@@ -219,28 +199,16 @@ export default function CustomOrderPage() {
 
           {/* Navigation */}
           <div className="flex justify-between mt-8">
-            <button
-              onClick={prev}
-              disabled={currentStep === 0}
-              className="px-6 py-3 border border-border text-sm font-semibold disabled:opacity-30 hover:bg-accent transition-colors"
-              style={{ minHeight: '44px' }}
-            >
+            <button onClick={prev} disabled={currentStep === 0} className="px-6 py-3 border border-border text-sm font-semibold disabled:opacity-30 hover:bg-accent transition-colors" style={{ minHeight: '44px' }}>
               Back
             </button>
             {currentStep < 4 ? (
-              <button
-                onClick={next}
-                className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors"
-                style={{ minHeight: '44px' }}
-              >
+              <button onClick={next} className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors" style={{ minHeight: '44px' }}>
                 Next
               </button>
             ) : (
-              <button
-                onClick={handleSubmit}
-                className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors"
-                style={{ minHeight: '44px' }}
-              >
+              <button onClick={handleSubmit} disabled={submitting} className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors disabled:opacity-50 flex items-center gap-2" style={{ minHeight: '44px' }}>
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Send My Chronicle to Linda
               </button>
             )}
