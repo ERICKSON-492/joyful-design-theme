@@ -18,16 +18,24 @@ export function FeaturedProducts() {
   const { addToCart } = useCart()
 
   useEffect(() => {
-    const fetch = async () => {
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, price, image_url, stock')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(4)
-      setProducts(data || [])
+    const loadProducts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name, price, image_url, stock')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(4)
+        if (error) {
+          console.error('FeaturedProducts fetch error:', error)
+          return
+        }
+        setProducts(data || [])
+      } catch (err) {
+        console.error('FeaturedProducts exception:', err)
+      }
     }
-    fetch()
+    loadProducts()
   }, [])
 
   if (products.length === 0) return null
