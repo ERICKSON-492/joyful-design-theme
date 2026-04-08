@@ -1,24 +1,34 @@
 import { useState } from 'react'
 import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/integrations/supabase/client'
+import { v4 as uuidv4 } from 'crypto'
 
 export function Contact() {
   const { toast } = useToast()
   const [formData, setFormData] = useState({ name: '', email: '', message: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name.trim() || !formData.email.trim() || !formData.message.trim()) {
       toast({ title: 'Please fill in all fields', variant: 'destructive' })
       return
     }
     setIsSubmitting(true)
-    // Simulate submission — connect to a backend to actually send
-    setTimeout(() => {
+    const conversationId = crypto.randomUUID()
+    const { error } = await supabase.from('enquiry_messages').insert({
+      customer_name: formData.name.trim(),
+      customer_email: formData.email.trim(),
+      message: formData.message.trim(),
+      conversation_id: conversationId,
+    })
+    if (error) {
+      toast({ title: 'Failed to send', description: error.message, variant: 'destructive' })
+    } else {
       toast({ title: 'Message sent!', description: "We'll get back to you soon." })
       setFormData({ name: '', email: '', message: '' })
-      setIsSubmitting(false)
-    }, 1000)
+    }
+    setIsSubmitting(false)
   }
 
   return (
