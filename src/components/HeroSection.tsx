@@ -37,49 +37,60 @@ export function HeroSection() {
   }, [])
 
   useEffect(() => {
-    const timer = setInterval(nextSlide, 5500)
+    const timer = setInterval(nextSlide, 4500)
     return () => clearInterval(timer)
   }, [nextSlide])
 
   const slide = slides[current]
 
   return (
-    <section className="relative w-full h-[85vh] md:h-screen overflow-hidden bg-black">
-      {/* Sliding background images */}
-      <AnimatePresence mode="wait">
+    <section className="relative w-full h-[85vh] md:h-screen overflow-hidden bg-background">
+      {/* All images stacked — current one animates to visible */}
+      {slides.map((s, i) => (
         <motion.img
-          key={current}
-          src={slide.image}
-          alt={slide.subtitle}
-          className="absolute inset-0 w-full h-full object-contain"
-          initial={{ scale: 1.1, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }}
+          key={i}
+          src={s.image}
+          alt={s.subtitle}
+          className="absolute inset-0 w-full h-full object-cover"
+          initial={false}
+          animate={{
+            opacity: i === current ? 1 : 0,
+            scale: i === current ? 1 : 1.05,
+          }}
+          transition={{ duration: 0.6, ease: 'easeInOut' }}
+          style={{ zIndex: i === current ? 1 : 0 }}
         />
-      </AnimatePresence>
+      ))}
 
-      <div className="absolute inset-0 bg-black/45" />
+      {/* Gradient overlay for text readability */}
+      <div
+        className="absolute inset-0 z-[2]"
+        style={{
+          background:
+            'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 50%, rgba(0,0,0,0.7) 100%)',
+        }}
+      />
 
-      <div className="absolute inset-0 flex items-center justify-center text-center px-6">
+      {/* Content */}
+      <div className="absolute inset-0 z-[3] flex items-center justify-center text-center px-6">
         <div className="max-w-3xl">
           <AnimatePresence mode="wait">
             <motion.div
               key={current}
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
-              <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-4 leading-[1.1] tracking-wide">
+              <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-4 leading-[1.1] tracking-wide drop-shadow-lg">
                 {slide.title}
               </h1>
-              <p className="text-primary text-xl md:text-2xl lg:text-3xl font-display italic mb-10">
+              <p className="text-primary text-xl md:text-2xl lg:text-3xl font-display italic mb-10 drop-shadow-md">
                 {slide.subtitle}
               </p>
               <Link
                 to={slide.link}
-                className="inline-block bg-primary hover:bg-[#c49515] text-primary-foreground px-10 py-4 text-sm font-bold tracking-widest uppercase transition-colors"
+                className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-10 py-4 text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 style={{ minHeight: '44px' }}
               >
                 {slide.cta}
@@ -90,13 +101,13 @@ export function HeroSection() {
       </div>
 
       {/* Slide indicators */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3">
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3 z-[4]">
         {slides.map((_, i) => (
           <button
             key={i}
             onClick={() => setCurrent(i)}
-            className={`h-1 rounded-full transition-all duration-500 ${
-              i === current ? 'w-10 bg-primary' : 'w-5 bg-white/40 hover:bg-white/60'
+            className={`h-1.5 rounded-full transition-all duration-500 ${
+              i === current ? 'w-10 bg-primary shadow-md' : 'w-5 bg-white/40 hover:bg-white/60'
             }`}
             aria-label={`Go to slide ${i + 1}`}
           />
