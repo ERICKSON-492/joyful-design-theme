@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
-import { v4 as uuidv4 } from 'crypto'
 
 export function Contact() {
   const { toast } = useToast()
