@@ -8,8 +8,8 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
           <div>
-            <Link to="/" className="font-display text-xl font-bold text-white tracking-wide block mb-4">
-              USHANGA <span className="font-light">CHRONICLES</span>
+            <Link to="/" className="block mb-4">
+              <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-14 w-auto brightness-0 invert" />
             </Link>
             <p className="text-sm leading-relaxed mb-4">
               One bead. A thousand stories. Handcrafted African jewelry, home decor, 
