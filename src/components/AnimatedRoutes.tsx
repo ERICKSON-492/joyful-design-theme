@@ -13,6 +13,7 @@ import AdminDashboard from '../pages/AdminDashboard'
 import AdminProducts from '../pages/AdminProducts'
 import AdminEnquiries from '../pages/AdminEnquiries'
 import AdminHeroSlides from '../pages/AdminHeroSlides'
+import AdminOrders from '../pages/AdminOrders'
 import CheckoutPage from '../pages/CheckoutPage'
 import NotFound from '../pages/NotFound'
 
@@ -29,6 +30,7 @@ export function AnimatedRoutes() {
           <Route path="products" element={<AdminProducts />} />
           <Route path="hero" element={<AdminHeroSlides />} />
           <Route path="enquiries" element={<AdminEnquiries />} />
+          <Route path="orders" element={<AdminOrders />} />
         </Route>
       </Routes>
     )
