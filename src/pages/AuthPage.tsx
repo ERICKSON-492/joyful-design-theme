@@ -25,6 +25,27 @@ export default function AuthPage() {
     return () => subscription.unsubscribe()
   }, [navigate])
 
+  const [showForgot, setShowForgot] = useState(false)
+  const [forgotLoading, setForgotLoading] = useState(false)
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) { toast.error('Please enter your email'); return }
+    setForgotLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) throw error
+      toast.success('Password reset link sent! Check your email.')
+      setShowForgot(false)
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send reset email')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
