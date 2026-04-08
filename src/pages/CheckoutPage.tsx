@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
+import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin } from 'lucide-react'
@@ -18,35 +19,12 @@ export default function CheckoutPage() {
   const [city, setCity] = useState('')
   const [postalCode, setPostalCode] = useState('')
   const [email, setEmail] = useState('')
-  const [userId, setUserId] = useState<string | null>(null)
-  const [authChecked, setAuthChecked] = useState(false)
+  const { userId, authChecked, name: accountName, email: accountEmail } = useCheckoutAuth()
 
-  // Auth check using onAuthStateChange (more reliable than getSession alone)
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUserId(session.user.id)
-        setName(prev => prev || session.user.user_metadata?.full_name || '')
-        setEmail(prev => prev || session.user.email || '')
-        setAuthChecked(true)
-      }
-    })
-
-    // Also call getSession to handle already-authenticated users
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.user) {
-        toast.error('Please log in or create an account to checkout')
-        navigate('/auth', { state: { returnTo: '/checkout' } })
-        return
-      }
-      setUserId(session.user.id)
-      setName(prev => prev || session.user.user_metadata?.full_name || '')
-      setEmail(prev => prev || session.user.email || '')
-      setAuthChecked(true)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [navigate])
+    if (accountName) setName(prev => prev || accountName)
+    if (accountEmail) setEmail(prev => prev || accountEmail)
+  }, [accountName, accountEmail])
 
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) {
