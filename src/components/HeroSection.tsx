@@ -1,12 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '@/integrations/supabase/client'
+import { fetchPublicTable } from '@/lib/publicContent'
 
-/**
- * Convert a Supabase storage URL to a resized/optimized version.
- * Uses Supabase Image Transforms (render endpoint) for much smaller files.
- */
 function optimizeImageUrl(url: string): string {
   return url || ''
 }
@@ -49,50 +45,30 @@ const normalizeSlides = (data: Partial<Slide>[] | null | undefined): Slide[] => 
 export function HeroSection() {
   const [slides, setSlides] = useState<Slide[]>(fallbackSlides)
   const [current, setCurrent] = useState(0)
-  const [ready, setReady] = useState(false)
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-  const imgWidth = isMobile ? 800 : 1920
 
   useEffect(() => {
     let isMounted = true
 
     const fetchSlides = async () => {
       try {
-        const { data, error } = await supabase
-          .from('hero_slides')
-          .select('id, image_url, title, subtitle, cta_text, cta_link')
-          .eq('is_active', true)
-          .order('display_order')
+        const data = await fetchPublicTable<Slide>(
+          'hero_slides',
+          'select=id,image_url,title,subtitle,cta_text,cta_link&is_active=eq.true&order=display_order.asc'
+        )
 
         if (!isMounted) return
-
-        if (error) {
-          setReady(true)
-          return
-        }
-
         const normalized = normalizeSlides(data)
         setSlides(normalized)
 
-        // Preload first image eagerly, rest in background
-        if (normalized[0]?.image_url) {
-          const img = new window.Image()
-          img.onload = () => { if (isMounted) setReady(true) }
-          img.onerror = () => { if (isMounted) setReady(true) }
-          img.src = optimizeImageUrl(normalized[0].image_url)
-        } else {
-          setReady(true)
-        }
-
-        // Preload remaining images in background
-        normalized.slice(1).forEach((slide) => {
+        normalized.slice(0, 2).forEach((slide) => {
           if (slide.image_url) {
             const img = new window.Image()
             img.src = optimizeImageUrl(slide.image_url)
           }
         })
-      } catch {
-        if (isMounted) setReady(true)
+      } catch (err) {
+        console.error('HeroSection fetch error:', err)
+        if (isMounted) setSlides(fallbackSlides)
       }
     }
 
@@ -124,7 +100,6 @@ export function HeroSection() {
     return () => window.clearInterval(timer)
   }, [nextSlide, safeSlides.length])
 
-  // Only render the active slide and the next one for performance
   const visibleIndices = useMemo(() => {
     const next = (activeIndex + 1) % safeSlides.length
     return new Set([activeIndex, next])

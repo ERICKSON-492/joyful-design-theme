@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { fetchPublicTable } from '@/lib/publicContent'
 
 interface Product {
   id: string
@@ -14,36 +14,49 @@ interface Product {
 }
 
 export function FeaturedProducts() {
-  const [products, setProducts] = useState<Product[] | null>(null)
+  const [products, setProducts] = useState<Product[]>([])
+  const [hasLoaded, setHasLoaded] = useState(false)
   const { addToCart } = useCart()
 
   useEffect(() => {
     let mounted = true
+
     const loadProducts = async () => {
       try {
-        const { data, error } = await supabase
-          .from('products')
-          .select('id, name, price, image_url, stock')
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .limit(4)
+        const data = await fetchPublicTable<Product>(
+          'products',
+          'select=id,name,price,image_url,stock&is_active=eq.true&order=created_at.desc&limit=4'
+        )
+
         if (!mounted) return
-        if (error) {
-          console.error('FeaturedProducts fetch error:', error)
-          setProducts([])
-          return
-        }
         setProducts(data || [])
       } catch (err) {
-        console.error('FeaturedProducts exception:', err)
-        if (mounted) setProducts([])
+        console.error('FeaturedProducts fetch error:', err)
+        if (!mounted) return
+        setProducts([])
+      } finally {
+        if (mounted) setHasLoaded(true)
       }
     }
+
     loadProducts()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [])
 
-  if (products === null || products.length === 0) return null
+  if (!hasLoaded && products.length === 0) {
+    return (
+      <section className="py-16 md:py-24 bg-background">
+        <div className="container mx-auto px-4">
+          <h2 className="font-display text-3xl md:text-5xl font-bold text-center text-foreground mb-14">Crafted This Week</h2>
+          <p className="text-center text-muted-foreground">Loading latest pieces...</p>
+        </div>
+      </section>
+    )
+  }
+
+  if (products.length === 0) return null
 
   return (
     <section className="py-16 md:py-24 bg-background">
