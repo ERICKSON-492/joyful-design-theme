@@ -27,6 +27,7 @@ export default function AdminDashboard() {
 
   const cards = [
     { label: 'Total Products', value: stats.products, icon: Package, color: 'text-primary' },
+    { label: 'Orders', value: stats.orders, icon: ShoppingBag, color: 'text-orange-500' },
     { label: 'Enquiries', value: stats.enquiries, icon: MessageSquare, color: 'text-blue-500' },
     { label: 'Unread Messages', value: stats.unread, icon: TrendingUp, color: 'text-destructive' },
     { label: 'Subscribers', value: stats.subscribers, icon: Users, color: 'text-green-500' },
