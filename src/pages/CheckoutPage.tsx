@@ -26,6 +26,7 @@ export default function CheckoutPage() {
       if (session?.user) {
         setUserId(session.user.id)
         setName(session.user.user_metadata?.full_name || '')
+        setEmail(session.user.email || '')
       }
     }
     getUser()
