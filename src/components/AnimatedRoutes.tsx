@@ -43,6 +43,7 @@ export function AnimatedRoutes() {
         <Route path="/custom-order" element={<PageTransition><CustomOrderPage /></PageTransition>} />
         <Route path="/tribe-looks" element={<PageTransition><TribeLooksPage /></PageTransition>} />
         <Route path="/wholesale-gifting" element={<PageTransition><WholesalePage /></PageTransition>} />
+        <Route path="/checkout" element={<PageTransition><CheckoutPage /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>
