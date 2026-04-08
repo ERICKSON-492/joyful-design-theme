@@ -274,6 +274,14 @@ export default function CheckoutPage() {
                     disabled={status !== 'idle' && status !== 'failed'}
                   />
                 </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="Email for order updates (optional)"
+                  className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  disabled={status !== 'idle' && status !== 'failed'}
+                />
               </div>
             </div>
 
