@@ -19,8 +19,22 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const location = useLocation()
   const { totalItems, setIsOpen: setCartOpen } = useCart()
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        const { data } = await supabase.from('admin_users').select('id').eq('user_id', session.user.id).maybeSingle()
+        setIsAdmin(!!data)
+      }
+    }
+    checkAdmin()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => checkAdmin())
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
