@@ -17,7 +17,7 @@ const fallbackSlides: Slide[] = [
 ]
 
 export function HeroSection() {
-  const [slides, setSlides] = useState<Slide[]>([])
+  const [slides, setSlides] = useState<Slide[]>(fallbackSlides)
   const [current, setCurrent] = useState(0)
 
   useEffect(() => {
