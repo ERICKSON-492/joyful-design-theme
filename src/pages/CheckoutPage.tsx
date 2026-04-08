@@ -17,6 +17,7 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [postalCode, setPostalCode] = useState('')
+  const [email, setEmail] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export default function CheckoutPage() {
       if (session?.user) {
         setUserId(session.user.id)
         setName(session.user.user_metadata?.full_name || '')
+        setEmail(session.user.email || '')
       }
     }
     getUser()
@@ -62,7 +64,7 @@ export default function CheckoutPage() {
           items: orderItems as any,
           status: 'pending',
           user_id: userId,
-          shipping_address: { address, city, postal_code: postalCode },
+          shipping_address: { address, city, postal_code: postalCode, email },
         })
         .select('id')
         .single()
@@ -272,6 +274,14 @@ export default function CheckoutPage() {
                     disabled={status !== 'idle' && status !== 'failed'}
                   />
                 </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="Email for order updates (optional)"
+                  className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  disabled={status !== 'idle' && status !== 'failed'}
+                />
               </div>
             </div>
 

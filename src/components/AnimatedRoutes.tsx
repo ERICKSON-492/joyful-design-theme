@@ -19,6 +19,7 @@ import NotFound from '../pages/NotFound'
 import AuthPage from '../pages/AuthPage'
 import MyOrdersPage from '../pages/MyOrdersPage'
 import ResetPasswordPage from '../pages/ResetPasswordPage'
+import UnsubscribePage from '../pages/UnsubscribePage'
 
 export function AnimatedRoutes() {
   const location = useLocation()
@@ -52,6 +53,7 @@ export function AnimatedRoutes() {
         <Route path="/auth" element={<PageTransition><AuthPage /></PageTransition>} />
         <Route path="/my-orders" element={<PageTransition><MyOrdersPage /></PageTransition>} />
         <Route path="/reset-password" element={<PageTransition><ResetPasswordPage /></PageTransition>} />
+        <Route path="/unsubscribe" element={<PageTransition><UnsubscribePage /></PageTransition>} />
         <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
       </Routes>
     </AnimatePresence>
