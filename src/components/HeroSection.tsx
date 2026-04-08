@@ -7,14 +7,8 @@ import { supabase } from '@/integrations/supabase/client'
  * Convert a Supabase storage URL to a resized/optimized version.
  * Uses Supabase Image Transforms (render endpoint) for much smaller files.
  */
-function optimizeImageUrl(url: string, width: number, quality = 75): string {
-  if (!url) return url
-  // Only transform Supabase storage URLs
-  const match = url.match(
-    /^(https:\/\/[^/]+\/storage\/v1\/object\/public\/)(.+)$/
-  )
-  if (!match) return url
-  return `${match[1].replace('/object/', '/render/image/')}${match[2]}?width=${width}&quality=${quality}`
+function optimizeImageUrl(url: string): string {
+  return url || ''
 }
 
 interface Slide {
