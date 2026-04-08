@@ -142,7 +142,7 @@ export function HeroSection() {
         return slide.image_url ? (
           <motion.img
             key={slide.id}
-            src={optimizeImageUrl(slide.image_url, imgWidth)}
+            src={optimizeImageUrl(slide.image_url)}
             alt={slide.subtitle}
             loading={index === 0 ? 'eager' : 'lazy'}
             fetchPriority={index === 0 ? 'high' : 'auto'}
