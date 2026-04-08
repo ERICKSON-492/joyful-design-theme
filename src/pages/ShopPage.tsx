@@ -1,21 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
-import catWearIt from '@/assets/cat-wear-it.jpg'
-import catLiveWithIt from '@/assets/cat-live-with-it.jpg'
-import catCollectibles from '@/assets/cat-collectibles.jpg'
-import catPet from '@/assets/cat-pet.jpg'
-import catTable from '@/assets/cat-table.jpg'
+import { useCart } from '@/contexts/CartContext'
+import { ShoppingBag } from 'lucide-react'
 
-const categories = [
-  { name: 'All', image: catWearIt },
-  { name: 'Wear It', image: catWearIt },
-  { name: 'Live With It', image: catLiveWithIt },
-  { name: 'For Your Table', image: catTable },
-  { name: 'Collectibles', image: catCollectibles },
-  { name: 'For Your Pet', image: catPet },
-  { name: 'Wholesale & Gifting', image: catWearIt },
-]
+const categoryList = ['All', 'Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
 
 interface Product {
   id: string
@@ -30,24 +19,37 @@ export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [activeCategory, setActiveCategory] = useState('All')
   const [loading, setLoading] = useState(true)
+  const [searchParams] = useSearchParams()
+  const searchQuery = searchParams.get('search') || ''
+  const catParam = searchParams.get('cat')
+  const { addToCart } = useCart()
+
+  useEffect(() => {
+    if (catParam) {
+      const match = categoryList.find(c => c.toLowerCase().replace(/\s+/g, '-') === catParam.toLowerCase())
+      if (match) setActiveCategory(match)
+    }
+  }, [catParam])
 
   useEffect(() => {
     const fetchProducts = async () => {
+      setLoading(true)
       let query = supabase.from('products').select('id, name, price, image_url, stock, category').eq('is_active', true)
       if (activeCategory !== 'All') query = query.eq('category', activeCategory)
+      if (searchQuery) query = query.ilike('name', `%${searchQuery}%`)
       const { data } = await query.order('created_at', { ascending: false })
       setProducts(data || [])
       setLoading(false)
     }
     fetchProducts()
-  }, [activeCategory])
+  }, [activeCategory, searchQuery])
 
   return (
     <div className="bg-background">
       <section className="py-12 md:py-16 bg-card">
         <div className="container mx-auto px-4 text-center">
           <h1 className="font-display text-4xl md:text-6xl font-bold text-foreground mb-4">
-            Find Your Piece
+            {searchQuery ? `Results for "${searchQuery}"` : 'Find Your Piece'}
           </h1>
           <p className="text-muted-foreground text-lg">Every piece tells a story</p>
         </div>
@@ -56,18 +58,18 @@ export default function ShopPage() {
       <section className="py-10">
         <div className="container mx-auto px-4">
           <div className="flex flex-wrap justify-center gap-3">
-            {categories.map((cat) => (
+            {categoryList.map((cat) => (
               <button
-                key={cat.name}
-                onClick={() => setActiveCategory(cat.name)}
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
                 className={`px-5 py-2 border text-sm font-medium transition-colors ${
-                  activeCategory === cat.name
+                  activeCategory === cat
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'border-border hover:bg-primary hover:text-primary-foreground hover:border-primary'
                 }`}
                 style={{ minHeight: '44px' }}
               >
-                {cat.name}
+                {cat}
               </button>
             ))}
           </div>
@@ -111,11 +113,13 @@ export default function ShopPage() {
                   </h3>
                   <p className="text-muted-foreground text-sm mb-3">KSh {product.price.toLocaleString()}</p>
                   <button
-                    className="w-full bg-foreground text-white py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
+                    onClick={() => addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })}
+                    className="w-full bg-foreground text-white py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     style={{ minHeight: '44px' }}
                     disabled={product.stock === 0}
                   >
-                    {product.stock === 0 ? 'Sold Out' : 'Claim This'}
+                    <ShoppingBag className="w-4 h-4" />
+                    {product.stock === 0 ? 'Sold Out' : 'Add to Cart'}
                   </button>
                 </div>
               ))}
