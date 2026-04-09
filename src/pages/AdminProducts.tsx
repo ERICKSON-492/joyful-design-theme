@@ -38,7 +38,7 @@ export default function AdminProducts() {
   useEffect(() => { fetchProducts() }, [])
 
   const resetForm = () => {
-    setForm({ name: '', description: '', price: '', category: categories[0], stock: '', image_url: '', is_active: true })
+    setForm({ name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true })
     setEditId(null)
     setShowForm(false)
   }
