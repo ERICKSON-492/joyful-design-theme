@@ -27,7 +27,7 @@ export default function AdminProducts() {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState({
-    name: '', description: '', price: '', category: categories[0], stock: '', image_url: '', is_active: true
+    name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true
   })
 
   const fetchProducts = async () => {
