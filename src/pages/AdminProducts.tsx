@@ -10,6 +10,8 @@ interface Product {
   name: string
   description: string | null
   price: number
+  price_min: number | null
+  price_max: number | null
   category: string
   image_url: string | null
   stock: number
@@ -25,7 +27,7 @@ export default function AdminProducts() {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState({
-    name: '', description: '', price: '', category: categories[0], stock: '', image_url: '', is_active: true
+    name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true
   })
 
   const fetchProducts = async () => {
@@ -36,7 +38,7 @@ export default function AdminProducts() {
   useEffect(() => { fetchProducts() }, [])
 
   const resetForm = () => {
-    setForm({ name: '', description: '', price: '', category: categories[0], stock: '', image_url: '', is_active: true })
+    setForm({ name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true })
     setEditId(null)
     setShowForm(false)
   }
@@ -66,6 +68,8 @@ export default function AdminProducts() {
       name: form.name,
       description: form.description || null,
       price: parseFloat(form.price),
+      price_min: form.price_min ? parseFloat(form.price_min) : null,
+      price_max: form.price_max ? parseFloat(form.price_max) : null,
       category: form.category,
       stock: parseInt(form.stock) || 0,
       image_url: form.image_url || null,
@@ -91,6 +95,8 @@ export default function AdminProducts() {
       name: p.name,
       description: p.description || '',
       price: String(p.price),
+      price_min: p.price_min ? String(p.price_min) : '',
+      price_max: p.price_max ? String(p.price_max) : '',
       category: p.category,
       stock: String(p.stock),
       image_url: p.image_url || '',
@@ -136,7 +142,7 @@ export default function AdminProducts() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium block mb-1">Price (KSh)</label>
+                  <label className="text-sm font-medium block mb-1">Base Price (KSh)</label>
                   <Input type="number" step="0.01" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} required />
                 </div>
                 <div>
@@ -144,6 +150,17 @@ export default function AdminProducts() {
                   <Input type="number" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} required />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium block mb-1">Min Price (KSh) <span className="text-muted-foreground text-xs">optional</span></label>
+                  <Input type="number" step="0.01" value={form.price_min} onChange={e => setForm(p => ({ ...p, price_min: e.target.value }))} placeholder="e.g. 500" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-1">Max Price (KSh) <span className="text-muted-foreground text-xs">optional</span></label>
+                  <Input type="number" step="0.01" value={form.price_max} onChange={e => setForm(p => ({ ...p, price_max: e.target.value }))} placeholder="e.g. 2000" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-2">Set min & max to show a price range (e.g. by size/color). Leave blank for a fixed price.</p>
               <div>
                 <label className="text-sm font-medium block mb-1">Category</label>
                 <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}

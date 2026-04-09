@@ -16,6 +16,7 @@ const AdminProducts = lazy(() => import('../pages/AdminProducts'))
 const AdminEnquiries = lazy(() => import('../pages/AdminEnquiries'))
 const AdminHeroSlides = lazy(() => import('../pages/AdminHeroSlides'))
 const AdminOrders = lazy(() => import('../pages/AdminOrders'))
+const AdminCategories = lazy(() => import('../pages/AdminCategories'))
 const CheckoutPage = lazy(() => import('../pages/CheckoutPage'))
 const NotFound = lazy(() => import('../pages/NotFound'))
 const AuthPage = lazy(() => import('../pages/AuthPage'))
@@ -46,6 +47,7 @@ export function AnimatedRoutes() {
             <Route path="hero" element={<AdminHeroSlides />} />
             <Route path="enquiries" element={<AdminEnquiries />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="categories" element={<AdminCategories />} />
           </Route>
         </Routes>
       </Suspense>
