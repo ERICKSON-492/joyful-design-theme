@@ -6,8 +6,8 @@ import catWearIt from '@/assets/cat-wear-it.jpg'
 import catLiveWithIt from '@/assets/cat-live-with-it.jpg'
 
 const looks = [
-  { image: tribeTess, name: 'Tess', piece: 'Beaded Waist Chain' },
-  { image: tribeAnne, name: 'Anne', piece: 'Beaded Watch Cuff' },
+  { image: tribeTess, name: 'Tess', piece: 'Beaded Dress' },
+  { image: tribeAnne, name: 'Anne', piece: 'Beaded Bracelet' },
   { image: tribeLuna, name: 'Luna', piece: 'Beaded Dog Collar' },
   { image: tribe1, name: 'Amani K.', piece: 'Layered Beaded Necklace' },
   { image: catWearIt, name: 'Tribe Collection', piece: 'Various Pieces' },
