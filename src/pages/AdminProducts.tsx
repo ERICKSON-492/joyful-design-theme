@@ -142,7 +142,7 @@ export default function AdminProducts() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium block mb-1">Price (KSh)</label>
+                  <label className="text-sm font-medium block mb-1">Base Price (KSh)</label>
                   <Input type="number" step="0.01" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} required />
                 </div>
                 <div>
@@ -150,6 +150,17 @@ export default function AdminProducts() {
                   <Input type="number" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} required />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium block mb-1">Min Price (KSh) <span className="text-muted-foreground text-xs">optional</span></label>
+                  <Input type="number" step="0.01" value={form.price_min} onChange={e => setForm(p => ({ ...p, price_min: e.target.value }))} placeholder="e.g. 500" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-1">Max Price (KSh) <span className="text-muted-foreground text-xs">optional</span></label>
+                  <Input type="number" step="0.01" value={form.price_max} onChange={e => setForm(p => ({ ...p, price_max: e.target.value }))} placeholder="e.g. 2000" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-2">Set min & max to show a price range (e.g. by size/color). Leave blank for a fixed price.</p>
               <div>
                 <label className="text-sm font-medium block mb-1">Category</label>
                 <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
