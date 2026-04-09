@@ -49,6 +49,7 @@ export function AnimatedRoutes() {
             <Route path="enquiries" element={<AdminEnquiries />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="categories" element={<AdminCategories />} />
+            <Route path="content" element={<AdminContent />} />
           </Route>
         </Routes>
       </Suspense>

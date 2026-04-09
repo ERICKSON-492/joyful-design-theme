@@ -11,6 +11,7 @@ const navItems = [
   { label: 'Orders', href: '/admin/orders', icon: ShoppingBag },
   { label: 'Categories', href: '/admin/categories', icon: Grid3X3 },
   { label: 'Enquiries', href: '/admin/enquiries', icon: MessageSquare },
+  { label: 'Chronicle Story', href: '/admin/content', icon: FileText },
 ]
 
 export default function AdminLayout() {
