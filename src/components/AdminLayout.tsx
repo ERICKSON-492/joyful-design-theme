@@ -9,6 +9,7 @@ const navItems = [
   { label: 'Products', href: '/admin/products', icon: Package },
   { label: 'Hero Slides', href: '/admin/hero', icon: Image },
   { label: 'Orders', href: '/admin/orders', icon: ShoppingBag },
+  { label: 'Categories', href: '/admin/categories', icon: Grid3X3 },
   { label: 'Enquiries', href: '/admin/enquiries', icon: MessageSquare },
 ]
 
