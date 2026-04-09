@@ -121,7 +121,11 @@ export default function ShopPage() {
                   <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1">
                     {product.name}
                   </h3>
-                  <p className="text-muted-foreground text-sm mb-3">KSh {product.price.toLocaleString()}</p>
+                  <p className="text-muted-foreground text-sm mb-3">
+                    {product.price_min && product.price_max
+                      ? `KSh ${product.price_min.toLocaleString()} – ${product.price_max.toLocaleString()}`
+                      : `KSh ${product.price.toLocaleString()}`}
+                  </p>
                   <button
                     onClick={() => addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })}
                     className="w-full bg-foreground text-white py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
