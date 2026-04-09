@@ -70,6 +70,30 @@ export type Database = {
           },
         ]
       }
+      category_images: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          image_url: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          image_url: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          image_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       contact_messages: {
         Row: {
           created_at: string
@@ -371,6 +395,8 @@ export type Database = {
           is_active: boolean
           name: string
           price: number
+          price_max: number | null
+          price_min: number | null
           stock: number
           updated_at: string
         }
@@ -383,6 +409,8 @@ export type Database = {
           is_active?: boolean
           name: string
           price: number
+          price_max?: number | null
+          price_min?: number | null
           stock?: number
           updated_at?: string
         }
@@ -395,6 +423,8 @@ export type Database = {
           is_active?: boolean
           name?: string
           price?: number
+          price_max?: number | null
+          price_min?: number | null
           stock?: number
           updated_at?: string
         }
