@@ -68,6 +68,8 @@ export default function AdminProducts() {
       name: form.name,
       description: form.description || null,
       price: parseFloat(form.price),
+      price_min: form.price_min ? parseFloat(form.price_min) : null,
+      price_max: form.price_max ? parseFloat(form.price_max) : null,
       category: form.category,
       stock: parseInt(form.stock) || 0,
       image_url: form.image_url || null,
