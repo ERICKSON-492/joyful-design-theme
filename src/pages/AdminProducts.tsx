@@ -10,6 +10,8 @@ interface Product {
   name: string
   description: string | null
   price: number
+  price_min: number | null
+  price_max: number | null
   category: string
   image_url: string | null
   stock: number
