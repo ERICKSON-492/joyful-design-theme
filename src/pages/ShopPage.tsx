@@ -38,7 +38,7 @@ export default function ShopPage() {
     const loadProducts = async () => {
       setLoading(true)
       try {
-        let query = 'select=id,name,price,image_url,stock,category&is_active=eq.true&order=created_at.desc'
+        let query = 'select=id,name,price,price_min,price_max,image_url,stock,category&is_active=eq.true&order=created_at.desc'
         if (activeCategory !== 'All') query += `&category=eq.${encodeURIComponent(activeCategory)}`
         if (searchQuery) query += `&name=ilike.*${encodeURIComponent(searchQuery)}*`
 
