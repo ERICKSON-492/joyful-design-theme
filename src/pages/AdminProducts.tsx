@@ -95,6 +95,8 @@ export default function AdminProducts() {
       name: p.name,
       description: p.description || '',
       price: String(p.price),
+      price_min: p.price_min ? String(p.price_min) : '',
+      price_max: p.price_max ? String(p.price_max) : '',
       category: p.category,
       stock: String(p.stock),
       image_url: p.image_url || '',
