@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
-import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText } from 'lucide-react'
+import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText, Camera } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { label: 'Categories', href: '/admin/categories', icon: Grid3X3 },
   { label: 'Enquiries', href: '/admin/enquiries', icon: MessageSquare },
   { label: 'Chronicle Story', href: '/admin/content', icon: FileText },
+  { label: 'Tribe Looks', href: '/admin/tribe-looks', icon: Camera },
 ]
 
 export default function AdminLayout() {
