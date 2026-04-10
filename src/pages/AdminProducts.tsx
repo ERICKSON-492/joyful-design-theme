@@ -16,6 +16,8 @@ interface Product {
   image_url: string | null
   stock: number
   is_active: boolean
+  is_preorder: boolean
+  preorder_label: string | null
 }
 
 const categories = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
