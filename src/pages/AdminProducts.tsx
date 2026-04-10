@@ -188,6 +188,16 @@ export default function AdminProducts() {
                 <input type="checkbox" checked={form.is_active} onChange={e => setForm(p => ({ ...p, is_active: e.target.checked }))} id="active" />
                 <label htmlFor="active" className="text-sm">Active (visible in shop)</label>
               </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={form.is_preorder} onChange={e => setForm(p => ({ ...p, is_preorder: e.target.checked }))} id="preorder" />
+                <label htmlFor="preorder" className="text-sm">Pre-Order (customers can order while being made)</label>
+              </div>
+              {form.is_preorder && (
+                <div>
+                  <label className="text-sm font-medium block mb-1">Pre-Order Label <span className="text-muted-foreground text-xs">e.g. "Made to order – 2 weeks"</span></label>
+                  <Input value={form.preorder_label} onChange={e => setForm(p => ({ ...p, preorder_label: e.target.value }))} placeholder="Made to order – 2 weeks" />
+                </div>
+              )}
               <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold">
                 {loading ? 'Saving...' : editId ? 'Update Product' : 'Add Product'}
               </Button>
