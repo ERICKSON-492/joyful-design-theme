@@ -393,7 +393,9 @@ export type Database = {
           id: string
           image_url: string | null
           is_active: boolean
+          is_preorder: boolean
           name: string
+          preorder_label: string | null
           price: number
           price_max: number | null
           price_min: number | null
@@ -407,7 +409,9 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
+          is_preorder?: boolean
           name: string
+          preorder_label?: string | null
           price: number
           price_max?: number | null
           price_min?: number | null
@@ -421,7 +425,9 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
+          is_preorder?: boolean
           name?: string
+          preorder_label?: string | null
           price?: number
           price_max?: number | null
           price_min?: number | null
@@ -511,6 +517,36 @@ export type Database = {
           id?: string
           metadata?: Json | null
           reason?: string
+        }
+        Relationships: []
+      }
+      tribe_looks: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string
+          name: string
+          piece_name: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url: string
+          name?: string
+          piece_name?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          name?: string
+          piece_name?: string
+          status?: string
+          user_id?: string
         }
         Relationships: []
       }

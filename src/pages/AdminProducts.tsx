@@ -16,6 +16,8 @@ interface Product {
   image_url: string | null
   stock: number
   is_active: boolean
+  is_preorder: boolean
+  preorder_label: string | null
 }
 
 const categories = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
@@ -27,7 +29,7 @@ export default function AdminProducts() {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState({
-    name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true
+    name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true, is_preorder: false, preorder_label: ''
   })
 
   const fetchProducts = async () => {
@@ -38,7 +40,7 @@ export default function AdminProducts() {
   useEffect(() => { fetchProducts() }, [])
 
   const resetForm = () => {
-    setForm({ name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true })
+    setForm({ name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true, is_preorder: false, preorder_label: '' })
     setEditId(null)
     setShowForm(false)
   }
@@ -74,6 +76,8 @@ export default function AdminProducts() {
       stock: parseInt(form.stock) || 0,
       image_url: form.image_url || null,
       is_active: form.is_active,
+      is_preorder: form.is_preorder,
+      preorder_label: form.preorder_label || null,
     }
 
     if (editId) {
@@ -101,6 +105,8 @@ export default function AdminProducts() {
       stock: String(p.stock),
       image_url: p.image_url || '',
       is_active: p.is_active,
+      is_preorder: p.is_preorder,
+      preorder_label: p.preorder_label || '',
     })
     setEditId(p.id)
     setShowForm(true)
@@ -182,6 +188,16 @@ export default function AdminProducts() {
                 <input type="checkbox" checked={form.is_active} onChange={e => setForm(p => ({ ...p, is_active: e.target.checked }))} id="active" />
                 <label htmlFor="active" className="text-sm">Active (visible in shop)</label>
               </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={form.is_preorder} onChange={e => setForm(p => ({ ...p, is_preorder: e.target.checked }))} id="preorder" />
+                <label htmlFor="preorder" className="text-sm">Pre-Order (customers can order while being made)</label>
+              </div>
+              {form.is_preorder && (
+                <div>
+                  <label className="text-sm font-medium block mb-1">Pre-Order Label <span className="text-muted-foreground text-xs">e.g. "Made to order – 2 weeks"</span></label>
+                  <Input value={form.preorder_label} onChange={e => setForm(p => ({ ...p, preorder_label: e.target.value }))} placeholder="Made to order – 2 weeks" />
+                </div>
+              )}
               <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold">
                 {loading ? 'Saving...' : editId ? 'Update Product' : 'Add Product'}
               </Button>
