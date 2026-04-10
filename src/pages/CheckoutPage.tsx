@@ -127,7 +127,7 @@ export default function CheckoutPage() {
     )
   }
 
-  if (items.length === 0 && status !== 'success') {
+  if (items.length === 0) {
     return (
       <div className="bg-background min-h-screen pt-24 pb-16">
         <div className="container mx-auto px-4 text-center py-20">
