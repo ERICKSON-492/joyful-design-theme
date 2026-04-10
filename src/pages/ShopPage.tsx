@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
-import { ShoppingBag } from 'lucide-react'
+import { ShoppingBag, Clock } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 
 const categoryList = ['All', 'Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
@@ -15,6 +15,8 @@ interface Product {
   image_url: string | null
   stock: number
   category: string
+  is_preorder: boolean
+  preorder_label: string | null
 }
 
 export default function ShopPage() {
@@ -38,7 +40,7 @@ export default function ShopPage() {
     const loadProducts = async () => {
       setLoading(true)
       try {
-        let query = 'select=id,name,price,price_min,price_max,image_url,stock,category&is_active=eq.true&order=created_at.desc'
+        let query = 'select=id,name,price,price_min,price_max,image_url,stock,category,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
         if (activeCategory !== 'All') query += `&category=eq.${encodeURIComponent(activeCategory)}`
         if (searchQuery) query += `&name=ilike.*${encodeURIComponent(searchQuery)}*`
 
@@ -53,6 +55,14 @@ export default function ShopPage() {
     loadProducts()
     return () => { mounted = false }
   }, [activeCategory, searchQuery])
+
+  const getButtonLabel = (product: Product) => {
+    if (product.is_preorder) return 'Pre-Order'
+    if (product.stock === 0) return 'Sold Out'
+    return 'Add to Cart'
+  }
+
+  const canOrder = (product: Product) => product.is_preorder || product.stock > 0
 
   return (
     <div className="bg-background">
@@ -69,16 +79,12 @@ export default function ShopPage() {
         <div className="container mx-auto px-4">
           <div className="flex flex-wrap justify-center gap-3">
             {categoryList.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
+              <button key={cat} onClick={() => setActiveCategory(cat)}
                 className={`px-5 py-2 border text-sm font-medium transition-colors ${
                   activeCategory === cat
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'border-border hover:bg-primary hover:text-primary-foreground hover:border-primary'
-                }`}
-                style={{ minHeight: '44px' }}
-              >
+                }`} style={{ minHeight: '44px' }}>
                 {cat}
               </button>
             ))}
@@ -96,44 +102,61 @@ export default function ShopPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
               {products.map((product) => (
                 <div key={product.id} className="group">
-                  <div className="overflow-hidden bg-card mb-4 relative">
+                  <div className="overflow-hidden bg-card mb-4 relative rounded-lg">
                     {product.image_url ? (
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105"
-                        loading="lazy"
-                      />
+                      <img src={product.image_url} alt={product.name}
+                        className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                     ) : (
                       <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
                     )}
-                    {product.stock <= 3 && product.stock > 0 && (
-                      <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-xs px-2 py-1 font-semibold">
-                        Only {product.stock} left
-                      </span>
-                    )}
-                    {product.stock === 0 && (
-                      <span className="absolute top-2 left-2 bg-foreground text-background text-xs px-2 py-1 font-semibold">
-                        Sold Out
-                      </span>
-                    )}
+                    {/* Badges */}
+                    <div className="absolute top-2 left-2 flex flex-col gap-1">
+                      {product.is_preorder && (
+                        <span className="bg-blue-600 text-white text-xs px-2 py-1 font-semibold flex items-center gap-1 rounded">
+                          <Clock className="w-3 h-3" /> Pre-Order
+                        </span>
+                      )}
+                      {!product.is_preorder && product.stock <= 3 && product.stock > 0 && (
+                        <span className="bg-destructive text-destructive-foreground text-xs px-2 py-1 font-semibold rounded">
+                          Only {product.stock} left
+                        </span>
+                      )}
+                      {!product.is_preorder && product.stock === 0 && (
+                        <span className="bg-foreground text-background text-xs px-2 py-1 font-semibold rounded">
+                          Sold Out
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1">
                     {product.name}
                   </h3>
-                  <p className="text-muted-foreground text-sm mb-3">
-                    {product.price_min && product.price_max
-                      ? `KSh ${product.price_min.toLocaleString()} – ${product.price_max.toLocaleString()}`
-                      : `KSh ${product.price.toLocaleString()}`}
-                  </p>
+                  <div className="mb-1">
+                    {product.price_min && product.price_max ? (
+                      <p className="text-foreground font-bold text-sm">
+                        KSh {product.price_min.toLocaleString()} - KSh {product.price_max.toLocaleString()}
+                      </p>
+                    ) : (
+                      <p className="text-foreground font-bold text-sm">KSh {product.price.toLocaleString()}</p>
+                    )}
+                  </div>
+                  {product.is_preorder && product.preorder_label && (
+                    <p className="text-blue-600 text-xs font-medium mb-2 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {product.preorder_label}
+                    </p>
+                  )}
+                  {!product.is_preorder && !product.preorder_label && <div className="mb-2" />}
                   <button
                     onClick={() => addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })}
-                    className="w-full bg-foreground text-white py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    className={`w-full py-2.5 text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
+                      product.is_preorder
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-foreground text-white hover:bg-primary hover:text-primary-foreground'
+                    }`}
                     style={{ minHeight: '44px' }}
-                    disabled={product.stock === 0}
-                  >
+                    disabled={!canOrder(product)}>
                     <ShoppingBag className="w-4 h-4" />
-                    {product.stock === 0 ? 'Sold Out' : 'Add to Cart'}
+                    {getButtonLabel(product)}
                   </button>
                 </div>
               ))}
