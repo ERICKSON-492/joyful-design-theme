@@ -55,6 +55,8 @@ export function AnimatedRoutes() {
             <Route path="categories" element={<AdminCategories />} />
             <Route path="content" element={<AdminContent />} />
             <Route path="tribe-looks" element={<AdminTribeLooks />} />
+            <Route path="shipping" element={<AdminShipping />} />
+            <Route path="payments" element={<AdminPayments />} />
           </Route>
         </Routes>
       </Suspense>
@@ -68,6 +70,7 @@ export function AnimatedRoutes() {
           <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
           <Route path="/about-us" element={<PageTransition><TheChronicle /></PageTransition>} />
           <Route path="/shop" element={<PageTransition><ShopPage /></PageTransition>} />
+          <Route path="/product/:id" element={<PageTransition><ProductDetailPage /></PageTransition>} />
           <Route path="/custom-order" element={<PageTransition><CustomOrderPage /></PageTransition>} />
           <Route path="/tribe-looks" element={<PageTransition><TribeLooksPage /></PageTransition>} />
           <Route path="/wholesale-gifting" element={<PageTransition><WholesalePage /></PageTransition>} />
