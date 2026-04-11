@@ -7,6 +7,7 @@ import AdminLayout from '../components/AdminLayout'
 const HomePage = lazy(() => import('../pages/HomePage'))
 const TheChronicle = lazy(() => import('../pages/TheChronicle'))
 const ShopPage = lazy(() => import('../pages/ShopPage'))
+const ProductDetailPage = lazy(() => import('../pages/ProductDetailPage'))
 const CustomOrderPage = lazy(() => import('../pages/CustomOrderPage'))
 const TribeLooksPage = lazy(() => import('../pages/TribeLooksPage'))
 const WholesalePage = lazy(() => import('../pages/WholesalePage'))
@@ -19,6 +20,8 @@ const AdminOrders = lazy(() => import('../pages/AdminOrders'))
 const AdminCategories = lazy(() => import('../pages/AdminCategories'))
 const AdminContent = lazy(() => import('../pages/AdminContent'))
 const AdminTribeLooks = lazy(() => import('../pages/AdminTribeLooks'))
+const AdminShipping = lazy(() => import('../pages/AdminShipping'))
+const AdminPayments = lazy(() => import('../pages/AdminPayments'))
 const CheckoutPage = lazy(() => import('../pages/CheckoutPage'))
 const NotFound = lazy(() => import('../pages/NotFound'))
 const AuthPage = lazy(() => import('../pages/AuthPage'))
@@ -52,6 +55,8 @@ export function AnimatedRoutes() {
             <Route path="categories" element={<AdminCategories />} />
             <Route path="content" element={<AdminContent />} />
             <Route path="tribe-looks" element={<AdminTribeLooks />} />
+            <Route path="shipping" element={<AdminShipping />} />
+            <Route path="payments" element={<AdminPayments />} />
           </Route>
         </Routes>
       </Suspense>
@@ -65,6 +70,7 @@ export function AnimatedRoutes() {
           <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
           <Route path="/about-us" element={<PageTransition><TheChronicle /></PageTransition>} />
           <Route path="/shop" element={<PageTransition><ShopPage /></PageTransition>} />
+          <Route path="/product/:id" element={<PageTransition><ProductDetailPage /></PageTransition>} />
           <Route path="/custom-order" element={<PageTransition><CustomOrderPage /></PageTransition>} />
           <Route path="/tribe-looks" element={<PageTransition><TribeLooksPage /></PageTransition>} />
           <Route path="/wholesale-gifting" element={<PageTransition><WholesalePage /></PageTransition>} />

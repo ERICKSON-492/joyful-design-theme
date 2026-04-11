@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { Plus, Trash2, Edit, X, Upload } from 'lucide-react'
+import { Plus, Trash2, Edit, X, Upload, Layers } from 'lucide-react'
 
 interface Product {
   id: string
@@ -20,6 +20,17 @@ interface Product {
   preorder_label: string | null
 }
 
+interface Variant {
+  id: string
+  product_id: string
+  variant_label: string
+  size: string | null
+  color: string | null
+  price: number
+  stock: number
+  is_active: boolean
+}
+
 const categories = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
 
 export default function AdminProducts() {
@@ -32,9 +43,20 @@ export default function AdminProducts() {
     name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true, is_preorder: false, preorder_label: ''
   })
 
+  // Variant management
+  const [variantProductId, setVariantProductId] = useState<string | null>(null)
+  const [variants, setVariants] = useState<Variant[]>([])
+  const [variantForm, setVariantForm] = useState({ variant_label: '', size: '', color: '', price: '', stock: '0' })
+  const [editVariantId, setEditVariantId] = useState<string | null>(null)
+
   const fetchProducts = async () => {
     const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false })
     if (data) setProducts(data)
+  }
+
+  const fetchVariants = async (productId: string) => {
+    const { data } = await supabase.from('product_variants').select('*').eq('product_id', productId).order('price', { ascending: true })
+    if (data) setVariants(data)
   }
 
   useEffect(() => { fetchProducts() }, [])
@@ -52,11 +74,7 @@ export default function AdminProducts() {
     const ext = file.name.split('.').pop()
     const path = `${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) {
-      toast.error('Upload failed: ' + error.message)
-      setUploading(false)
-      return
-    }
+    if (error) { toast.error('Upload failed: ' + error.message); setUploading(false); return }
     const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
     setForm(prev => ({ ...prev, image_url: publicUrl }))
     setUploading(false)
@@ -67,57 +85,77 @@ export default function AdminProducts() {
     e.preventDefault()
     setLoading(true)
     const payload = {
-      name: form.name,
-      description: form.description || null,
-      price: parseFloat(form.price),
-      price_min: form.price_min ? parseFloat(form.price_min) : null,
-      price_max: form.price_max ? parseFloat(form.price_max) : null,
-      category: form.category,
-      stock: parseInt(form.stock) || 0,
-      image_url: form.image_url || null,
-      is_active: form.is_active,
-      is_preorder: form.is_preorder,
-      preorder_label: form.preorder_label || null,
+      name: form.name, description: form.description || null,
+      price: parseFloat(form.price), price_min: form.price_min ? parseFloat(form.price_min) : null,
+      price_max: form.price_max ? parseFloat(form.price_max) : null, category: form.category,
+      stock: parseInt(form.stock) || 0, image_url: form.image_url || null,
+      is_active: form.is_active, is_preorder: form.is_preorder, preorder_label: form.preorder_label || null,
     }
-
     if (editId) {
       const { error } = await supabase.from('products').update(payload).eq('id', editId)
-      if (error) toast.error(error.message)
-      else toast.success('Product updated!')
+      if (error) toast.error(error.message); else toast.success('Product updated!')
     } else {
       const { error } = await supabase.from('products').insert(payload)
-      if (error) toast.error(error.message)
-      else toast.success('Product added!')
+      if (error) toast.error(error.message); else toast.success('Product added!')
     }
-    setLoading(false)
-    resetForm()
-    fetchProducts()
+    setLoading(false); resetForm(); fetchProducts()
   }
 
   const handleEdit = (p: Product) => {
     setForm({
-      name: p.name,
-      description: p.description || '',
-      price: String(p.price),
-      price_min: p.price_min ? String(p.price_min) : '',
-      price_max: p.price_max ? String(p.price_max) : '',
-      category: p.category,
-      stock: String(p.stock),
-      image_url: p.image_url || '',
-      is_active: p.is_active,
-      is_preorder: p.is_preorder,
-      preorder_label: p.preorder_label || '',
+      name: p.name, description: p.description || '', price: String(p.price),
+      price_min: p.price_min ? String(p.price_min) : '', price_max: p.price_max ? String(p.price_max) : '',
+      category: p.category, stock: String(p.stock), image_url: p.image_url || '',
+      is_active: p.is_active, is_preorder: p.is_preorder, preorder_label: p.preorder_label || '',
     })
-    setEditId(p.id)
-    setShowForm(true)
+    setEditId(p.id); setShowForm(true)
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this product?')) return
     const { error } = await supabase.from('products').delete().eq('id', id)
-    if (error) toast.error(error.message)
-    else { toast.success('Product deleted'); fetchProducts() }
+    if (error) toast.error(error.message); else { toast.success('Product deleted'); fetchProducts() }
   }
+
+  // Variant handlers
+  const openVariants = (productId: string) => {
+    setVariantProductId(productId)
+    fetchVariants(productId)
+  }
+
+  const resetVariantForm = () => {
+    setVariantForm({ variant_label: '', size: '', color: '', price: '', stock: '0' })
+    setEditVariantId(null)
+  }
+
+  const handleVariantSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!variantProductId) return
+    const payload = {
+      product_id: variantProductId,
+      variant_label: variantForm.variant_label || `${variantForm.size || ''} ${variantForm.color || ''}`.trim(),
+      size: variantForm.size || null, color: variantForm.color || null,
+      price: parseFloat(variantForm.price) || 0, stock: parseInt(variantForm.stock) || 0,
+    }
+    if (editVariantId) {
+      const { error } = await supabase.from('product_variants').update(payload).eq('id', editVariantId)
+      if (error) toast.error(error.message); else toast.success('Variant updated!')
+    } else {
+      const { error } = await supabase.from('product_variants').insert(payload)
+      if (error) toast.error(error.message); else toast.success('Variant added!')
+    }
+    resetVariantForm()
+    fetchVariants(variantProductId)
+  }
+
+  const handleDeleteVariant = async (id: string) => {
+    if (!variantProductId) return
+    await supabase.from('product_variants').delete().eq('id', id)
+    toast.success('Variant deleted')
+    fetchVariants(variantProductId)
+  }
+
+  const variantProduct = products.find(p => p.id === variantProductId)
 
   return (
     <div>
@@ -128,7 +166,7 @@ export default function AdminProducts() {
         </Button>
       </div>
 
-      {/* Form Modal */}
+      {/* Product Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
@@ -137,48 +175,26 @@ export default function AdminProducts() {
               <button onClick={resetForm}><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="text-sm font-medium block mb-1">Name</label>
-                <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
-              </div>
-              <div>
-                <label className="text-sm font-medium block mb-1">Description</label>
-                <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px]" />
+              <div><label className="text-sm font-medium block mb-1">Name</label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required /></div>
+              <div><label className="text-sm font-medium block mb-1">Description</label>
+                <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px]" />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium block mb-1">Base Price (KSh)</label>
-                  <Input type="number" step="0.01" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} required />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">Stock</label>
-                  <Input type="number" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} required />
-                </div>
+                <div><label className="text-sm font-medium block mb-1">Base Price (KSh)</label><Input type="number" step="0.01" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} required /></div>
+                <div><label className="text-sm font-medium block mb-1">Stock</label><Input type="number" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} required /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium block mb-1">Min Price (KSh) <span className="text-muted-foreground text-xs">optional</span></label>
-                  <Input type="number" step="0.01" value={form.price_min} onChange={e => setForm(p => ({ ...p, price_min: e.target.value }))} placeholder="e.g. 500" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">Max Price (KSh) <span className="text-muted-foreground text-xs">optional</span></label>
-                  <Input type="number" step="0.01" value={form.price_max} onChange={e => setForm(p => ({ ...p, price_max: e.target.value }))} placeholder="e.g. 2000" />
-                </div>
+                <div><label className="text-sm font-medium block mb-1">Min Price <span className="text-muted-foreground text-xs">optional</span></label><Input type="number" step="0.01" value={form.price_min} onChange={e => setForm(p => ({ ...p, price_min: e.target.value }))} placeholder="e.g. 500" /></div>
+                <div><label className="text-sm font-medium block mb-1">Max Price <span className="text-muted-foreground text-xs">optional</span></label><Input type="number" step="0.01" value={form.price_max} onChange={e => setForm(p => ({ ...p, price_max: e.target.value }))} placeholder="e.g. 2000" /></div>
               </div>
-              <p className="text-xs text-muted-foreground -mt-2">Set min & max to show a price range (e.g. by size/color). Leave blank for a fixed price.</p>
-              <div>
-                <label className="text-sm font-medium block mb-1">Category</label>
-                <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <p className="text-xs text-muted-foreground -mt-2">Set min & max to show a price range. Or add variants below for per-size/color pricing.</p>
+              <div><label className="text-sm font-medium block mb-1">Category</label>
+                <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                   {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="text-sm font-medium block mb-1">Product Image</label>
-                {form.image_url && (
-                  <img src={form.image_url} alt="Preview" className="w-24 h-24 object-cover rounded mb-2 border border-border" />
-                )}
+              <div><label className="text-sm font-medium block mb-1">Product Image</label>
+                {form.image_url && <img src={form.image_url} alt="Preview" className="w-24 h-24 object-cover rounded mb-2 border border-border" />}
                 <label className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-md cursor-pointer hover:bg-accent transition-colors text-sm">
                   <Upload className="w-4 h-4" /> {uploading ? 'Uploading...' : 'Upload Image'}
                   <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
@@ -190,18 +206,59 @@ export default function AdminProducts() {
               </div>
               <div className="flex items-center gap-2">
                 <input type="checkbox" checked={form.is_preorder} onChange={e => setForm(p => ({ ...p, is_preorder: e.target.checked }))} id="preorder" />
-                <label htmlFor="preorder" className="text-sm">Pre-Order (customers can order while being made)</label>
+                <label htmlFor="preorder" className="text-sm">Pre-Order</label>
               </div>
               {form.is_preorder && (
-                <div>
-                  <label className="text-sm font-medium block mb-1">Pre-Order Label <span className="text-muted-foreground text-xs">e.g. "Made to order – 2 weeks"</span></label>
-                  <Input value={form.preorder_label} onChange={e => setForm(p => ({ ...p, preorder_label: e.target.value }))} placeholder="Made to order – 2 weeks" />
-                </div>
+                <div><label className="text-sm font-medium block mb-1">Pre-Order Label</label><Input value={form.preorder_label} onChange={e => setForm(p => ({ ...p, preorder_label: e.target.value }))} placeholder="Made to order – 2 weeks" /></div>
               )}
               <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold">
                 {loading ? 'Saving...' : editId ? 'Update Product' : 'Add Product'}
               </Button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Variant Management Modal */}
+      {variantProductId && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-xl font-bold">Variants: {variantProduct?.name}</h2>
+              <button onClick={() => { setVariantProductId(null); resetVariantForm() }}><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+
+            {/* Add variant form */}
+            <form onSubmit={handleVariantSubmit} className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4 items-end">
+              <div><label className="text-xs font-medium block mb-1">Size</label><Input value={variantForm.size} onChange={e => setVariantForm(p => ({ ...p, size: e.target.value }))} placeholder="e.g. S, M, L" /></div>
+              <div><label className="text-xs font-medium block mb-1">Color</label><Input value={variantForm.color} onChange={e => setVariantForm(p => ({ ...p, color: e.target.value }))} placeholder="e.g. Red" /></div>
+              <div><label className="text-xs font-medium block mb-1">Price (KSh)</label><Input type="number" value={variantForm.price} onChange={e => setVariantForm(p => ({ ...p, price: e.target.value }))} required /></div>
+              <div><label className="text-xs font-medium block mb-1">Stock</label><Input type="number" value={variantForm.stock} onChange={e => setVariantForm(p => ({ ...p, stock: e.target.value }))} /></div>
+              <Button type="submit" size="sm" className="h-10">{editVariantId ? 'Update' : 'Add'}</Button>
+            </form>
+
+            {/* Existing variants */}
+            <div className="space-y-2">
+              {variants.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No variants yet. Add sizes, colors, and prices above.</p>}
+              {variants.map(v => (
+                <div key={v.id} className="flex items-center justify-between bg-muted/50 rounded-lg p-3">
+                  <div>
+                    <span className="font-medium text-foreground text-sm">
+                      {[v.size, v.color].filter(Boolean).join(' / ') || v.variant_label}
+                    </span>
+                    <span className="text-primary font-bold text-sm ml-3">KSh {v.price.toLocaleString()}</span>
+                    <span className="text-muted-foreground text-xs ml-2">Stock: {v.stock}</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => {
+                      setVariantForm({ variant_label: v.variant_label, size: v.size || '', color: v.color || '', price: String(v.price), stock: String(v.stock) })
+                      setEditVariantId(v.id)
+                    }}><Edit className="w-3 h-3" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteVariant(v.id)} className="text-destructive"><Trash2 className="w-3 h-3" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -229,6 +286,9 @@ export default function AdminProducts() {
               <div className="flex gap-2 mt-3">
                 <Button size="sm" variant="outline" onClick={() => handleEdit(p)} className="flex-1">
                   <Edit className="w-3 h-3 mr-1" /> Edit
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => openVariants(p.id)} title="Manage variants">
+                  <Layers className="w-3 h-3" />
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => handleDelete(p.id)} className="text-destructive hover:text-destructive">
                   <Trash2 className="w-3 h-3" />

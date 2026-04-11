@@ -385,6 +385,83 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_methods: {
+        Row: {
+          config: Json | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      product_variants: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          price: number
+          product_id: string
+          size: string | null
+          stock: number
+          updated_at: string
+          variant_label: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          price?: number
+          product_id: string
+          size?: string | null
+          stock?: number
+          updated_at?: string
+          variant_label?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          price?: number
+          product_id?: string
+          size?: string | null
+          stock?: number
+          updated_at?: string
+          variant_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           category: string
@@ -460,6 +537,45 @@ export type Database = {
           phone?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      shipping_methods: {
+        Row: {
+          created_at: string
+          estimated_days: string | null
+          id: string
+          is_active: boolean
+          name: string
+          price: number
+          provider: string
+          regions: string[] | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          estimated_days?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          price?: number
+          provider?: string
+          regions?: string[] | null
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          estimated_days?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          price?: number
+          provider?: string
+          regions?: string[] | null
+          type?: string
+          updated_at?: string
         }
         Relationships: []
       }

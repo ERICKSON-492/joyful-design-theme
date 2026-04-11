@@ -4,9 +4,18 @@ import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck } from 'lucide-react'
+import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard } from 'lucide-react'
+import { fetchPublicTable } from '@/lib/publicContent'
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
+
+interface ShippingMethod {
+  id: string; name: string; type: string; provider: string; estimated_days: string | null; price: number; regions: string[]
+}
+
+interface PaymentMethodOption {
+  id: string; name: string; provider: string; is_active: boolean
+}
 
 function CheckoutStepper({ step }: { step: number }) {
   const steps = ['Cart', 'Shipping', 'Payment']
@@ -37,8 +46,14 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [postalCode, setPostalCode] = useState('')
+  const [county, setCounty] = useState('')
+  const [country, setCountry] = useState('Kenya')
   const [email, setEmail] = useState('')
   const [step, setStep] = useState(0)
+  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([])
+  const [selectedShipping, setSelectedShipping] = useState<ShippingMethod | null>(null)
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([])
+  const [selectedPayment, setSelectedPayment] = useState<string>('mpesa')
   const { userId, authChecked, name: accountName, email: accountEmail } = useCheckoutAuth()
 
   useEffect(() => {
@@ -46,13 +61,36 @@ export default function CheckoutPage() {
     if (accountEmail) setEmail(prev => prev || accountEmail)
   }, [accountName, accountEmail])
 
+  // Load shipping & payment methods
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [ship, pay] = await Promise.all([
+          fetchPublicTable<ShippingMethod>('shipping_methods', 'select=*&is_active=eq.true&order=price.asc'),
+          fetchPublicTable<PaymentMethodOption>('payment_methods', 'select=*&is_active=eq.true&order=created_at.asc'),
+        ])
+        setShippingMethods(ship || [])
+        setPaymentMethods(pay || [])
+        if (pay?.length) setSelectedPayment(pay[0].provider)
+      } catch { /* ignore */ }
+    }
+    load()
+  }, [])
+
+  const isInternational = country !== 'Kenya'
+  const filteredShipping = shippingMethods.filter(m => isInternational ? m.type === 'international' : m.type === 'local')
+  const shippingCost = selectedShipping?.price || 0
+  const grandTotal = totalPrice + shippingCost
+
+  const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
+
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) {
       toast.error('Please log in first')
       navigate('/auth', { state: { returnTo: '/checkout' } })
       return
     }
-    if (!phone || phone.length < 9) { setError('Please enter a valid M-Pesa phone number'); return }
+    if (!phone || phone.length < 9) { setError('Please enter a valid phone number'); return }
     if (!name.trim()) { setError('Please enter your name'); return }
     if (items.length === 0) return
 
@@ -65,17 +103,25 @@ export default function CheckoutPage() {
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
-          phone, customer_name: name, total_amount: totalPrice,
-          items: orderItems as any, status: 'pending', user_id: userId,
-          shipping_address: { address, city, postal_code: postalCode, email },
+          phone, customer_name: name, total_amount: grandTotal,
+          items: orderItems as any, status: selectedPayment === 'cod' ? 'confirmed' : 'pending', user_id: userId,
+          shipping_address: { address, city, county, postal_code: postalCode, country, email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost },
         })
         .select('id').single()
 
       if (orderError || !order) throw new Error('Failed to create order')
 
+      if (selectedPayment === 'cod') {
+        setStatus('success')
+        clearCart()
+        toast.success('Order placed! Pay on delivery 🎉')
+        return
+      }
+
+      // M-Pesa flow
       setStatus('pushing')
       const { data: stkData, error: stkError } = await supabase.functions.invoke(
-        'mpesa-stk-push', { body: { phone, amount: totalPrice, order_id: order.id } }
+        'mpesa-stk-push', { body: { phone, amount: grandTotal, order_id: order.id } }
       )
       if (stkError) throw new Error(stkError.message)
       if (stkData?.ResponseCode !== '0') throw new Error(stkData?.ResponseDescription || 'Failed to initiate M-Pesa payment')
@@ -112,15 +158,17 @@ export default function CheckoutPage() {
     } catch (err: any) {
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
-  }, [phone, name, items, totalPrice, userId, address, city, postalCode, email, clearCart, navigate])
+  }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, clearCart, navigate])
 
   if (status === 'success') {
     return (
       <div className="bg-background min-h-screen pt-24 pb-16">
         <div className="container mx-auto px-4 text-center py-20 max-w-md">
           <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
-          <h1 className="font-display text-3xl font-bold text-foreground mb-3">Payment Successful!</h1>
-          <p className="text-muted-foreground mb-8">Your order has been confirmed. We'll reach out via WhatsApp for delivery details.</p>
+          <h1 className="font-display text-3xl font-bold text-foreground mb-3">Order Confirmed!</h1>
+          <p className="text-muted-foreground mb-8">
+            {selectedPayment === 'cod' ? "Your order has been placed. Pay on delivery." : "Payment successful! We'll reach out via WhatsApp for delivery details."}
+          </p>
           <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase rounded-lg">Continue Shopping</Link>
         </div>
       </div>
@@ -142,7 +190,7 @@ export default function CheckoutPage() {
 
   const isProcessing = status === 'creating' || status === 'pushing' || status === 'polling'
   const canGoToShipping = items.length > 0
-  const canGoToPayment = name.trim() && phone.length >= 9
+  const canGoToPayment = name.trim() && phone.length >= 9 && selectedShipping
 
   return (
     <div className="bg-muted/30 min-h-screen pt-24 pb-16">
@@ -155,9 +203,8 @@ export default function CheckoutPage() {
         <CheckoutStepper step={step} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main content */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Step 0: Cart Review */}
+            {/* Step 0: Cart */}
             {step === 0 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -178,19 +225,11 @@ export default function CheckoutPage() {
                         <p className="text-primary font-bold text-sm mt-1">KSh {item.price.toLocaleString()}</p>
                         <div className="flex items-center gap-3 mt-2">
                           <div className="flex items-center border border-border rounded-lg">
-                            <button onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="p-1.5 hover:bg-accent transition-colors rounded-l-lg" aria-label="Decrease quantity">
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
+                            <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1.5 hover:bg-accent transition-colors rounded-l-lg"><Minus className="w-3.5 h-3.5" /></button>
                             <span className="px-3 text-sm font-medium min-w-[2rem] text-center">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              className="p-1.5 hover:bg-accent transition-colors rounded-r-lg" aria-label="Increase quantity">
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
+                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1.5 hover:bg-accent transition-colors rounded-r-lg"><Plus className="w-3.5 h-3.5" /></button>
                           </div>
-                          <button onClick={() => removeFromCart(item.id)} className="text-destructive hover:text-destructive/80 transition-colors" aria-label="Remove">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <button onClick={() => removeFromCart(item.id)} className="text-destructive hover:text-destructive/80 transition-colors"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
@@ -201,15 +240,14 @@ export default function CheckoutPage() {
                 </div>
                 <div className="p-4 border-t border-border">
                   <button onClick={() => setStep(1)} disabled={!canGoToShipping}
-                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-                    style={{ minHeight: '48px' }}>
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50" style={{ minHeight: '48px' }}>
                     Proceed to Shipping
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Step 1: Shipping Details */}
+            {/* Step 1: Shipping */}
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -235,26 +273,79 @@ export default function CheckoutPage() {
                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com"
                       className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
                   </div>
+
+                  {/* Country */}
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Country</label>
+                    <select value={country} onChange={e => { setCountry(e.target.value); setSelectedShipping(null) }}
+                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm">
+                      <option value="Kenya">🇰🇪 Kenya</option>
+                      <option value="Tanzania">🇹🇿 Tanzania</option>
+                      <option value="Uganda">🇺🇬 Uganda</option>
+                      <option value="Rwanda">🇷🇼 Rwanda</option>
+                      <option value="Ethiopia">🇪🇹 Ethiopia</option>
+                      <option value="Other">🌍 Other (International)</option>
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">Street Address</label>
-                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street address / building / estate"
+                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate"
                       className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1.5">City / Town</label>
-                      <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="Nairobi"
-                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
-                    </div>
+                    {country === 'Kenya' ? (
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">County</label>
+                        <select value={county} onChange={e => setCounty(e.target.value)}
+                          className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm">
+                          <option value="">Select county</option>
+                          {kenyanCounties.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">City / Town</label>
+                        <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City"
+                          className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                      </div>
+                    )}
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1.5">Postal Code</label>
                       <input type="text" value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="00100"
                         className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
                     </div>
                   </div>
+
+                  {/* Shipping Method Selection */}
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
+                    </label>
+                    {filteredShipping.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No shipping methods available for this destination.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredShipping.map(m => (
+                          <label key={m.id}
+                            className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                              selectedShipping?.id === m.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                            }`}>
+                            <input type="radio" name="shipping" checked={selectedShipping?.id === m.id}
+                              onChange={() => setSelectedShipping(m)} className="accent-primary" />
+                            <div className="flex-1">
+                              <p className="font-medium text-foreground text-sm">{m.name}</p>
+                              <p className="text-xs text-muted-foreground">{m.estimated_days} · {(m.regions || []).join(', ')}</p>
+                            </div>
+                            <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <button onClick={() => setStep(2)} disabled={!canGoToPayment}
-                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 mt-2"
-                    style={{ minHeight: '48px' }}>
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 mt-2" style={{ minHeight: '48px' }}>
                     Proceed to Payment
                   </button>
                 </div>
@@ -266,20 +357,60 @@ export default function CheckoutPage() {
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
                   <h2 className="font-display font-semibold text-foreground flex items-center gap-2">
-                    <Phone className="w-5 h-5 text-primary" /> Pay with M-Pesa
+                    <CreditCard className="w-5 h-5 text-primary" /> Payment
                   </h2>
                 </div>
                 <div className="p-4 space-y-4">
-                  <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4">
-                    <p className="text-sm text-green-800 dark:text-green-200">
-                      <strong>How it works:</strong> Click "Pay Now" and you'll receive an M-Pesa STK push on <strong>{phone}</strong>. Enter your PIN to complete payment.
-                    </p>
-                  </div>
+                  {/* Payment method selection */}
+                  {paymentMethods.length > 1 && (
+                    <div className="space-y-2">
+                      {paymentMethods.map(pm => (
+                        <label key={pm.id}
+                          className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                            selectedPayment === pm.provider ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                          }`}>
+                          <input type="radio" name="payment" checked={selectedPayment === pm.provider}
+                            onChange={() => setSelectedPayment(pm.provider)} className="accent-primary" />
+                          <div>
+                            <p className="font-medium text-foreground text-sm">{pm.name}</p>
+                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay via M-Pesa STK Push</p>}
+                            {pm.provider === 'pesapal' && <p className="text-xs text-muted-foreground">Pay with card or mobile money</p>}
+                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Pay when you receive your order</p>}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedPayment === 'mpesa' && (
+                    <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4">
+                      <p className="text-sm text-green-800 dark:text-green-200">
+                        <strong>How it works:</strong> Click "Pay Now" and you'll receive an M-Pesa STK push on <strong>{phone}</strong>. Enter your PIN to complete payment.
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedPayment === 'cod' && (
+                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} when you receive your order. Delivery via {selectedShipping?.name}.
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedPayment === 'pesapal' && (
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
+                      <p className="text-sm text-amber-800 dark:text-amber-200">
+                        <strong>Pesapal:</strong> You'll be redirected to Pesapal to complete payment via card or mobile money.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Shipping summary */}
-                  <div className="text-sm text-muted-foreground space-y-1">
+                  <div className="text-sm text-muted-foreground space-y-1 border-t border-border pt-3">
                     <p><strong className="text-foreground">Delivering to:</strong> {name}</p>
-                    {address && <p>{address}, {city} {postalCode}</p>}
+                    {address && <p>{address}, {county || city} {postalCode}</p>}
+                    {selectedShipping && <p>Via {selectedShipping.name} ({selectedShipping.estimated_days})</p>}
                     <p>Phone: {phone}</p>
                   </div>
 
@@ -290,13 +421,18 @@ export default function CheckoutPage() {
                   )}
 
                   <button onClick={handleMpesaPayment} disabled={isProcessing || !authChecked}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white py-4 font-bold text-sm tracking-wider uppercase rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                    style={{ minHeight: '52px' }}>
+                    className={`w-full py-4 font-bold text-sm tracking-wider uppercase rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2 ${
+                      selectedPayment === 'mpesa' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                      selectedPayment === 'cod' ? 'bg-primary hover:bg-primary/90 text-primary-foreground' :
+                      'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`} style={{ minHeight: '52px' }}>
                     {!authChecked && <><Loader2 className="w-5 h-5 animate-spin" /> Verifying account...</>}
                     {authChecked && status === 'creating' && <><Loader2 className="w-5 h-5 animate-spin" /> Creating order...</>}
                     {authChecked && status === 'pushing' && <><Loader2 className="w-5 h-5 animate-spin" /> Sending STK push...</>}
                     {authChecked && status === 'polling' && <><Loader2 className="w-5 h-5 animate-spin" /> Waiting for payment...</>}
-                    {authChecked && (status === 'idle' || status === 'failed') && <>Pay KSh {totalPrice.toLocaleString()} Now</>}
+                    {authChecked && (status === 'idle' || status === 'failed') && (
+                      selectedPayment === 'cod' ? 'Place Order' : `Pay KSh ${grandTotal.toLocaleString()} Now`
+                    )}
                   </button>
 
                   {status === 'polling' && (
@@ -307,7 +443,7 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          {/* Order Summary Sidebar */}
+          {/* Order Summary */}
           <div className="lg:col-span-1">
             <div className="bg-card border border-border rounded-lg sticky top-28">
               <div className="p-4 border-b border-border">
@@ -331,17 +467,21 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Shipping</span>
-                  <span className="text-green-600 font-medium">Free</span>
+                  {selectedShipping ? (
+                    <span className="text-foreground font-medium">KSh {shippingCost.toLocaleString()}</span>
+                  ) : (
+                    <span className="text-muted-foreground italic text-xs">Select at next step</span>
+                  )}
                 </div>
                 <div className="border-t border-border pt-2 flex justify-between">
                   <span className="font-display font-bold text-foreground">Total</span>
-                  <span className="font-bold text-lg text-primary">KSh {totalPrice.toLocaleString()}</span>
+                  <span className="font-bold text-lg text-primary">KSh {grandTotal.toLocaleString()}</span>
                 </div>
               </div>
               <div className="p-4 pt-0">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <ShieldCheck className="w-4 h-4 text-green-500" />
-                  <span>Secure checkout powered by M-Pesa</span>
+                  <span>Secure checkout</span>
                 </div>
               </div>
             </div>

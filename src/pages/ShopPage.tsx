@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
@@ -102,7 +102,7 @@ export default function ShopPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
               {products.map((product) => (
                 <div key={product.id} className="group">
-                  <div className="overflow-hidden bg-card mb-4 relative rounded-lg">
+                  <Link to={`/product/${product.id}`} className="block overflow-hidden bg-card mb-4 relative rounded-lg">
                     {product.image_url ? (
                       <img src={product.image_url} alt={product.name}
                         className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
@@ -127,10 +127,12 @@ export default function ShopPage() {
                         </span>
                       )}
                     </div>
-                  </div>
-                  <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1">
-                    {product.name}
-                  </h3>
+                  </Link>
+                  <Link to={`/product/${product.id}`}>
+                    <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1 hover:text-primary transition-colors">
+                      {product.name}
+                    </h3>
+                  </Link>
                   <div className="mb-1">
                     {product.price_min && product.price_max ? (
                       <p className="text-foreground font-bold text-sm">
