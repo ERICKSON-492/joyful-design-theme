@@ -5,6 +5,7 @@ import { WhatsAppButton } from './components/WhatsAppButton'
 import { AnimatedRoutes } from './components/AnimatedRoutes'
 import { CartProvider } from './contexts/CartContext'
 import { CartDrawer } from './components/CartDrawer'
+import { InstallAppPrompt } from './components/InstallAppPrompt'
 
 function AppContent() {
   const location = useLocation()
@@ -19,6 +20,7 @@ function AppContent() {
       {!isAdmin && <Footer />}
       {!isAdmin && <WhatsAppButton />}
       {!isAdmin && <CartDrawer />}
+      {!isAdmin && <InstallAppPrompt />}
     </div>
   )
 }
