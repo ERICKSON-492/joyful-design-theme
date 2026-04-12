@@ -13,7 +13,7 @@ const navItems = [
   { label: 'Shipping', href: '/admin/shipping', icon: Truck },
   { label: 'Payments', href: '/admin/payments', icon: CreditCard },
   { label: 'Enquiries', href: '/admin/enquiries', icon: MessageSquare },
-  { label: 'Chronicle Story', href: '/admin/content', icon: FileText },
+  { label: 'Site Content', href: '/admin/content', icon: FileText },
   { label: 'Tribe Looks', href: '/admin/tribe-looks', icon: Camera },
 ]
 

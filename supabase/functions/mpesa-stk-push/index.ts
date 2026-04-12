@@ -5,9 +5,44 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DARAJA_AUTH_URL = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials";
-const DARAJA_STK_URL = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest";
-const DARAJA_QUERY_URL = "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query";
+const SANDBOX_AUTH_URL = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials";
+const SANDBOX_STK_URL = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest";
+const SANDBOX_QUERY_URL = "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query";
+const PROD_AUTH_URL = "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials";
+const PROD_STK_URL = "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest";
+const PROD_QUERY_URL = "https://api.safaricom.co.ke/mpesa/stkpushquery/v1/query";
+
+async function getMpesaConfig() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data } = await supabase
+    .from("payment_methods")
+    .select("config")
+    .eq("provider", "mpesa")
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+
+  if (!data?.config) {
+    // Fallback to env vars for backward compatibility
+    const consumerKey = Deno.env.get("MPESA_CONSUMER_KEY");
+    const consumerSecret = Deno.env.get("MPESA_CONSUMER_SECRET");
+    const shortcode = Deno.env.get("MPESA_SHORTCODE");
+    const passkey = Deno.env.get("MPESA_PASSKEY");
+    if (consumerKey && consumerSecret && shortcode && passkey) {
+      return { consumer_key: consumerKey, consumer_secret: consumerSecret, shortcode, passkey, environment: "sandbox" };
+    }
+    return null;
+  }
+
+  const cfg = data.config as Record<string, string>;
+  if (!cfg.consumer_key || !cfg.consumer_secret || !cfg.shortcode || !cfg.passkey) {
+    return null;
+  }
+  return cfg;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -15,23 +50,25 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const consumerKey = Deno.env.get("MPESA_CONSUMER_KEY");
-    const consumerSecret = Deno.env.get("MPESA_CONSUMER_SECRET");
-    const shortcode = Deno.env.get("MPESA_SHORTCODE");
-    const passkey = Deno.env.get("MPESA_PASSKEY");
-
-    if (!consumerKey || !consumerSecret || !shortcode || !passkey) {
-      return new Response(JSON.stringify({ error: "M-Pesa credentials not configured" }), {
+    const config = await getMpesaConfig();
+    if (!config) {
+      return new Response(JSON.stringify({ error: "M-Pesa credentials not configured. Add them in Admin → Payments." }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const { consumer_key, consumer_secret, shortcode, passkey, environment } = config;
+    const isProd = environment === "production";
+    const authUrl = isProd ? PROD_AUTH_URL : SANDBOX_AUTH_URL;
+    const stkUrl = isProd ? PROD_STK_URL : SANDBOX_STK_URL;
+    const queryUrl = isProd ? PROD_QUERY_URL : SANDBOX_QUERY_URL;
 
     const url = new URL(req.url);
     const action = url.searchParams.get("action") || "push";
 
     // Get OAuth token
-    const authRes = await fetch(DARAJA_AUTH_URL, {
-      headers: { Authorization: `Basic ${btoa(`${consumerKey}:${consumerSecret}`)}` },
+    const authRes = await fetch(authUrl, {
+      headers: { Authorization: `Basic ${btoa(`${consumer_key}:${consumer_secret}`)}` },
     });
     const authData = await authRes.json();
     if (!authRes.ok) {
@@ -42,7 +79,6 @@ Deno.serve(async (req) => {
     const accessToken = authData.access_token;
 
     if (action === "query") {
-      // Query STK push status
       const { checkout_request_id } = await req.json();
       if (!checkout_request_id) {
         return new Response(JSON.stringify({ error: "checkout_request_id is required" }), {
@@ -53,7 +89,7 @@ Deno.serve(async (req) => {
       const timestamp = new Date().toISOString().replace(/[-T:.Z]/g, "").slice(0, 14);
       const password = btoa(`${shortcode}${passkey}${timestamp}`);
 
-      const queryRes = await fetch(DARAJA_QUERY_URL, {
+      const queryRes = await fetch(queryUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -68,7 +104,6 @@ Deno.serve(async (req) => {
       });
       const queryData = await queryRes.json();
 
-      // Update order status if successful
       if (queryData.ResultCode === "0" || queryData.ResultCode === 0) {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -96,16 +131,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Format phone: ensure 254XXXXXXXXX
     let formattedPhone = phone.replace(/\s+/g, "").replace(/^0/, "254").replace(/^\+/, "");
     if (!formattedPhone.startsWith("254")) formattedPhone = "254" + formattedPhone;
 
     const timestamp = new Date().toISOString().replace(/[-T:.Z]/g, "").slice(0, 14);
     const password = btoa(`${shortcode}${passkey}${timestamp}`);
-
     const callbackUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mpesa-callback`;
 
-    const stkRes = await fetch(DARAJA_STK_URL, {
+    const stkRes = await fetch(stkUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
