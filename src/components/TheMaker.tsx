@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import lindaPortrait from '@/assets/linda-portrait.jpg'
 import { ScrollReveal } from './ScrollReveal'
-import { supabase } from '@/integrations/supabase/client'
+import { fetchPublicTable } from '@/lib/publicContent'
 
 interface ChronicleContent {
   title: string
