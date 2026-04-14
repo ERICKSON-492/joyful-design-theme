@@ -20,14 +20,12 @@ export function TheMaker() {
   const [content, setContent] = useState<ChronicleContent>(fallback)
 
   useEffect(() => {
-    supabase
-      .from('site_content')
-      .select('title, body, image_url')
-      .eq('section_key', 'the_chronicle_begins')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setContent({ title: data.title, body: data.body, image_url: data.image_url })
-      })
+    fetchPublicTable<{ title: string; body: string; image_url: string | null }>(
+      'site_content',
+      'select=title,body,image_url&section_key=eq.the_chronicle_begins'
+    ).then((rows) => {
+      if (rows[0]) setContent({ title: rows[0].title, body: rows[0].body, image_url: rows[0].image_url })
+    })
   }, [])
 
   const paragraphs = content.body.split('\n\n').filter(Boolean)
