@@ -10,8 +10,8 @@ const CustomOrderTeaser = lazy(() => import('@/components/CustomOrderTeaser').th
 const InstagramFeed = lazy(() => import('@/components/InstagramFeed').then(m => ({ default: m.InstagramFeed })))
 const JoinTheTribe = lazy(() => import('@/components/JoinTheTribe').then(m => ({ default: m.JoinTheTribe })))
 
-function SectionFallback() {
-  return <div className="min-h-[200px]" />
+function SectionFallback({ className = "min-h-[400px]" }: { className?: string }) {
+  return <div className={className} />
 }
 
 export default function HomePage() {
