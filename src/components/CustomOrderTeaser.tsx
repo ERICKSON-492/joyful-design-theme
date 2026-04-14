@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { ScrollReveal } from './ScrollReveal'
-import { supabase } from '@/integrations/supabase/client'
+import { fetchPublicTable } from '@/lib/publicContent'
 
 const fallback = {
   title: 'Something made just for you',
@@ -12,14 +12,12 @@ export function CustomOrderTeaser() {
   const [content, setContent] = useState(fallback)
 
   useEffect(() => {
-    supabase
-      .from('site_content')
-      .select('title, body')
-      .eq('section_key', 'custom_order_teaser')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setContent({ title: data.title, body: data.body })
-      })
+    fetchPublicTable<{ title: string; body: string }>(
+      'site_content',
+      'select=title,body&section_key=eq.custom_order_teaser'
+    ).then((rows) => {
+      if (rows[0]) setContent({ title: rows[0].title, body: rows[0].body })
+    })
   }, [])
 
   return (
