@@ -415,6 +415,62 @@ export type Database = {
         }
         Relationships: []
       }
+      product_reviews: {
+        Row: {
+          admin_response: string | null
+          comment: string
+          created_at: string
+          customer_name: string
+          id: string
+          is_verified_buyer: boolean
+          photo_urls: string[] | null
+          product_id: string
+          rating: number
+          status: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_response?: string | null
+          comment: string
+          created_at?: string
+          customer_name: string
+          id?: string
+          is_verified_buyer?: boolean
+          photo_urls?: string[] | null
+          product_id: string
+          rating: number
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_response?: string | null
+          comment?: string
+          created_at?: string
+          customer_name?: string
+          id?: string
+          is_verified_buyer?: boolean
+          photo_urls?: string[] | null
+          product_id?: string
+          rating?: number
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_reviews_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_variants: {
         Row: {
           color: string | null
