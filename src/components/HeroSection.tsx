@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
 
 function optimizeImageUrl(url: string): string {
@@ -115,20 +114,14 @@ export function HeroSection() {
         if (!visibleIndices.has(index)) return null
         const isActive = index === activeIndex
         return slide.image_url ? (
-          <motion.img
+          <img
             key={slide.id}
             src={optimizeImageUrl(slide.image_url)}
             alt={slide.subtitle}
             loading={index === 0 ? 'eager' : 'lazy'}
             fetchPriority={index === 0 ? 'high' : 'auto'}
-            className="absolute inset-0 h-full w-full object-cover"
-            initial={false}
-            animate={{
-              opacity: isActive ? 1 : 0,
-              scale: isActive ? 1 : 1.04,
-            }}
-            transition={{ duration: 0.4, ease: 'easeOut' }}
-            style={{ zIndex: isActive ? 1 : 0 }}
+            className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-out"
+            style={{ zIndex: isActive ? 1 : 0, opacity: isActive ? 1 : 0 }}
           />
         ) : (
           <div
@@ -148,29 +141,21 @@ export function HeroSection() {
 
       <div className="absolute inset-0 z-[3] flex items-center justify-center px-6 text-center">
         <div className="max-w-3xl">
-          <AnimatePresence initial={false} mode="sync">
-            <motion.div
-              key={activeSlide.id}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          <div key={activeSlide.id} className="animate-fade-in">
+            <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-4 leading-[1.1] tracking-wide drop-shadow-lg">
+              {activeSlide.title}
+            </h1>
+            <p className="text-primary text-xl md:text-2xl lg:text-3xl font-display italic mb-10 drop-shadow-md">
+              {activeSlide.subtitle}
+            </p>
+            <Link
+              to={activeSlide.cta_link}
+              className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-10 py-4 text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              style={{ minHeight: '44px' }}
             >
-              <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-4 leading-[1.1] tracking-wide drop-shadow-lg">
-                {activeSlide.title}
-              </h1>
-              <p className="text-primary text-xl md:text-2xl lg:text-3xl font-display italic mb-10 drop-shadow-md">
-                {activeSlide.subtitle}
-              </p>
-              <Link
-                to={activeSlide.cta_link}
-                className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-10 py-4 text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-                style={{ minHeight: '44px' }}
-              >
-                {activeSlide.cta_text}
-              </Link>
-            </motion.div>
-          </AnimatePresence>
+              {activeSlide.cta_text}
+            </Link>
+          </div>
         </div>
       </div>
 
