@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
-import { supabase } from '@/integrations/supabase/client'
 import { ShoppingBag, Clock, ArrowLeft, Minus, Plus, Check } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { ProductReviews } from '@/components/ProductReviews'
+import { RelatedProducts } from '@/components/RelatedProducts'
+import { RecentlyViewed } from '@/components/RecentlyViewed'
+import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 
 interface Product {
   id: string
