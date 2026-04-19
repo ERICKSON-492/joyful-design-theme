@@ -34,6 +34,7 @@ interface Variant {
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { addToCart } = useCart()
+  const { addProduct: trackView } = useRecentlyViewed()
   const [product, setProduct] = useState<Product | null>(null)
   const [variants, setVariants] = useState<Variant[]>([])
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null)
@@ -41,6 +42,10 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true)
   const [selectedSize, setSelectedSize] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (id) trackView(id)
+  }, [id, trackView])
 
   useEffect(() => {
     if (!id) return
@@ -255,6 +260,10 @@ export default function ProductDetailPage() {
             </button>
           </div>
         </div>
+
+        <ProductReviews productId={product.id} />
+        <RelatedProducts productId={product.id} category={product.category} />
+        <RecentlyViewed excludeId={product.id} />
       </div>
     </div>
   )
