@@ -7,6 +7,7 @@ import AdminLayout from '../components/AdminLayout'
 const HomePage = lazy(() => import('../pages/HomePage'))
 const TheChronicle = lazy(() => import('../pages/TheChronicle'))
 const ShopPage = lazy(() => import('../pages/ShopPage'))
+const SearchPage = lazy(() => import('../pages/SearchPage'))
 const ProductDetailPage = lazy(() => import('../pages/ProductDetailPage'))
 const CustomOrderPage = lazy(() => import('../pages/CustomOrderPage'))
 const TribeLooksPage = lazy(() => import('../pages/TribeLooksPage'))
@@ -72,6 +73,7 @@ export function AnimatedRoutes() {
           <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
           <Route path="/about-us" element={<PageTransition><TheChronicle /></PageTransition>} />
           <Route path="/shop" element={<PageTransition><ShopPage /></PageTransition>} />
+          <Route path="/search" element={<PageTransition><SearchPage /></PageTransition>} />
           <Route path="/product/:id" element={<PageTransition><ProductDetailPage /></PageTransition>} />
           <Route path="/custom-order" element={<PageTransition><CustomOrderPage /></PageTransition>} />
           <Route path="/tribe-looks" element={<PageTransition><TribeLooksPage /></PageTransition>} />
