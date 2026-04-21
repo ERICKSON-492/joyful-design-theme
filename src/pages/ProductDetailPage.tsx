@@ -265,6 +265,36 @@ export default function ProductDetailPage() {
         <RelatedProducts productId={product.id} category={product.category} />
         <RecentlyViewed excludeId={product.id} />
       </div>
+
+      {/* Sticky mobile Add-to-Cart bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background border-t border-border shadow-[0_-4px_12px_rgba(0,0,0,0.08)] px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground truncate">{product.name}</p>
+            <p className="text-base font-bold text-primary leading-tight">
+              {variants.length > 0 && !selectedVariant && product.price_min && product.price_max
+                ? `KSh ${product.price_min.toLocaleString()} – ${product.price_max.toLocaleString()}`
+                : `KSh ${currentPrice.toLocaleString()}`}
+            </p>
+          </div>
+          <button
+            onClick={handleAddToCart}
+            disabled={!canOrder || needsVariant}
+            className={`shrink-0 px-5 py-3 text-xs font-bold tracking-wider uppercase rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+              product.is_preorder
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-foreground text-background hover:bg-primary hover:text-primary-foreground'
+            }`}
+            style={{ minHeight: '48px', minWidth: '160px' }}
+          >
+            <ShoppingBag className="w-4 h-4" />
+            {getButtonLabel()}
+          </button>
+        </div>
+      </div>
+
+      {/* Spacer so content isn't hidden behind sticky bar on mobile */}
+      <div className="md:hidden h-20" aria-hidden />
     </div>
   )
 }
