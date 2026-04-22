@@ -258,6 +258,14 @@ export default function ProductDetailPage() {
               <ShoppingBag className="w-5 h-5" />
               {getButtonLabel()}
             </button>
+
+            {/* Help links */}
+            <div className="pt-4 border-t border-border flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+              <Link to="/faq#shipping" className="hover:text-primary transition-colors underline-offset-2 hover:underline">Shipping info</Link>
+              <Link to="/faq#care" className="hover:text-primary transition-colors underline-offset-2 hover:underline">Care instructions</Link>
+              <Link to="/faq#custom-orders" className="hover:text-primary transition-colors underline-offset-2 hover:underline">Custom orders</Link>
+              <Link to="/faq" className="hover:text-primary transition-colors underline-offset-2 hover:underline">All FAQs</Link>
+            </div>
           </div>
         </div>
 
