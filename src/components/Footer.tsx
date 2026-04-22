@@ -51,6 +51,7 @@ export function Footer() {
               <li><Link to="/custom-order" className="hover:text-primary transition-colors">Create Yours</Link></li>
               <li><Link to="/tribe-looks" className="hover:text-primary transition-colors">Tribe Looks</Link></li>
               <li><Link to="/wholesale-gifting" className="hover:text-primary transition-colors">Wholesale & Gifting</Link></li>
+              <li><Link to="/faq" className="hover:text-primary transition-colors">FAQ & Help</Link></li>
             </ul>
           </div>
 
