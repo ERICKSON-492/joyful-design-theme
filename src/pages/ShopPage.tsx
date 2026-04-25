@@ -102,15 +102,16 @@ export default function ShopPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
               {products.map((product) => (
                 <div key={product.id} className="group">
-                  <Link to={`/product/${product.id}`} className="block overflow-hidden bg-card mb-4 relative rounded-lg">
+                  <Link to={`/product/${product.id}`} className="product-image-frame block mb-4">
                     {product.image_url ? (
                       <img src={product.image_url} alt={product.name}
-                        className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                        className="product-image" loading="lazy"
+                        onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
                     ) : (
                       <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
                     )}
                     {/* Badges */}
-                    <div className="absolute top-2 left-2 flex flex-col gap-1">
+                    <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
                       {product.is_preorder && (
                         <span className="bg-blue-600 text-white text-xs px-2 py-1 font-semibold flex items-center gap-1 rounded">
                           <Clock className="w-3 h-3" /> Pre-Order

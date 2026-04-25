@@ -305,14 +305,15 @@ export default function SearchPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
                 {products.map(p => (
                   <div key={p.id} className="group">
-                    <Link to={`/product/${p.id}`} className="block overflow-hidden bg-card mb-3 relative rounded-lg">
+                    <Link to={`/product/${p.id}`} className="product-image-frame block mb-3">
                       {p.image_url ? (
                         <img src={p.image_url} alt={p.name}
-                          className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                          className="product-image" loading="lazy"
+                          onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
                       ) : (
                         <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
                       )}
-                      <div className="absolute top-2 left-2 flex flex-col gap-1">
+                      <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
                         {p.is_preorder && (
                           <span className="bg-blue-600 text-white text-xs px-2 py-1 font-semibold flex items-center gap-1 rounded">
                             <Clock className="w-3 h-3" /> Pre-Order

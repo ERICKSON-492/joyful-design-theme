@@ -71,13 +71,14 @@ export function FeaturedProducts() {
               transition={{ duration: 0.4, delay: i * 0.1 }}
             >
               <div className="group">
-                <div className="overflow-hidden bg-card mb-4">
+                <Link to={`/product/${product.id}`} className="product-image-frame block mb-4">
                   {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                    <img src={product.image_url} alt={product.name} className="product-image" loading="lazy"
+                      onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
                   ) : (
                     <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
                   )}
-                </div>
+                </Link>
                 <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1">{product.name}</h3>
                 <p className="text-muted-foreground text-sm mb-3">KSh {product.price.toLocaleString()}</p>
                 <button
