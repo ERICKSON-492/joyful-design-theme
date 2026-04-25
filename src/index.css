@@ -146,12 +146,17 @@ html {
     object-fit: cover;
     display: block;
     transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1), filter 400ms ease;
-    filter: brightness(1.08) contrast(1.04) saturate(1.08);
+    filter: brightness(1.1) contrast(1.12) saturate(1.22) hue-rotate(-2deg);
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-transform: translateZ(0);
     will-change: transform;
   }
   .group:hover .product-image {
     transform: scale(1.06);
-    filter: brightness(1.12) contrast(1.06) saturate(1.15);
+    filter: brightness(1.14) contrast(1.16) saturate(1.32) hue-rotate(-2deg);
   }
 
   .product-image-loading {
