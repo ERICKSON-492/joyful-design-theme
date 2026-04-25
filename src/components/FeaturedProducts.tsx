@@ -79,8 +79,10 @@ export function FeaturedProducts() {
                     <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
                   )}
                 </Link>
-                <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1">{product.name}</h3>
-                <p className="text-muted-foreground text-sm mb-3">KSh {product.price.toLocaleString()}</p>
+                <Link to={`/product/${product.id}`}>
+                  <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1 hover:text-primary transition-colors">{product.name}</h3>
+                  <p className="text-muted-foreground text-sm mb-3">KSh {product.price.toLocaleString()}</p>
+                </Link>
                 <button
                   onClick={() => addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })}
                   className="w-full bg-foreground text-white py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
