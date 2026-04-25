@@ -30,12 +30,12 @@ export function RelatedProducts({ productId, category }: { productId: string; ca
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {products.map(p => (
           <Link key={p.id} to={`/product/${p.id}`} className="group">
-            <div className="aspect-square bg-card border border-border rounded-lg overflow-hidden mb-2">
+            <div className="product-image-frame mb-2">
               {p.image_url ? (
-                <img src={p.image_url} alt={p.name} loading="lazy"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img src={p.image_url} alt={p.name} loading="lazy" className="product-image"
+                  onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
               ) : (
-                <div className="w-full h-full bg-muted" />
+                <div className="w-full aspect-square bg-muted" />
               )}
             </div>
             <h3 className="text-sm font-medium text-foreground line-clamp-1 group-hover:text-primary transition-colors">{p.name}</h3>
