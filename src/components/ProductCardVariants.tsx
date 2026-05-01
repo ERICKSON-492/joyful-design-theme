@@ -13,7 +13,7 @@ export interface CardVariant {
 interface Props {
   productId: string
   basePrice: number
-  onVariantChange?: (v: { variant: CardVariant | null; price: number; canOrder: boolean; label: string | null }) => void
+  onVariantChange?: (v: { variant: CardVariant | null; price: number; canOrder: boolean; label: string | null; hasVariants: boolean }) => void
 }
 
 /**
@@ -41,7 +41,7 @@ export function ProductCardVariants({ productId, basePrice, onVariantChange }: P
 
   useEffect(() => {
     if (variants.length === 0) {
-      onVariantChange?.({ variant: null, price: basePrice, canOrder: true, label: null })
+      onVariantChange?.({ variant: null, price: basePrice, canOrder: true, label: null, hasVariants: false })
       return
     }
     const match = variants.find(v =>
@@ -59,6 +59,7 @@ export function ProductCardVariants({ productId, basePrice, onVariantChange }: P
       price: match?.price ?? basePrice,
       canOrder: fullySelected && (match?.stock ?? 0) > 0,
       label: match?.variant_label || null,
+      hasVariants: true,
     })
   }, [selectedSize, selectedColor, variants, basePrice])
 
