@@ -187,7 +187,7 @@ export default function ShopPage() {
                     className={`w-full py-2.5 text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
                       product.is_preorder
                         ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : 'bg-foreground text-white hover:bg-primary hover:text-primary-foreground'
+                        : 'bg-primary text-primary-foreground hover:bg-primary/90'
                     }`}
                     style={{ minHeight: '44px' }}
                     disabled={!canOrder(product)}>
