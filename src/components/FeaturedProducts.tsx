@@ -111,7 +111,7 @@ export function FeaturedProducts() {
                       canOrder: s.canOrder,
                       label: s.label,
                       selected: !!s.variant,
-                      hasVariants: s.label !== null || prev[product.id]?.hasVariants || false,
+                      hasVariants: s.hasVariants,
                     }
                   }))}
                 />
