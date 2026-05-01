@@ -3,6 +3,8 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { ProductCardVariants } from '@/components/ProductCardVariants'
+import { toast } from 'sonner'
 
 const categoryList = ['All', 'Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
 
@@ -23,6 +25,7 @@ export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [activeCategory, setActiveCategory] = useState('All')
   const [loading, setLoading] = useState(true)
+  const [variantState, setVariantState] = useState<Record<string, { price: number; canOrder: boolean; label: string | null; selected: boolean; hasVariants: boolean }>>({})
   const [searchParams] = useSearchParams()
   const searchQuery = searchParams.get('search') || ''
   const catParam = searchParams.get('cat')
@@ -63,6 +66,18 @@ export default function ShopPage() {
   }
 
   const canOrder = (product: Product) => product.is_preorder || product.stock > 0
+
+  const handleAdd = (product: Product) => {
+    const state = variantState[product.id]
+    if (state?.hasVariants && !state.selected) {
+      toast.error('Please select all options first')
+      return
+    }
+    const finalPrice = state?.price ?? product.price
+    const finalName = state?.label ? `${product.name} (${state.label})` : product.name
+    const finalId = state?.label ? `${product.id}::${state.label}` : product.id
+    addToCart({ id: finalId, name: finalName, price: finalPrice, image_url: product.image_url })
+  }
 
   return (
     <div className="bg-background">
@@ -135,7 +150,11 @@ export default function ShopPage() {
                     </h3>
                   </Link>
                   <div className="mb-1">
-                    {product.price_min && product.price_max ? (
+                    {variantState[product.id]?.hasVariants ? (
+                      <p className="text-foreground font-bold text-sm">
+                        KSh {(variantState[product.id]?.price ?? product.price).toLocaleString()}
+                      </p>
+                    ) : product.price_min && product.price_max ? (
                       <p className="text-foreground font-bold text-sm">
                         KSh {product.price_min.toLocaleString()} - KSh {product.price_max.toLocaleString()}
                       </p>
@@ -149,8 +168,22 @@ export default function ShopPage() {
                     </p>
                   )}
                   {!product.is_preorder && !product.preorder_label && <div className="mb-2" />}
+                  <ProductCardVariants
+                    productId={product.id}
+                    basePrice={product.price}
+                    onVariantChange={(s) => setVariantState(prev => ({
+                      ...prev,
+                      [product.id]: {
+                        price: s.price,
+                        canOrder: s.canOrder,
+                        label: s.label,
+                        selected: !!s.variant,
+                        hasVariants: s.hasVariants,
+                      }
+                    }))}
+                  />
                   <button
-                    onClick={() => addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })}
+                    onClick={() => handleAdd(product)}
                     className={`w-full py-2.5 text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
                       product.is_preorder
                         ? 'bg-blue-600 hover:bg-blue-700 text-white'

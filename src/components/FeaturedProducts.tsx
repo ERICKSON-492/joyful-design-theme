@@ -4,6 +4,8 @@ import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { ProductCardVariants } from './ProductCardVariants'
+import { toast } from 'sonner'
 
 interface Product {
   id: string
@@ -16,6 +18,7 @@ interface Product {
 export function FeaturedProducts() {
   const [products, setProducts] = useState<Product[]>([])
   const [hasLoaded, setHasLoaded] = useState(false)
+  const [variantState, setVariantState] = useState<Record<string, { price: number; canOrder: boolean; label: string | null; selected: boolean; hasVariants: boolean }>>({})
   const { addToCart } = useCart()
 
   useEffect(() => {
@@ -58,6 +61,19 @@ export function FeaturedProducts() {
 
   if (products.length === 0) return null
 
+  const handleAdd = (product: Product) => {
+    const state = variantState[product.id]
+    // If product has variants but user hasn't fully selected, prompt them
+    if (state?.hasVariants && !state.selected) {
+      toast.error('Please select all options first')
+      return
+    }
+    const finalPrice = state?.price ?? product.price
+    const finalName = state?.label ? `${product.name} (${state.label})` : product.name
+    const finalId = state?.label ? `${product.id}::${state.label}` : product.id
+    addToCart({ id: finalId, name: finalName, price: finalPrice, image_url: product.image_url })
+  }
+
   return (
     <section className="py-16 md:py-24 bg-background">
       <div className="container mx-auto px-4">
@@ -81,10 +97,26 @@ export function FeaturedProducts() {
                 </Link>
                 <Link to={`/product/${product.id}`}>
                   <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1 hover:text-primary transition-colors">{product.name}</h3>
-                  <p className="text-muted-foreground text-sm mb-3">KSh {product.price.toLocaleString()}</p>
+                  <p className="text-muted-foreground text-sm mb-3">
+                    KSh {(variantState[product.id]?.price ?? product.price).toLocaleString()}
+                  </p>
                 </Link>
+                <ProductCardVariants
+                  productId={product.id}
+                  basePrice={product.price}
+                  onVariantChange={(s) => setVariantState(prev => ({
+                    ...prev,
+                    [product.id]: {
+                      price: s.price,
+                      canOrder: s.canOrder,
+                      label: s.label,
+                      selected: !!s.variant,
+                      hasVariants: s.hasVariants,
+                    }
+                  }))}
+                />
                 <button
-                  onClick={() => addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })}
+                  onClick={() => handleAdd(product)}
                   className="w-full bg-foreground text-white py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   style={{ minHeight: '44px' }}
                   disabled={product.stock === 0}
