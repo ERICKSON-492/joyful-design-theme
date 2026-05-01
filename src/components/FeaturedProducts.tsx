@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { ProductCardVariants } from './ProductCardVariants'
 import { toast } from 'sonner'
@@ -21,6 +21,18 @@ export function FeaturedProducts() {
   const [hasLoaded, setHasLoaded] = useState(false)
   const [variantState, setVariantState] = useState<Record<string, { price: number; canOrder: boolean; label: string | null; selected: boolean; hasVariants: boolean }>>({})
   const { addToCart } = useCart()
+  const preloadedRef = useRef<Set<string>>(new Set())
+
+  // Preload a list of image URLs into the browser cache
+  const preloadImages = (urls: (string | null)[]) => {
+    urls.forEach(url => {
+      if (!url || preloadedRef.current.has(url)) return
+      preloadedRef.current.add(url)
+      const img = new Image()
+      img.decoding = 'async'
+      img.src = url
+    })
+  }
 
   useEffect(() => {
     let mounted = true
@@ -34,6 +46,9 @@ export function FeaturedProducts() {
 
         if (!mounted) return
         setAllProducts(data || [])
+        // Warm the browser cache with EVERY product image up-front so
+        // subsequent rotations swap instantly with no flash/blank state.
+        preloadImages((data || []).map(p => p.image_url))
       } catch (err) {
         console.error('FeaturedProducts fetch error:', err)
         if (!mounted) return
@@ -53,7 +68,15 @@ export function FeaturedProducts() {
   useEffect(() => {
     if (allProducts.length <= 4) return
     const interval = setInterval(() => {
-      setOffset(prev => (prev + 4) % allProducts.length)
+      setOffset(prev => {
+        const next = (prev + 4) % allProducts.length
+        // Pre-warm the upcoming batch (defensive; usually already cached)
+        const nextBatch = Array.from({ length: 4 }, (_, i) =>
+          allProducts[(next + i) % allProducts.length]?.image_url
+        )
+        preloadImages(nextBatch)
+        return next
+      })
     }, 10000)
     return () => clearInterval(interval)
   }, [allProducts.length])
@@ -96,21 +119,28 @@ export function FeaturedProducts() {
         <h2 className="font-display text-3xl md:text-5xl font-bold text-center text-foreground mb-14">Crafted This Week</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
           {products.map((product, i) => (
-            <motion.div
-              key={`${offset}-${product.id}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: i * 0.1 }}
-            >
-              <div className="group">
-                <Link to={`/product/${product.id}`} className="product-image-frame block mb-4">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="product-image" loading="lazy"
-                      onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
-                  ) : (
-                    <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
-                  )}
-                </Link>
+            <AnimatePresence key={`slot-${i}`} mode="wait">
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+              >
+                <div className="group">
+                  <Link to={`/product/${product.id}`} className="product-image-frame block mb-4">
+                    {product.image_url ? (
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="product-image product-image-loaded"
+                        loading="eager"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
+                    )}
+                  </Link>
                 <Link to={`/product/${product.id}`}>
                   <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1 hover:text-primary transition-colors">{product.name}</h3>
                   <p className="text-muted-foreground text-sm mb-3">
@@ -140,8 +170,9 @@ export function FeaturedProducts() {
                   <ShoppingBag className="w-4 h-4" />
                   {product.stock === 0 ? 'Sold Out' : 'Add to Cart'}
                 </button>
-              </div>
-            </motion.div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
           ))}
         </div>
         <div className="text-center mt-12">
