@@ -16,7 +16,8 @@ interface Product {
 }
 
 export function FeaturedProducts() {
-  const [products, setProducts] = useState<Product[]>([])
+  const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [offset, setOffset] = useState(0)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [variantState, setVariantState] = useState<Record<string, { price: number; canOrder: boolean; label: string | null; selected: boolean; hasVariants: boolean }>>({})
   const { addToCart } = useCart()
@@ -28,15 +29,15 @@ export function FeaturedProducts() {
       try {
         const data = await fetchPublicTable<Product>(
           'products',
-          'select=id,name,price,image_url,stock&is_active=eq.true&order=created_at.desc&limit=4'
+          'select=id,name,price,image_url,stock&is_active=eq.true&order=created_at.desc&limit=24'
         )
 
         if (!mounted) return
-        setProducts(data || [])
+        setAllProducts(data || [])
       } catch (err) {
         console.error('FeaturedProducts fetch error:', err)
         if (!mounted) return
-        setProducts([])
+        setAllProducts([])
       } finally {
         if (mounted) setHasLoaded(true)
       }
@@ -47,6 +48,21 @@ export function FeaturedProducts() {
       mounted = false
     }
   }, [])
+
+  // Rotate which 4 products are shown every 10 seconds
+  useEffect(() => {
+    if (allProducts.length <= 4) return
+    const interval = setInterval(() => {
+      setOffset(prev => (prev + 4) % allProducts.length)
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [allProducts.length])
+
+  const products = allProducts.length === 0
+    ? []
+    : Array.from({ length: Math.min(4, allProducts.length) }, (_, i) =>
+        allProducts[(offset + i) % allProducts.length]
+      )
 
   if (!hasLoaded && products.length === 0) {
     return (
@@ -81,7 +97,7 @@ export function FeaturedProducts() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
           {products.map((product, i) => (
             <motion.div
-              key={product.id}
+              key={`${offset}-${product.id}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.1 }}
@@ -117,7 +133,7 @@ export function FeaturedProducts() {
                 />
                 <button
                   onClick={() => handleAdd(product)}
-                  className="w-full bg-foreground text-white py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full bg-primary text-primary-foreground py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   style={{ minHeight: '44px' }}
                   disabled={product.stock === 0}
                 >
