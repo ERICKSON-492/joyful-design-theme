@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Instagram, Facebook, Phone, Mail } from 'lucide-react'
+import { InstallAppButton } from './InstallAppButton'
 
 export function Footer() {
   return (
@@ -28,6 +29,9 @@ export function Footer() {
               <a href="mailto:admin@ushangachronicles.com" aria-label="Email" className="hover:text-primary transition-colors">
                 <Mail className="w-5 h-5" />
               </a>
+            </div>
+            <div className="mt-5">
+              <InstallAppButton />
             </div>
           </div>
 
