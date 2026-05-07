@@ -1,7 +1,7 @@
 import { BrowserRouter, useLocation } from 'react-router-dom'
 import { Navbar } from './components/Navbar'
 import { Footer } from './components/Footer'
-import { WhatsAppButton } from './components/WhatsAppButton'
+import { ChatWidget } from './components/ChatWidget'
 import { AnimatedRoutes } from './components/AnimatedRoutes'
 import { CartProvider } from './contexts/CartContext'
 import { CartDrawer } from './components/CartDrawer'
@@ -19,7 +19,7 @@ function AppContent() {
         <AnimatedRoutes />
       </main>
       {!isAdmin && <Footer />}
-      {!isAdmin && <WhatsAppButton />}
+      {!isAdmin && <ChatWidget />}
       {!isAdmin && <CartDrawer />}
       {!isAdmin && <InstallAppPrompt />}
       {!isAdmin && <BackButton />}
