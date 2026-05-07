@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Send, MessageSquare } from 'lucide-react'
+import { Send, MessageSquare, ExternalLink } from 'lucide-react'
 
 interface Message {
   id: string
@@ -33,6 +33,8 @@ export default function AdminEnquiries() {
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const lastTypingSentRef = useRef(0)
 
   const fetchMessages = async () => {
     const { data } = await supabase.from('enquiry_messages').select('*').order('created_at', { ascending: true })
@@ -73,6 +75,30 @@ export default function AdminEnquiries() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
+  // Broadcast channel per selected conversation (for typing indicator -> customer)
+  useEffect(() => {
+    if (!selectedConv) return
+    const channel = supabase.channel(`chat-${selectedConv}`)
+    channel.subscribe()
+    typingChannelRef.current = channel
+    return () => {
+      supabase.removeChannel(channel)
+      typingChannelRef.current = null
+    }
+  }, [selectedConv])
+
+  const broadcastAdminTyping = () => {
+    if (!typingChannelRef.current) return
+    const now = Date.now()
+    if (now - lastTypingSentRef.current < 1500) return
+    lastTypingSentRef.current = now
+    typingChannelRef.current.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { from: 'admin' },
+    })
+  }
+
   // Auto-scroll
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -91,6 +117,17 @@ export default function AdminEnquiries() {
 
   const convMessages = messages.filter(m => m.conversation_id === selectedConv)
   const selectedConvData = conversations.find(c => c.conversation_id === selectedConv)
+  const customerPhone = convMessages.find(m => !m.is_from_admin && m.customer_phone)?.customer_phone || null
+
+  const openWhatsApp = () => {
+    if (!customerPhone) {
+      toast.error('No phone number on file for this customer.')
+      return
+    }
+    const cleaned = customerPhone.replace(/[^\d]/g, '')
+    const text = reply.trim() || `Hi ${selectedConvData?.customer_name || ''}, this is Ushanga Chronicles following up on your enquiry.`
+    window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
 
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,9 +178,22 @@ export default function AdminEnquiries() {
         <div className="flex-1 flex flex-col">
           {selectedConv ? (
             <>
-              <div className="p-4 border-b border-border bg-card">
-                <h3 className="font-semibold text-foreground">{selectedConvData?.customer_name}</h3>
-                <p className="text-xs text-muted-foreground">{selectedConvData?.customer_email || 'No email'}</p>
+              <div className="p-4 border-b border-border bg-card flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-foreground">{selectedConvData?.customer_name}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {customerPhone || selectedConvData?.customer_email || 'No contact info'}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={openWhatsApp}
+                  disabled={!customerPhone}
+                  className="bg-[#25D366] hover:bg-[#20BD5A] text-white shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 mr-1" /> WhatsApp
+                </Button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {convMessages.map(m => (
@@ -156,6 +206,7 @@ export default function AdminEnquiries() {
                       <p>{m.message}</p>
                       <p className={`text-[10px] mt-1 ${m.is_from_admin ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                         {new Date(m.created_at).toLocaleTimeString()}
+                        {m.is_from_admin && (m.is_read ? ' · Read' : ' · Sent')}
                       </p>
                     </div>
                   </div>
@@ -163,7 +214,12 @@ export default function AdminEnquiries() {
                 <div ref={chatEndRef} />
               </div>
               <form onSubmit={handleReply} className="p-4 border-t border-border flex gap-2">
-                <Input value={reply} onChange={e => setReply(e.target.value)} placeholder="Type your reply..." className="flex-1" />
+                <Input
+                  value={reply}
+                  onChange={e => { setReply(e.target.value); broadcastAdminTyping() }}
+                  placeholder="Type your reply..."
+                  className="flex-1"
+                />
                 <Button type="submit" disabled={sending} className="bg-primary text-primary-foreground hover:bg-primary/90">
                   <Send className="w-4 h-4" />
                 </Button>
