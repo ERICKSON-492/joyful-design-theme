@@ -70,6 +70,36 @@ export type Database = {
           },
         ]
       }
+      categories: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       category_images: {
         Row: {
           category: string
@@ -525,6 +555,7 @@ export type Database = {
           description: string | null
           id: string
           image_url: string | null
+          image_urls: string[]
           is_active: boolean
           is_preorder: boolean
           name: string
@@ -533,6 +564,7 @@ export type Database = {
           price_max: number | null
           price_min: number | null
           stock: number
+          subcategory: string | null
           updated_at: string
         }
         Insert: {
@@ -541,6 +573,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          image_urls?: string[]
           is_active?: boolean
           is_preorder?: boolean
           name: string
@@ -549,6 +582,7 @@ export type Database = {
           price_max?: number | null
           price_min?: number | null
           stock?: number
+          subcategory?: string | null
           updated_at?: string
         }
         Update: {
@@ -557,6 +591,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          image_urls?: string[]
           is_active?: boolean
           is_preorder?: boolean
           name?: string
@@ -565,6 +600,7 @@ export type Database = {
           price_max?: number | null
           price_min?: number | null
           stock?: number
+          subcategory?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -667,6 +703,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      subcategories: {
+        Row: {
+          category_id: string
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcategories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       suppressed_emails: {
         Row: {

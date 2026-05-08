@@ -4,8 +4,6 @@ import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
-import { ProductCardVariants } from './ProductCardVariants'
-import { toast } from 'sonner'
 
 interface Product {
   id: string
@@ -19,7 +17,6 @@ export function FeaturedProducts() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [offset, setOffset] = useState(0)
   const [hasLoaded, setHasLoaded] = useState(false)
-  const [variantState, setVariantState] = useState<Record<string, { price: number; canOrder: boolean; label: string | null; selected: boolean; hasVariants: boolean }>>({})
   const { addToCart } = useCart()
   const preloadedRef = useRef<Set<string>>(new Set())
 
@@ -101,23 +98,14 @@ export function FeaturedProducts() {
   if (products.length === 0) return null
 
   const handleAdd = (product: Product) => {
-    const state = variantState[product.id]
-    // If product has variants but user hasn't fully selected, prompt them
-    if (state?.hasVariants && !state.selected) {
-      toast.error('Please select all options first')
-      return
-    }
-    const finalPrice = state?.price ?? product.price
-    const finalName = state?.label ? `${product.name} (${state.label})` : product.name
-    const finalId = state?.label ? `${product.id}::${state.label}` : product.id
-    addToCart({ id: finalId, name: finalName, price: finalPrice, image_url: product.image_url })
+    addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })
   }
 
   return (
     <section className="py-16 md:py-24 bg-background">
       <div className="container mx-auto px-4">
         <h2 className="font-display text-3xl md:text-5xl font-bold text-center text-foreground mb-14">Crafted This Week</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto">
           {products.map((product, i) => (
             <AnimatePresence key={`slot-${i}`} mode="wait">
               <motion.div
@@ -128,7 +116,7 @@ export function FeaturedProducts() {
                 transition={{ duration: 0.5, ease: 'easeOut' }}
               >
                 <div className="group">
-                  <Link to={`/product/${product.id}`} className="product-image-frame block mb-4">
+                  <Link to={`/product/${product.id}`} className="product-image-frame block mb-3">
                     {product.image_url ? (
                       <img
                         src={product.image_url}
@@ -142,32 +130,18 @@ export function FeaturedProducts() {
                     )}
                   </Link>
                 <Link to={`/product/${product.id}`}>
-                  <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1 hover:text-primary transition-colors">{product.name}</h3>
-                  <p className="text-muted-foreground text-sm mb-3">
-                    KSh {(variantState[product.id]?.price ?? product.price).toLocaleString()}
+                  <h3 className="font-display text-xs md:text-sm font-semibold text-foreground mb-1 hover:text-primary transition-colors line-clamp-1">{product.name}</h3>
+                  <p className="text-muted-foreground text-xs mb-2">
+                    KSh {product.price.toLocaleString()}
                   </p>
                 </Link>
-                <ProductCardVariants
-                  productId={product.id}
-                  basePrice={product.price}
-                  onVariantChange={(s) => setVariantState(prev => ({
-                    ...prev,
-                    [product.id]: {
-                      price: s.price,
-                      canOrder: s.canOrder,
-                      label: s.label,
-                      selected: !!s.variant,
-                      hasVariants: s.hasVariants,
-                    }
-                  }))}
-                />
                 <button
                   onClick={() => handleAdd(product)}
-                  className="w-full bg-primary text-primary-foreground py-2.5 text-xs font-bold tracking-wider uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full bg-primary text-primary-foreground py-2 text-[11px] font-bold tracking-wider uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 rounded"
                   style={{ minHeight: '44px' }}
                   disabled={product.stock === 0}
                 >
-                  <ShoppingBag className="w-4 h-4" />
+                  <ShoppingBag className="w-3.5 h-3.5" />
                   {product.stock === 0 ? 'Sold Out' : 'Add to Cart'}
                 </button>
                 </div>

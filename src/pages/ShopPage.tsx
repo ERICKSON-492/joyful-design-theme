@@ -6,8 +6,6 @@ import { fetchPublicTable } from '@/lib/publicContent'
 import { ProductCardVariants } from '@/components/ProductCardVariants'
 import { toast } from 'sonner'
 
-const categoryList = ['All', 'Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
-
 interface Product {
   id: string
   name: string
@@ -17,13 +15,21 @@ interface Product {
   image_url: string | null
   stock: number
   category: string
+  subcategory: string | null
   is_preorder: boolean
   preorder_label: string | null
 }
 
+interface Category { id: string; name: string }
+interface Subcategory { id: string; category_id: string; name: string }
+
 export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [categoryList, setCategoryList] = useState<string[]>(['All'])
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([])
+  const [categoriesData, setCategoriesData] = useState<Category[]>([])
   const [activeCategory, setActiveCategory] = useState('All')
+  const [activeSub, setActiveSub] = useState<string>('All')
   const [loading, setLoading] = useState(true)
   const [variantState, setVariantState] = useState<Record<string, { price: number; canOrder: boolean; label: string | null; selected: boolean; hasVariants: boolean }>>({})
   const [searchParams] = useSearchParams()
@@ -32,19 +38,35 @@ export default function ShopPage() {
   const { addToCart } = useCart()
 
   useEffect(() => {
+    // Load taxonomy from DB
+    Promise.all([
+      fetchPublicTable<Category>('categories', 'select=id,name&is_active=eq.true&order=display_order.asc'),
+      fetchPublicTable<Subcategory>('subcategories', 'select=id,category_id,name&is_active=eq.true&order=display_order.asc'),
+    ]).then(([cats, subs]) => {
+      setCategoriesData(cats || [])
+      setSubcategories(subs || [])
+      setCategoryList(['All', ...(cats || []).map(c => c.name)])
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     if (catParam) {
       const match = categoryList.find(c => c.toLowerCase().replace(/\s+/g, '-') === catParam.toLowerCase())
       if (match) setActiveCategory(match)
     }
-  }, [catParam])
+  }, [catParam, categoryList])
+
+  // Reset subcategory when category changes
+  useEffect(() => { setActiveSub('All') }, [activeCategory])
 
   useEffect(() => {
     let mounted = true
     const loadProducts = async () => {
       setLoading(true)
       try {
-        let query = 'select=id,name,price,price_min,price_max,image_url,stock,category,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
+        let query = 'select=id,name,price,price_min,price_max,image_url,stock,category,subcategory,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
         if (activeCategory !== 'All') query += `&category=eq.${encodeURIComponent(activeCategory)}`
+        if (activeSub !== 'All') query += `&subcategory=eq.${encodeURIComponent(activeSub)}`
         if (searchQuery) query += `&name=ilike.*${encodeURIComponent(searchQuery)}*`
 
         const data = await fetchPublicTable<Product>('products', query)
@@ -57,7 +79,10 @@ export default function ShopPage() {
     }
     loadProducts()
     return () => { mounted = false }
-  }, [activeCategory, searchQuery])
+  }, [activeCategory, activeSub, searchQuery])
+
+  const activeCategoryId = categoriesData.find(c => c.name === activeCategory)?.id
+  const visibleSubs = activeCategoryId ? subcategories.filter(s => s.category_id === activeCategoryId) : []
 
   const getButtonLabel = (product: Product) => {
     if (product.is_preorder) return 'Pre-Order'
@@ -104,6 +129,17 @@ export default function ShopPage() {
               </button>
             ))}
           </div>
+          {visibleSubs.length > 0 && (
+            <div className="flex flex-wrap justify-center gap-2 mt-4">
+              <button onClick={() => setActiveSub('All')} className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${activeSub === 'All' ? 'bg-foreground text-background border-foreground' : 'border-border hover:border-primary'}`}>All</button>
+              {visibleSubs.map(s => (
+                <button key={s.id} onClick={() => setActiveSub(s.name)}
+                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${activeSub === s.name ? 'bg-foreground text-background border-foreground' : 'border-border hover:border-primary'}`}>
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

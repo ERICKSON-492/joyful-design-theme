@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { Plus, Trash2, Edit, X, Upload, Layers } from 'lucide-react'
+import { Plus, Trash2, Edit, X, Upload, Layers, GripVertical } from 'lucide-react'
 
 interface Product {
   id: string
@@ -13,7 +13,9 @@ interface Product {
   price_min: number | null
   price_max: number | null
   category: string
+  subcategory: string | null
   image_url: string | null
+  image_urls: string[] | null
   stock: number
   is_active: boolean
   is_preorder: boolean
@@ -31,16 +33,19 @@ interface Variant {
   is_active: boolean
 }
 
-const categories = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
+interface Category { id: string; name: string }
+interface Subcategory { id: string; category_id: string; name: string }
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState({
-    name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true, is_preorder: false, preorder_label: ''
+    name: '', description: '', price: '', price_min: '', price_max: '', category: '', subcategory: '', stock: '', image_urls: [] as string[], is_active: true, is_preorder: false, preorder_label: ''
   })
 
   // Variant management
@@ -54,31 +59,59 @@ export default function AdminProducts() {
     if (data) setProducts(data)
   }
 
+  const fetchTaxonomy = async () => {
+    const [c, s] = await Promise.all([
+      supabase.from('categories').select('id,name').order('display_order'),
+      supabase.from('subcategories').select('id,category_id,name').order('display_order'),
+    ])
+    if (c.data) setCategories(c.data)
+    if (s.data) setSubcategories(s.data)
+  }
+
   const fetchVariants = async (productId: string) => {
     const { data } = await supabase.from('product_variants').select('*').eq('product_id', productId).order('price', { ascending: true })
     if (data) setVariants(data)
   }
 
-  useEffect(() => { fetchProducts() }, [])
+  useEffect(() => { fetchProducts(); fetchTaxonomy() }, [])
 
   const resetForm = () => {
-    setForm({ name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0], stock: '', image_url: '', is_active: true, is_preorder: false, preorder_label: '' })
+    setForm({ name: '', description: '', price: '', price_min: '', price_max: '', category: categories[0]?.name || '', subcategory: '', stock: '', image_urls: [], is_active: true, is_preorder: false, preorder_label: '' })
     setEditId(null)
     setShowForm(false)
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
     setUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) { toast.error('Upload failed: ' + error.message); setUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-    setForm(prev => ({ ...prev, image_url: publicUrl }))
+    const uploaded: string[] = []
+    for (const file of files) {
+      const ext = file.name.split('.').pop()
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`
+      const { error } = await supabase.storage.from('product-images').upload(path, file)
+      if (error) { toast.error('Upload failed: ' + error.message); continue }
+      const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
+      uploaded.push(publicUrl)
+    }
+    setForm(prev => ({ ...prev, image_urls: [...prev.image_urls, ...uploaded] }))
     setUploading(false)
-    toast.success('Image uploaded!')
+    if (uploaded.length) toast.success(`${uploaded.length} image(s) uploaded`)
+    e.target.value = ''
+  }
+
+  const removeImage = (idx: number) => {
+    setForm(prev => ({ ...prev, image_urls: prev.image_urls.filter((_, i) => i !== idx) }))
+  }
+
+  const moveImage = (idx: number, dir: -1 | 1) => {
+    setForm(prev => {
+      const arr = [...prev.image_urls]
+      const j = idx + dir
+      if (j < 0 || j >= arr.length) return prev
+      ;[arr[idx], arr[j]] = [arr[j], arr[idx]]
+      return { ...prev, image_urls: arr }
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,7 +121,10 @@ export default function AdminProducts() {
       name: form.name, description: form.description || null,
       price: parseFloat(form.price), price_min: form.price_min ? parseFloat(form.price_min) : null,
       price_max: form.price_max ? parseFloat(form.price_max) : null, category: form.category,
-      stock: parseInt(form.stock) || 0, image_url: form.image_url || null,
+      subcategory: form.subcategory || null,
+      stock: parseInt(form.stock) || 0,
+      image_url: form.image_urls[0] || null,
+      image_urls: form.image_urls,
       is_active: form.is_active, is_preorder: form.is_preorder, preorder_label: form.preorder_label || null,
     }
     if (editId) {
@@ -102,10 +138,12 @@ export default function AdminProducts() {
   }
 
   const handleEdit = (p: Product) => {
+    const urls = (p.image_urls && p.image_urls.length) ? p.image_urls : (p.image_url ? [p.image_url] : [])
     setForm({
       name: p.name, description: p.description || '', price: String(p.price),
       price_min: p.price_min ? String(p.price_min) : '', price_max: p.price_max ? String(p.price_max) : '',
-      category: p.category, stock: String(p.stock), image_url: p.image_url || '',
+      category: p.category, subcategory: p.subcategory || '',
+      stock: String(p.stock), image_urls: urls,
       is_active: p.is_active, is_preorder: p.is_preorder, preorder_label: p.preorder_label || '',
     })
     setEditId(p.id); setShowForm(true)
@@ -188,16 +226,42 @@ export default function AdminProducts() {
                 <div><label className="text-sm font-medium block mb-1">Max Price <span className="text-muted-foreground text-xs">optional</span></label><Input type="number" step="0.01" value={form.price_max} onChange={e => setForm(p => ({ ...p, price_max: e.target.value }))} placeholder="e.g. 2000" /></div>
               </div>
               <p className="text-xs text-muted-foreground -mt-2">Set min & max to show a price range. Or add variants below for per-size/color pricing.</p>
-              <div><label className="text-sm font-medium block mb-1">Category</label>
-                <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-sm font-medium block mb-1">Category</label>
+                  <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value, subcategory: '' }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    <option value="">— Select —</option>
+                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div><label className="text-sm font-medium block mb-1">Subcategory</label>
+                  <select value={form.subcategory} onChange={e => setForm(p => ({ ...p, subcategory: e.target.value }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" disabled={!form.category}>
+                    <option value="">— None —</option>
+                    {subcategories.filter(s => {
+                      const c = categories.find(c => c.name === form.category)
+                      return c ? s.category_id === c.id : false
+                    }).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
               </div>
-              <div><label className="text-sm font-medium block mb-1">Product Image</label>
-                {form.image_url && <img src={form.image_url} alt="Preview" className="w-24 h-24 object-cover rounded mb-2 border border-border" />}
+              <div><label className="text-sm font-medium block mb-1">Product Images <span className="text-muted-foreground text-xs">(first is primary)</span></label>
+                {form.image_urls.length > 0 && (
+                  <div className="grid grid-cols-4 gap-2 mb-2">
+                    {form.image_urls.map((url, i) => (
+                      <div key={url + i} className="relative group">
+                        <img src={url} alt="" className="w-full aspect-square object-cover rounded border border-border" />
+                        {i === 0 && <span className="absolute top-1 left-1 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded">Primary</span>}
+                        <div className="absolute inset-x-0 bottom-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex justify-between p-1">
+                          <button type="button" onClick={() => moveImage(i, -1)} className="text-white text-xs px-1">◀</button>
+                          <button type="button" onClick={() => removeImage(i)} className="text-white text-xs px-1"><Trash2 className="w-3 h-3" /></button>
+                          <button type="button" onClick={() => moveImage(i, 1)} className="text-white text-xs px-1">▶</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <label className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-md cursor-pointer hover:bg-accent transition-colors text-sm">
-                  <Upload className="w-4 h-4" /> {uploading ? 'Uploading...' : 'Upload Image'}
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  <Upload className="w-4 h-4" /> {uploading ? 'Uploading...' : 'Upload Image(s)'}
+                  <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
                 </label>
               </div>
               <div className="flex items-center gap-2">

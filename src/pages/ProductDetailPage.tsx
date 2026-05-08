@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
-import { ShoppingBag, Clock, ArrowLeft, Minus, Plus, Check } from 'lucide-react'
+import { ShoppingBag, Clock, ArrowLeft, Minus, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { ProductReviews } from '@/components/ProductReviews'
 import { RelatedProducts } from '@/components/RelatedProducts'
@@ -16,8 +16,10 @@ interface Product {
   price_min: number | null
   price_max: number | null
   image_url: string | null
+  image_urls: string[] | null
   stock: number
   category: string
+  subcategory?: string | null
   is_preorder: boolean
   preorder_label: string | null
 }
@@ -42,6 +44,7 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true)
   const [selectedSize, setSelectedSize] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
+  const [imgIdx, setImgIdx] = useState(0)
 
   useEffect(() => {
     if (id) trackView(id)
@@ -97,6 +100,13 @@ export default function ProductDetailPage() {
     )
   }
 
+  const gallery: string[] = (product.image_urls && product.image_urls.length > 0)
+    ? product.image_urls
+    : (product.image_url ? [product.image_url] : [])
+  const safeIdx = Math.min(imgIdx, Math.max(0, gallery.length - 1))
+  const prevImg = () => setImgIdx(i => (i - 1 + gallery.length) % gallery.length)
+  const nextImg = () => setImgIdx(i => (i + 1) % gallery.length)
+
   const currentPrice = selectedVariant ? selectedVariant.price : product.price
   const currentStock = selectedVariant ? selectedVariant.stock : product.stock
   const canOrder = product.is_preorder || currentStock > 0
@@ -130,12 +140,40 @@ export default function ProductDetailPage() {
         </Link>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
-          {/* Image */}
-          <div className="rounded-lg overflow-hidden bg-card border border-border">
-            {product.image_url ? (
-              <img src={product.image_url} alt={product.name} className="w-full aspect-square object-cover" />
-            ) : (
-              <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground">No image</div>
+          {/* Image carousel */}
+          <div>
+            <div className="relative rounded-lg overflow-hidden bg-card border border-border">
+              {gallery.length > 0 ? (
+                <img src={gallery[safeIdx]} alt={product.name} className="w-full aspect-square object-cover transition-opacity" />
+              ) : (
+                <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground">No image</div>
+              )}
+              {gallery.length > 1 && (
+                <>
+                  <button onClick={prevImg} aria-label="Previous image" className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full p-2 shadow-md">
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button onClick={nextImg} aria-label="Next image" className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full p-2 shadow-md">
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                    {gallery.map((_, i) => (
+                      <button key={i} onClick={() => setImgIdx(i)} aria-label={`Image ${i+1}`}
+                        className={`w-2 h-2 rounded-full transition-all ${i === safeIdx ? 'bg-primary w-6' : 'bg-background/80'}`} />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            {gallery.length > 1 && (
+              <div className="grid grid-cols-5 gap-2 mt-3">
+                {gallery.map((url, i) => (
+                  <button key={url + i} onClick={() => setImgIdx(i)}
+                    className={`aspect-square rounded overflow-hidden border-2 transition-colors ${i === safeIdx ? 'border-primary' : 'border-border hover:border-primary/40'}`}>
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
