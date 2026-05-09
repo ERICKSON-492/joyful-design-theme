@@ -61,22 +61,9 @@ export function FeaturedProducts() {
     }
   }, [])
 
-  // Rotate which 4 products are shown every 10 seconds
-  useEffect(() => {
-    if (allProducts.length <= 4) return
-    const interval = setInterval(() => {
-      setOffset(prev => {
-        const next = (prev + 4) % allProducts.length
-        // Pre-warm the upcoming batch (defensive; usually already cached)
-        const nextBatch = Array.from({ length: 4 }, (_, i) =>
-          allProducts[(next + i) % allProducts.length]?.image_url
-        )
-        preloadImages(nextBatch)
-        return next
-      })
-    }, 10000)
-    return () => clearInterval(interval)
-  }, [allProducts.length])
+  // Rotation disabled — products stay static so clicking doesn't trigger
+  // a flash/reload of the bottom row.
+  void setOffset
 
   const products = allProducts.length === 0
     ? []

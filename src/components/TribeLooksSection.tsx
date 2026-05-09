@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import tribeTess from '@/assets/tribe-tess.jpeg'
 import tribeAnne from '@/assets/tribe-anne.jpeg'
 import tribeLuna from '@/assets/tribe-luna.jpeg'
@@ -13,21 +14,6 @@ const tribeLooks = [
   { image: tribe1, name: 'Amani K.', piece: 'Layered Beaded Necklace' },
 ]
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 60, scale: 0.9, rotate: -2 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    rotate: 0,
-    transition: {
-      delay: i * 0.15,
-      duration: 0.7,
-      ease: [0.22, 1, 0.36, 1] as const,
-    },
-  }),
-}
-
 const offsets = [
   'md:mt-0',
   'md:mt-12',
@@ -35,7 +21,31 @@ const offsets = [
   'md:mt-16',
 ]
 
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  // Avoid producing the same order back-to-back
+  if (arr.length > 1 && a.every((v, i) => v === arr[i])) {
+    ;[a[0], a[1]] = [a[1], a[0]]
+  }
+  return a
+}
+
 export function TribeLooksSection() {
+  const [order, setOrder] = useState(tribeLooks)
+
+  useEffect(() => {
+    // Initial shuffle so each visit feels fresh
+    setOrder(prev => shuffle(prev))
+    const id = setInterval(() => {
+      setOrder(prev => shuffle(prev))
+    }, 5000)
+    return () => clearInterval(id)
+  }, [])
+
   return (
     <section className="py-20 md:py-32 bg-card overflow-hidden">
       <div className="container mx-auto px-4">
@@ -51,15 +61,19 @@ export function TribeLooksSection() {
           </div>
         </ScrollReveal>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto">
-          {tribeLooks.map((look, i) => (
+        <motion.div
+          layout
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto"
+        >
+          <AnimatePresence initial={false}>
+          {order.map((look, i) => (
             <motion.div
               key={look.name}
-              custom={i}
-              variants={cardVariants}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: '-40px' }}
+              layout
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
               className={`group relative ${offsets[i]}`}
             >
               <motion.div
@@ -99,7 +113,8 @@ export function TribeLooksSection() {
               </motion.div>
             </motion.div>
           ))}
-        </div>
+          </AnimatePresence>
+        </motion.div>
 
         <ScrollReveal delay={0.3}>
           <div className="text-center mt-14">
