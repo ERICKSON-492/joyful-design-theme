@@ -558,6 +558,7 @@ export type Database = {
           image_urls: string[]
           is_active: boolean
           is_preorder: boolean
+          low_stock_threshold: number
           name: string
           preorder_label: string | null
           price: number
@@ -576,6 +577,7 @@ export type Database = {
           image_urls?: string[]
           is_active?: boolean
           is_preorder?: boolean
+          low_stock_threshold?: number
           name: string
           preorder_label?: string | null
           price: number
@@ -594,6 +596,7 @@ export type Database = {
           image_urls?: string[]
           is_active?: boolean
           is_preorder?: boolean
+          low_stock_threshold?: number
           name?: string
           preorder_label?: string | null
           price?: number
@@ -701,6 +704,48 @@ export type Database = {
           subtitle?: string | null
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      stock_adjustments: {
+        Row: {
+          adjusted_by: string | null
+          adjusted_by_email: string | null
+          change: number
+          created_at: string
+          id: string
+          new_stock: number
+          notes: string | null
+          previous_stock: number
+          product_id: string
+          reason: string
+          variant_id: string | null
+        }
+        Insert: {
+          adjusted_by?: string | null
+          adjusted_by_email?: string | null
+          change: number
+          created_at?: string
+          id?: string
+          new_stock: number
+          notes?: string | null
+          previous_stock: number
+          product_id: string
+          reason: string
+          variant_id?: string | null
+        }
+        Update: {
+          adjusted_by?: string | null
+          adjusted_by_email?: string | null
+          change?: number
+          created_at?: string
+          id?: string
+          new_stock?: number
+          notes?: string | null
+          previous_stock?: number
+          product_id?: string
+          reason?: string
+          variant_id?: string | null
         }
         Relationships: []
       }
