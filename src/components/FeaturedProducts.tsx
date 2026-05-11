@@ -13,6 +13,15 @@ interface Product {
   stock: number
 }
 
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 export function FeaturedProducts() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [offset, setOffset] = useState(0)
@@ -42,7 +51,7 @@ export function FeaturedProducts() {
         )
 
         if (!mounted) return
-        setAllProducts(data || [])
+        setAllProducts(shuffle(data || []))
         // Warm the browser cache with EVERY product image up-front so
         // subsequent rotations swap instantly with no flash/blank state.
         preloadImages((data || []).map(p => p.image_url))
