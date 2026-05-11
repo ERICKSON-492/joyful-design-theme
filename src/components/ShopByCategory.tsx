@@ -51,6 +51,7 @@ interface CategoryImage {
 
 export function ShopByCategory() {
   const [dbImages, setDbImages] = useState<Record<string, string>>({})
+  const [imagesLoaded, setImagesLoaded] = useState(false)
   const [categoriesData] = useState(() => shuffle(categoriesBase))
 
   useEffect(() => {
@@ -61,6 +62,7 @@ export function ShopByCategory() {
         setDbImages(map)
       })
       .catch(() => {})
+      .finally(() => setImagesLoaded(true))
   }, [])
 
   return (
@@ -92,6 +94,7 @@ export function ShopByCategory() {
                 to={cat.href}
                 className="group relative overflow-hidden block rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-500 h-full md:aspect-square"
               >
+                {imagesLoaded ? (
                 <motion.img
                   src={dbImages[cat.name] || defaultImages[cat.name]}
                   alt={cat.name}
@@ -102,6 +105,9 @@ export function ShopByCategory() {
                   whileHover={{ scale: 1.08 }}
                   transition={{ duration: 0.6, ease: 'easeOut' }}
                 />
+                ) : (
+                  <div className="w-full h-full bg-muted animate-pulse" />
+                )}
                 {/* Gradient overlay for legibility */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent group-hover:from-primary/80 group-hover:via-primary/30 transition-colors duration-500" />
 
