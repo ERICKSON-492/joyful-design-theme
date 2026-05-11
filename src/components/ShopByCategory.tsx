@@ -17,13 +17,22 @@ const defaultImages: Record<string, string> = {
   'For Your Table': catTable,
 }
 
-const categoriesData = [
+const categoriesBase = [
   { name: 'Wear It', href: '/shop?cat=wear-it', tagline: 'Adorn yourself' },
   { name: 'Live With It', href: '/shop?cat=live-with-it', tagline: 'Home stories' },
   { name: 'Collectibles', href: '/shop?cat=collectibles', tagline: 'Keepsakes' },
   { name: 'For Your Pet', href: '/shop?cat=pet', tagline: 'Furry tribe' },
   { name: 'For Your Table', href: '/shop?cat=table', tagline: 'Gather round' },
 ]
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
 
 // Bento positions for mobile (creative, asymmetric arrangement).
 // Grid: 4 cols × 3 rows. Each tile picks a span class.
@@ -42,6 +51,7 @@ interface CategoryImage {
 
 export function ShopByCategory() {
   const [dbImages, setDbImages] = useState<Record<string, string>>({})
+  const [categoriesData] = useState(() => shuffle(categoriesBase))
 
   useEffect(() => {
     fetchPublicTable<CategoryImage>('category_images', 'select=category,image_url')

@@ -40,10 +40,6 @@ export function TribeLooksSection() {
   useEffect(() => {
     // Initial shuffle so each visit feels fresh
     setOrder(prev => shuffle(prev))
-    const id = setInterval(() => {
-      setOrder(prev => shuffle(prev))
-    }, 5000)
-    return () => clearInterval(id)
   }, [])
 
   return (
