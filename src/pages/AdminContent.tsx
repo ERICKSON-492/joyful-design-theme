@@ -23,6 +23,7 @@ interface SectionConfig {
   hasImage?: boolean
   bodyLabel?: string
   bodyPlaceholder?: string
+  defaults?: { title?: string; subtitle?: string; body?: string }
 }
 
 const SECTIONS: SectionConfig[] = [
@@ -33,6 +34,10 @@ const SECTIONS: SectionConfig[] = [
     hasImage: true,
     bodyLabel: 'Story (separate paragraphs with blank lines)',
     bodyPlaceholder: 'Write the chronicle story...',
+    defaults: {
+      title: 'The Chronicle Begins',
+      body: 'It started with one bead. A single beaded necklace, gifted to Linda on her graduation day in 2018. That moment sparked something — a deep connection to the craft, the culture, and the stories each bead carries.\n\nWhat began as a passion project grew into Ushanga Chronicles — a brand rooted in African heritage, handcrafted by skilled artisans, and worn by the Ushanga Tribe across the world.',
+    },
   },
   {
     key: 'custom_order_teaser',
@@ -41,6 +46,10 @@ const SECTIONS: SectionConfig[] = [
     hasSubtitle: true,
     bodyLabel: 'Description',
     bodyPlaceholder: 'Every piece tells your story...',
+    defaults: {
+      title: 'Something made just for you',
+      body: 'Every piece tells your story. Commission a custom creation from Linda. From imagination to your hands — handcrafted with intention.',
+    },
   },
   {
     key: 'homepage_intro',
@@ -73,6 +82,10 @@ const SECTIONS: SectionConfig[] = [
     hasImage: true,
     bodyLabel: 'Story (separate paragraphs with blank lines)',
     bodyPlaceholder: 'In 2018, Linda received a single beaded necklace...',
+    defaults: {
+      title: 'Where It All Began',
+      body: 'In 2018, Linda received a single beaded necklace on her graduation day. It wasn\'t just a gift — it was a spark. That one bead carried the weight of centuries of African craftsmanship, the stories of hands that wove it, and the promise of something greater.\n\nFrom that moment, Linda began learning the art herself — studying under Maasai artisans, understanding the language of beads, colors, and patterns that had been passed down through generations.\n\nUshanga Chronicles was born from that passion. Every piece is handcrafted in Nairobi, Kenya, rooted in African heritage but designed for modern life. Each creation carries a story — not just of the artisan who made it, but of the person who wears it.\n\nToday, the Ushanga Tribe spans the globe. What started with one bead has become a thousand stories, and counting.',
+    },
   },
   {
     key: 'about_the_craft',
@@ -81,6 +94,10 @@ const SECTIONS: SectionConfig[] = [
     hasImage: true,
     bodyLabel: 'Story (separate paragraphs with blank lines)',
     bodyPlaceholder: 'Every piece begins with intention...',
+    defaults: {
+      title: 'The Craft',
+      body: 'Every piece begins with intention. The beads are carefully selected — each color holding meaning, each pattern telling a different chapter.\n\nOur artisans work by hand, using techniques that have been refined over generations. There are no machines, no shortcuts. Just skilled hands, quality materials, and the patience to create something extraordinary.\n\nFrom sisal to leather, cowrie shells to glass beads — every material is sourced with care, ensuring that each piece is not just beautiful, but built to last.',
+    },
   },
   {
     key: 'footer_brand',
@@ -124,9 +141,9 @@ const SECTIONS: SectionConfig[] = [
 ]
 
 function SectionEditor({ config, initial }: { config: SectionConfig; initial: SiteContent | null }) {
-  const [title, setTitle] = useState(initial?.title || '')
-  const [subtitle, setSubtitle] = useState(initial?.subtitle || '')
-  const [body, setBody] = useState(initial?.body || '')
+  const [title, setTitle] = useState(initial?.title || config.defaults?.title || '')
+  const [subtitle, setSubtitle] = useState(initial?.subtitle || config.defaults?.subtitle || '')
+  const [body, setBody] = useState(initial?.body || config.defaults?.body || '')
   const [imageUrl, setImageUrl] = useState(initial?.image_url || '')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
