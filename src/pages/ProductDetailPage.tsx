@@ -102,8 +102,8 @@ export default function ProductDetailPage() {
 
   if (!product) {
     return (
-      <div className="bg-background min-h-screen pt-24 pb-16">
-        <div className="container mx-auto px-4 text-center py-20">
+      <div className="bg-background min-h-[80vh] pt-24 pb-16 flex items-center justify-center">
+        <div className="text-center">
           <h1 className="font-display text-2xl font-bold text-foreground mb-4">Product not found</h1>
           <Link to="/shop" className="text-primary underline">Back to Shop</Link>
         </div>
