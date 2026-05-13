@@ -70,7 +70,7 @@ export function FeaturedProducts() {
     }
   }, [])
 
-  // Rotation disabled — products stay static so clicking doesn't trigger
+  // Rotation disabled - products stay static so clicking doesn't trigger
   // a flash/reload of the bottom row.
   void setOffset
 

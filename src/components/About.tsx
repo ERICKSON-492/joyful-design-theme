@@ -334,7 +334,7 @@ export function About() {
             {/* Caption */}
             <div className="mt-6 text-center">
               <p className="text-sm text-muted-foreground italic">
-                "Diverse scenarios, characters, and styles — all generated through our AI pipeline"
+                "Diverse scenarios, characters, and styles - all generated through our AI pipeline"
               </p>
             </div>
           </div>

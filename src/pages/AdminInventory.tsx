@@ -274,7 +274,7 @@ export default function AdminInventory() {
                       {a.variant_id && <span className="text-muted-foreground font-normal"> · {variantLabelMap[a.variant_id] || 'variant'}</span>}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {a.reason}{a.notes ? ` — ${a.notes}` : ''}
+                      {a.reason}{a.notes ? ` - ${a.notes}` : ''}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
                       {new Date(a.created_at).toLocaleString()} {a.adjusted_by_email ? `· ${a.adjusted_by_email}` : ''}

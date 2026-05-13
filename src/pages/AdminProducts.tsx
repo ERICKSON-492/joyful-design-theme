@@ -229,13 +229,13 @@ export default function AdminProducts() {
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-sm font-medium block mb-1">Category</label>
                   <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value, subcategory: '' }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    <option value="">— Select —</option>
+                    <option value="">- Select -</option>
                     {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                   </select>
                 </div>
                 <div><label className="text-sm font-medium block mb-1">Subcategory</label>
                   <select value={form.subcategory} onChange={e => setForm(p => ({ ...p, subcategory: e.target.value }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" disabled={!form.category}>
-                    <option value="">— None —</option>
+                    <option value="">- None -</option>
                     {subcategories.filter(s => {
                       const c = categories.find(c => c.name === form.category)
                       return c ? s.category_id === c.id : false
@@ -273,7 +273,7 @@ export default function AdminProducts() {
                 <label htmlFor="preorder" className="text-sm">Pre-Order</label>
               </div>
               {form.is_preorder && (
-                <div><label className="text-sm font-medium block mb-1">Pre-Order Label</label><Input value={form.preorder_label} onChange={e => setForm(p => ({ ...p, preorder_label: e.target.value }))} placeholder="Made to order – 2 weeks" /></div>
+                <div><label className="text-sm font-medium block mb-1">Pre-Order Label</label><Input value={form.preorder_label} onChange={e => setForm(p => ({ ...p, preorder_label: e.target.value }))} placeholder="Made to order - 2 weeks" /></div>
               )}
               <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold">
                 {loading ? 'Saving...' : editId ? 'Update Product' : 'Add Product'}

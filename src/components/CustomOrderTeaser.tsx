@@ -5,7 +5,7 @@ import { fetchPublicTable } from '@/lib/publicContent'
 
 const fallback = {
   title: 'Something made just for you',
-  body: 'Every piece tells your story. Commission a custom creation from Linda. From imagination to your hands — handcrafted with intention.',
+  body: 'Every piece tells your story. Commission a custom creation from Linda. From imagination to your hands - handcrafted with intention.',
 }
 
 export function CustomOrderTeaser() {

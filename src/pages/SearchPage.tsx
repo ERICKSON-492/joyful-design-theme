@@ -156,7 +156,7 @@ export default function SearchPage() {
             onChange={e => setMinPrice(e.target.value === '' ? '' : Number(e.target.value))}
             className="w-full h-10 px-3 rounded-md border border-border bg-card text-sm focus:outline-none focus:ring-1 focus:ring-primary"
           />
-          <span className="text-muted-foreground">–</span>
+          <span className="text-muted-foreground">-</span>
           <input
             type="number"
             inputMode="numeric"
@@ -337,7 +337,7 @@ export default function SearchPage() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{p.category}</p>
                     <div className="mb-2">
                       {p.price_min && p.price_max ? (
-                        <p className="text-foreground font-bold text-sm">KSh {p.price_min.toLocaleString()} – {p.price_max.toLocaleString()}</p>
+                        <p className="text-foreground font-bold text-sm">KSh {p.price_min.toLocaleString()} - {p.price_max.toLocaleString()}</p>
                       ) : (
                         <p className="text-foreground font-bold text-sm">KSh {p.price.toLocaleString()}</p>
                       )}

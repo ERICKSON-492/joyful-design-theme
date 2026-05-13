@@ -9,7 +9,7 @@ export default function WholesalePage() {
             Wholesale & Gifting
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Bulk orders, corporate gifting, and event branding — all handcrafted with 
+            Bulk orders, corporate gifting, and event branding - all handcrafted with 
             the same care and quality as every individual piece.
           </p>
         </div>
@@ -36,7 +36,7 @@ export default function WholesalePage() {
             <div className="bg-card p-8 border border-border">
               <h3 className="font-display text-xl font-bold text-foreground mb-3">Bulk Orders</h3>
               <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-                Retail, hospitality, or resale — order in quantities with competitive pricing. 
+                Retail, hospitality, or resale - order in quantities with competitive pricing. 
                 Minimum order quantities apply.
               </p>
               <a
@@ -51,7 +51,7 @@ export default function WholesalePage() {
             <div className="bg-card p-8 border border-border md:col-span-2">
               <h3 className="font-display text-xl font-bold text-foreground mb-3">Event Branding</h3>
               <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-                Make your event unforgettable with custom beaded merchandise — lanyards, badges, 
+                Make your event unforgettable with custom beaded merchandise - lanyards, badges, 
                 keyrings, and more, all handcrafted and branded to your specifications.
               </p>
               <a

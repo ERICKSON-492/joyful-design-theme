@@ -11,7 +11,7 @@ export function Services() {
     {
       id: 'campaigns',
       title: "Campaign & Ad Content",
-      description: "Multi-platform video campaigns ready for every channel—YouTube, TikTok, Instagram, and beyond.",
+      description: "Multi-platform video campaigns ready for every channel-YouTube, TikTok, Instagram, and beyond.",
       color: 'accent-emerald',
       rotation: 'rotate-2',
       image: 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=400&h=300&fit=crop&auto=format'
@@ -27,7 +27,7 @@ export function Services() {
     {
       id: 'trailers',
       title: "Trailers & Promos",
-      description: "High-impact teasers that hook viewers instantly—perfect for launches, events, and announcements.",
+      description: "High-impact teasers that hook viewers instantly-perfect for launches, events, and announcements.",
       color: 'accent-purple',
       rotation: 'rotate-1',
       image: 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?w=400&h=300&fit=crop&auto=format'
@@ -35,7 +35,7 @@ export function Services() {
     {
       id: 'short-films',
       title: "Short-Form Films",
-      description: "Festival-ready mini-movies up to 5 minutes—ideal for investors, events, and premium content.",
+      description: "Festival-ready mini-movies up to 5 minutes-ideal for investors, events, and premium content.",
       color: 'accent-emerald',
       rotation: '-rotate-2',
       image: 'https://images.unsplash.com/photo-1574267432553-4b4628081c31?w=400&h=300&fit=crop&auto=format'

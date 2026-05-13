@@ -98,7 +98,7 @@ export default function CustomOrderPage() {
             Create Your Chronicle
           </h1>
           <p className="text-muted-foreground text-base md:text-lg leading-relaxed">
-            Every piece Linda creates begins with your story. Tell us your vision — 
+            Every piece Linda creates begins with your story. Tell us your vision - 
             a piece drawn from imagination, chosen materials, or a photo that inspires you. 
             We'll bring it to life by hand.
           </p>
@@ -125,7 +125,7 @@ export default function CustomOrderPage() {
             ))}
           </div>
           <p className="text-sm text-muted-foreground mb-8 text-center">
-            Step {currentStep + 1} of 5 — {steps[currentStep]}
+            Step {currentStep + 1} of 5 - {steps[currentStep]}
           </p>
 
           {/* Step Content */}
@@ -166,7 +166,7 @@ export default function CustomOrderPage() {
             {currentStep === 3 && (
               <div>
                 <h3 className="font-display text-xl font-bold mb-4">Inspiration Photo</h3>
-                <p className="text-sm text-muted-foreground mb-4">Upload a photo for inspiration (optional) — accepts JPG/PNG</p>
+                <p className="text-sm text-muted-foreground mb-4">Upload a photo for inspiration (optional) - accepts JPG/PNG</p>
                 <label className="flex flex-col items-center justify-center border-2 border-dashed border-border p-10 cursor-pointer hover:border-primary transition-colors" style={{ minHeight: '120px' }}>
                   <span className="text-muted-foreground text-sm">{formData.file ? formData.file.name : 'Click to upload or drag & drop'}</span>
                   <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => setFormData({ ...formData, file: e.target.files?.[0] || null })} />
