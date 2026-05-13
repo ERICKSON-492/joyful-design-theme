@@ -199,7 +199,7 @@ export default function ProductDetailPage() {
             <div>
               {variants.length > 0 && !selectedVariant ? (
                 product.price_min && product.price_max ? (
-                  <p className="text-2xl font-bold text-primary">KSh {product.price_min.toLocaleString()} – {product.price_max.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-primary">KSh {product.price_min.toLocaleString()} - {product.price_max.toLocaleString()}</p>
                 ) : (
                   <p className="text-2xl font-bold text-primary">From KSh {Math.min(...variants.map(v => v.price)).toLocaleString()}</p>
                 )
@@ -330,7 +330,7 @@ export default function ProductDetailPage() {
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground truncate">{product.name}</p>
             <p className="text-base font-bold text-primary leading-tight">
               {variants.length > 0 && !selectedVariant && product.price_min && product.price_max
-                ? `KSh ${product.price_min.toLocaleString()} – ${product.price_max.toLocaleString()}`
+                ? `KSh ${product.price_min.toLocaleString()} - ${product.price_max.toLocaleString()}`
                 : `KSh ${currentPrice.toLocaleString()}`}
             </p>
           </div>

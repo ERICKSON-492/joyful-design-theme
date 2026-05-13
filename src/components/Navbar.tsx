@@ -55,7 +55,7 @@ export function Navbar() {
 
   return (
     <header className="w-full z-50">
-      {/* Top Bar — announcement + social icons */}
+      {/* Top Bar - announcement + social icons */}
       <div className="bg-primary text-primary-foreground">
         <div className="container mx-auto px-4 flex items-center justify-between h-10">
           <div className="hidden md:flex items-center gap-3">
@@ -92,7 +92,7 @@ export function Navbar() {
               <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-12 md:h-14 w-auto" />
             </Link>
 
-            {/* Desktop Nav Links — centered */}
+            {/* Desktop Nav Links - centered */}
             <div className="hidden lg:flex items-center gap-7 mx-6">
               {navLinks.map((link) => (
                 <Link
@@ -116,7 +116,7 @@ export function Navbar() {
 
             {/* Right side: search + admin + cart + mobile menu */}
             <div className="flex items-center gap-0.5">
-              {/* Search — inline on desktop */}
+              {/* Search - inline on desktop */}
               <div className="hidden lg:block relative mr-2">
                 <form onSubmit={handleSearch} className="flex items-center">
                   <input

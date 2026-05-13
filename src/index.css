@@ -107,7 +107,7 @@ html {
 }
 
 /* ==========================================================
-   Product image card — unified, refined presentation
+   Product image card - unified, refined presentation
    ========================================================== */
 @layer components {
   .product-image-frame {

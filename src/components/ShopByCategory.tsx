@@ -37,11 +37,11 @@ function shuffle<T>(arr: T[]): T[] {
 // Bento positions for mobile (creative, asymmetric arrangement).
 // Grid: 4 cols × 3 rows. Each tile picks a span class.
 const mobileBento = [
-  'col-span-2 row-span-2', // Wear It — hero tile (big square)
-  'col-span-2 row-span-1', // Live With It — wide top
-  'col-span-2 row-span-1', // Collectibles — wide middle
-  'col-span-2 row-span-1', // Pet — bottom left
-  'col-span-2 row-span-1', // Table — bottom right
+  'col-span-2 row-span-2', // Wear It - hero tile (big square)
+  'col-span-2 row-span-1', // Live With It - wide top
+  'col-span-2 row-span-1', // Collectibles - wide middle
+  'col-span-2 row-span-1', // Pet - bottom left
+  'col-span-2 row-span-1', // Table - bottom right
 ]
 
 interface CategoryImage {

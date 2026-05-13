@@ -134,7 +134,7 @@ export function CartDrawer() {
                 )}
                 <a
                   href={`https://wa.me/254748207000?text=${encodeURIComponent(
-                    `Hi! I'd like to order:\n${items.map(i => `• ${i.name} x${i.quantity} — KSh ${(i.price * i.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KSh ${totalPrice.toLocaleString()}`
+                    `Hi! I'd like to order:\n${items.map(i => `• ${i.name} x${i.quantity} - KSh ${(i.price * i.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KSh ${totalPrice.toLocaleString()}`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"

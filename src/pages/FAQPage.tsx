@@ -24,11 +24,11 @@ const SECTIONS: FaqSection[] = [
     items: [
       {
         q: 'How long does delivery take within Kenya?',
-        a: 'Nairobi orders are dispatched within 1–2 business days and typically arrive in 1–3 days via our local courier partners. Orders outside Nairobi take 3–5 business days depending on your location.'
+        a: 'Nairobi orders are dispatched within 1-2 business days and typically arrive in 1-3 days via our local courier partners. Orders outside Nairobi take 3-5 business days depending on your location.'
       },
       {
         q: 'Do you ship internationally?',
-        a: 'Yes! We ship worldwide via DHL and EMS. International delivery takes 7–14 business days. Shipping rates and the available carriers will be calculated automatically at checkout based on your destination.'
+        a: 'Yes! We ship worldwide via DHL and EMS. International delivery takes 7-14 business days. Shipping rates and the available carriers will be calculated automatically at checkout based on your destination.'
       },
       {
         q: 'How much does shipping cost?',
@@ -52,19 +52,19 @@ const SECTIONS: FaqSection[] = [
     items: [
       {
         q: 'How do I place a custom order?',
-        a: 'Visit our "Create Yours" page and complete the 5-step Chronicle form — choose a category, share your colour palette, materials and the story behind your piece. Linda will personally reach out within 48 hours to confirm details and pricing.'
+        a: 'Visit our "Create Yours" page and complete the 5-step Chronicle form - choose a category, share your colour palette, materials and the story behind your piece. Linda will personally reach out within 48 hours to confirm details and pricing.'
       },
       {
         q: 'How long does a custom piece take to make?',
-        a: 'Most custom pieces take 2–4 weeks from confirmation to dispatch. Larger or more intricate commissions (bridal sets, statement décor pieces) can take up to 6 weeks. We will give you a clear timeline before any work begins.'
+        a: 'Most custom pieces take 2-4 weeks from confirmation to dispatch. Larger or more intricate commissions (bridal sets, statement décor pieces) can take up to 6 weeks. We will give you a clear timeline before any work begins.'
       },
       {
         q: 'Is there a minimum order or deposit?',
-        a: 'A 50% deposit is required to begin work, with the balance settled before dispatch. There is no minimum order — we craft single pieces just as carefully as larger commissions and corporate bulk orders.'
+        a: 'A 50% deposit is required to begin work, with the balance settled before dispatch. There is no minimum order - we craft single pieces just as carefully as larger commissions and corporate bulk orders.'
       },
       {
         q: 'Can I see progress photos?',
-        a: 'Yes — we share photos at the midway point and again before final packing so you can confirm everything is exactly as you envisioned.'
+        a: 'Yes - we share photos at the midway point and again before final packing so you can confirm everything is exactly as you envisioned.'
       },
       {
         q: 'Do you do bridal and event commissions?',
@@ -80,7 +80,7 @@ const SECTIONS: FaqSection[] = [
     items: [
       {
         q: 'How do I care for my beaded jewelry?',
-        a: 'Store pieces flat in a dry pouch or jewelry box, away from direct sunlight. Avoid contact with perfume, lotion and water — apply cosmetics first and let them dry before wearing your piece. Wipe gently with a soft dry cloth after wear.'
+        a: 'Store pieces flat in a dry pouch or jewelry box, away from direct sunlight. Avoid contact with perfume, lotion and water - apply cosmetics first and let them dry before wearing your piece. Wipe gently with a soft dry cloth after wear.'
       },
       {
         q: 'Can I wear my jewelry in water?',
@@ -88,7 +88,7 @@ const SECTIONS: FaqSection[] = [
       },
       {
         q: 'How do I clean home décor and table pieces?',
-        a: 'Dust gently with a soft brush or microfibre cloth. For table mats and baskets, spot-clean with a barely damp cloth — never submerge in water. Keep away from direct heat sources.'
+        a: 'Dust gently with a soft brush or microfibre cloth. For table mats and baskets, spot-clean with a barely damp cloth - never submerge in water. Keep away from direct heat sources.'
       },
       {
         q: 'What if a bead comes loose?',
@@ -140,7 +140,7 @@ export default function FAQPage() {
             Frequently Asked Questions
           </h1>
           <p className="text-muted-foreground text-base md:text-lg leading-relaxed">
-            Answers to the questions our Tribe asks most — about shipping, custom commissions and how to care for your handcrafted piece.
+            Answers to the questions our Tribe asks most - about shipping, custom commissions and how to care for your handcrafted piece.
           </p>
         </div>
       </section>

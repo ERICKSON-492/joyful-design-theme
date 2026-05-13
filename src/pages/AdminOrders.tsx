@@ -201,7 +201,7 @@ export default function AdminOrders() {
                       </div>
                       <div>
                         <p className="text-muted-foreground text-xs mb-1">M-Pesa Receipt</p>
-                        <p className="text-foreground text-xs">{order.mpesa_receipt_number || '—'}</p>
+                        <p className="text-foreground text-xs">{order.mpesa_receipt_number || '-'}</p>
                       </div>
                     </div>
 

@@ -12,7 +12,7 @@ interface ChronicleContent {
 
 const fallback: ChronicleContent = {
   title: 'The Chronicle Begins',
-  body: 'It started with one bead. A single beaded necklace, gifted to Linda on her graduation day in 2018. That moment sparked something — a deep connection to the craft, the culture, and the stories each bead carries.\n\nWhat began as a passion project grew into Ushanga Chronicles — a brand rooted in African heritage, handcrafted by skilled artisans, and worn by the Ushanga Tribe across the world.',
+  body: 'It started with one bead. A single beaded necklace, gifted to Linda on her graduation day in 2018. That moment sparked something - a deep connection to the craft, the culture, and the stories each bead carries.\n\nWhat began as a passion project grew into Ushanga Chronicles - a brand rooted in African heritage, handcrafted by skilled artisans, and worn by the Ushanga Tribe across the world.',
   image_url: null,
 }
 
