@@ -35,8 +35,11 @@ const FAQPage = lazy(() => import('../pages/FAQPage'))
 
 function RouteLoader() {
   return (
-    <div className="min-h-[60vh] flex items-center justify-center bg-background text-muted-foreground">
-      Loading...
+    <div className="min-h-[80vh] flex items-center justify-center bg-background text-muted-foreground">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-sm tracking-wide">Loading...</span>
+      </div>
     </div>
   )
 }

@@ -13,9 +13,9 @@ function AppContent() {
   const isAdmin = location.pathname.startsWith('/admin')
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       {!isAdmin && <Navbar />}
-      <main>
+      <main className="flex-1">
         <AnimatedRoutes />
       </main>
       {!isAdmin && <Footer />}
