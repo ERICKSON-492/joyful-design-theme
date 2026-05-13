@@ -83,8 +83,19 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <div className="bg-background min-h-screen pt-24 pb-16">
-        <div className="container mx-auto px-4 text-center py-20 text-muted-foreground">Loading...</div>
+      <div className="bg-background min-h-[80vh] pt-24 pb-16">
+        <div className="container mx-auto px-4 max-w-5xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+            <div className="aspect-square bg-muted animate-pulse rounded-lg" />
+            <div className="space-y-4">
+              <div className="h-4 w-1/4 bg-muted animate-pulse rounded" />
+              <div className="h-8 w-3/4 bg-muted animate-pulse rounded" />
+              <div className="h-6 w-1/3 bg-muted animate-pulse rounded" />
+              <div className="h-20 w-full bg-muted animate-pulse rounded" />
+              <div className="h-12 w-full bg-muted animate-pulse rounded" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
