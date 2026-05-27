@@ -81,6 +81,27 @@ export default function ProductDetailPage() {
     setSelectedVariant(match || null)
   }, [selectedSize, selectedColor, variants])
 
+  const gallery: string[] = (product?.image_urls && product.image_urls.length > 0)
+    ? product.image_urls
+    : (product?.image_url ? [product.image_url] : [])
+    
+  const safeIdx = Math.min(imgIdx, Math.max(0, gallery.length - 1))
+
+  // Optimization: Dynamically inject a high-priority preload link for the active main display image
+  useEffect(() => {
+    if (gallery.length === 0 || !gallery[safeIdx]) return
+
+    const link = document.createElement('link')
+    link.rel = 'preload'
+    link.as = 'image'
+    link.href = gallery[safeIdx]
+    document.head.appendChild(link)
+
+    return () => {
+      document.head.removeChild(link)
+    }
+  }, [gallery, safeIdx])
+
   if (loading) {
     return (
       <div className="bg-background min-h-[80vh] pt-24 pb-16">
@@ -111,10 +132,6 @@ export default function ProductDetailPage() {
     )
   }
 
-  const gallery: string[] = (product.image_urls && product.image_urls.length > 0)
-    ? product.image_urls
-    : (product.image_url ? [product.image_url] : [])
-  const safeIdx = Math.min(imgIdx, Math.max(0, gallery.length - 1))
   const prevImg = () => setImgIdx(i => (i - 1 + gallery.length) % gallery.length)
   const nextImg = () => setImgIdx(i => (i + 1) % gallery.length)
 
@@ -153,21 +170,30 @@ export default function ProductDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
           {/* Image carousel */}
           <div>
-            <div className="relative rounded-lg overflow-hidden bg-card border border-border">
+            <div className="relative rounded-lg overflow-hidden bg-card border border-border aspect-square">
               {gallery.length > 0 ? (
-                <img src={gallery[safeIdx]} alt={product.name} className="w-full aspect-square object-cover transition-opacity" />
+                <img 
+                  src={gallery[safeIdx]} 
+                  alt={product.name} 
+                  className="w-full h-full object-cover transition-opacity"
+                  width={800}
+                  height={800}
+                  // Performance Critical Overrides:
+                  fetchPriority={safeIdx === 0 ? "high" : "auto"}
+                  loading="eager"
+                />
               ) : (
-                <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground">No image</div>
+                <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground">No image</div>
               )}
               {gallery.length > 1 && (
                 <>
-                  <button onClick={prevImg} aria-label="Previous image" className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full p-2 shadow-md">
+                  <button onClick={prevImg} aria-label="Previous image" className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full p-2 shadow-md z-10">
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  <button onClick={nextImg} aria-label="Next image" className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full p-2 shadow-md">
+                  <button onClick={nextImg} aria-label="Next image" className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full p-2 shadow-md z-10">
                     <ChevronRight className="w-5 h-5" />
                   </button>
-                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
                     {gallery.map((_, i) => (
                       <button key={i} onClick={() => setImgIdx(i)} aria-label={`Image ${i+1}`}
                         className={`w-2 h-2 rounded-full transition-all ${i === safeIdx ? 'bg-primary w-6' : 'bg-background/80'}`} />
@@ -181,7 +207,14 @@ export default function ProductDetailPage() {
                 {gallery.map((url, i) => (
                   <button key={url + i} onClick={() => setImgIdx(i)}
                     className={`aspect-square rounded overflow-hidden border-2 transition-colors ${i === safeIdx ? 'border-primary' : 'border-border hover:border-primary/40'}`}>
-                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    <img 
+                      src={url} 
+                      alt="" 
+                      className="w-full h-full object-cover" 
+                      width={150}
+                      height={150}
+                      loading="lazy" // Don't block primary screen layout with auxiliary images
+                    />
                   </button>
                 ))}
               </div>
