@@ -59,11 +59,26 @@ export function HeroSection() {
         const normalized = normalizeSlides(data)
         setSlides(normalized)
 
-        normalized.slice(0, 2).forEach((slide) => {
-          if (slide.image_url) {
-            const img = new window.Image()
-            img.src = optimizeImageUrl(slide.image_url)
+        // Inject <link rel="preload"> for the first hero image so the browser
+        // discovers it as early as possible, plus warm the cache for slide 2.
+        normalized.slice(0, 2).forEach((slide, index) => {
+          if (!slide.image_url) return
+          const href = optimizeImageUrl(slide.image_url)
+          if (index === 0 && typeof document !== 'undefined') {
+            const existing = document.head.querySelector(
+              `link[rel="preload"][as="image"][data-hero-preload="true"]`
+            )
+            if (existing) existing.remove()
+            const link = document.createElement('link')
+            link.rel = 'preload'
+            link.as = 'image'
+            link.href = href
+            link.setAttribute('fetchpriority', 'high')
+            link.setAttribute('data-hero-preload', 'true')
+            document.head.appendChild(link)
           }
+          const img = new window.Image()
+          img.src = href
         })
       } catch (err) {
         console.error('HeroSection fetch error:', err)
@@ -120,6 +135,7 @@ export function HeroSection() {
             alt={slide.subtitle}
             loading={index === 0 ? 'eager' : 'lazy'}
             fetchPriority={index === 0 ? 'high' : 'auto'}
+            decoding={index === 0 ? 'sync' : 'async'}
             className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-out"
             style={{ zIndex: isActive ? 1 : 0, opacity: isActive ? 1 : 0 }}
           />
