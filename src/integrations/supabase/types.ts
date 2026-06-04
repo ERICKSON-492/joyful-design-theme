@@ -857,6 +857,15 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      enqueue_transactional_email: {
+        Args: {
+          html_body: string
+          recipient_email: string
+          subject_text: string
+          template_label: string
+        }
+        Returns: number
+      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       move_to_dlq: {
         Args: {
