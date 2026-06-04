@@ -1,360 +1,558 @@
-import { sendLovableEmail } from 'npm:@lovable.dev/email-js'
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { useState, useEffect, useCallback } from 'react'
+import { useCart } from '@/contexts/CartContext'
+import { supabase } from '@/integrations/supabase/client'
+import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
+import { toast } from 'sonner'
+import { Link, useNavigate } from 'react-router-dom'
+import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard } from 'lucide-react'
+import { fetchPublicTable } from '@/lib/publicContent'
 
-const MAX_RETRIES = 5
-const DEFAULT_BATCH_SIZE = 10
-const DEFAULT_SEND_DELAY_MS = 200
-const DEFAULT_AUTH_TTL_MINUTES = 15
-const DEFAULT_TRANSACTIONAL_TTL_MINUTES = 60
+type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
-// Check if an error is a rate-limit (429) response.
-// Uses EmailAPIError.status when available (email-js >=0.x with structured errors),
-// falls back to parsing the error message for older versions.
-function isRateLimited(error: unknown): boolean {
-  if (error && typeof error === 'object' && 'status' in error) {
-    return (error as { status: number }).status === 429
-  }
-  return error instanceof Error && error.message.includes('429')
+interface ShippingMethod {
+  id: string; name: string; type: string; provider: string; estimated_days: string | null; price: number; regions: string[]
 }
 
-// Check if an error is a forbidden (403) response, which means emails are
-// disabled for this project. Retrying won't help — move straight to DLQ.
-function isForbidden(error: unknown): boolean {
-  if (error && typeof error === 'object' && 'status' in error) {
-    return (error as { status: number }).status === 403
-  }
-  return error instanceof Error && error.message.includes('403')
+interface PaymentMethodOption {
+  id: string; name: string; provider: string; is_active: boolean
 }
 
-// Extract Retry-After seconds from a structured EmailAPIError, or default to 60s.
-function getRetryAfterSeconds(error: unknown): number {
-  if (error && typeof error === 'object' && 'retryAfterSeconds' in error) {
-    return (error as { retryAfterSeconds: number | null }).retryAfterSeconds ?? 60
-  }
-  return 60
-}
-
-function parseJwtClaims(token: string): Record<string, unknown> | null {
-  const parts = token.split('.')
-  if (parts.length < 2) {
-    return null
-  }
-
-  try {
-    const payload = parts[1]
-      .replaceAll('-', '+')
-      .replaceAll('_', '/')
-      .padEnd(Math.ceil(parts[1].length / 4) * 4, '=')
-
-    return JSON.parse(atob(payload)) as Record<string, unknown>
-  } catch {
-    return null
-  }
-}
-
-// Move a message to the dead letter queue and log the reason.
-async function moveToDlq(
-  supabase: ReturnType<typeof createClient>,
-  queue: string,
-  msg: { msg_id: number; message: Record<string, unknown> },
-  reason: string
-): Promise<void> {
-  const payload = msg.message
-  await supabase.from('email_send_log').insert({
-    message_id: payload.message_id,
-    template_name: (payload.label || queue) as string,
-    recipient_email: payload.to,
-    status: 'dlq',
-    error_message: reason,
-  })
-  const { error } = await supabase.rpc('move_to_dlq', {
-    source_queue: queue,
-    dlq_name: `${queue}_dlq`,
-    message_id: msg.msg_id,
-    payload,
-  })
-  if (error) {
-    console.error('Failed to move message to DLQ', { queue, msg_id: msg.msg_id, reason, error })
-  }
-}
-
-Deno.serve(async (req) => {
-  const apiKey = Deno.env.get('LOVABLE_API_KEY')
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-  if (!apiKey || !supabaseUrl || !supabaseServiceKey) {
-    console.error('Missing required environment variables')
-    return new Response(
-      JSON.stringify({ error: 'Server configuration error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
-  }
-
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    )
-  }
-
-  // Defense in depth: verify_jwt=true already requires a valid JWT at the
-  // gateway layer. This adds an explicit role check so only service-role
-  // callers can trigger queue processing.
-  const token = authHeader.slice('Bearer '.length).trim()
-  const claims = parseJwtClaims(token)
-  if (claims?.role !== 'service_role') {
-    return new Response(
-      JSON.stringify({ error: 'Forbidden' }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } }
-    )
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-  // 1. Check rate-limit cooldown and read queue config
-  const { data: state } = await supabase
-    .from('email_send_state')
-    .select('retry_after_until, batch_size, send_delay_ms, auth_email_ttl_minutes, transactional_email_ttl_minutes')
-    .single()
-
-  if (state?.retry_after_until && new Date(state.retry_after_until) > new Date()) {
-    return new Response(
-      JSON.stringify({ skipped: true, reason: 'rate_limited' }),
-      { headers: { 'Content-Type': 'application/json' } }
-    )
-  }
-
-  const batchSize = state?.batch_size ?? DEFAULT_BATCH_SIZE
-  const sendDelayMs = state?.send_delay_ms ?? DEFAULT_SEND_DELAY_MS
-  const ttlMinutes: Record<string, number> = {
-    auth_emails: state?.auth_email_ttl_minutes ?? DEFAULT_AUTH_TTL_MINUTES,
-    transactional_emails: state?.transactional_email_ttl_minutes ?? DEFAULT_TRANSACTIONAL_TTL_MINUTES,
-  }
-
-  let totalProcessed = 0
-
-  // 2. Process auth_emails first (priority), then transactional_emails
-  for (const queue of ['auth_emails', 'transactional_emails']) {
-    const { data: messages, error: readError } = await supabase.rpc('read_email_batch', {
-      queue_name: queue,
-      batch_size: batchSize,
-      vt: 30,
-    })
-
-    if (readError) {
-      console.error('Failed to read email batch', { queue, error: readError })
-      continue
-    }
-
-    if (!messages?.length) continue
-
-    // Retry budget is based on real send failures, not pgmq read_ct.
-    // read_ct increments for every message in a claimed batch, including
-    // messages not attempted when a 429 stops processing early.
-    const messageIds = Array.from(
-      new Set(
-        messages
-          .map((msg) =>
-            msg?.message?.message_id && typeof msg.message.message_id === 'string'
-              ? msg.message.message_id
-              : null
-          )
-          .filter((id): id is string => Boolean(id))
-      )
-    )
-    const failedAttemptsByMessageId = new Map<string, number>()
-    if (messageIds.length > 0) {
-      const { data: failedRows, error: failedRowsError } = await supabase
-        .from('email_send_log')
-        .select('message_id')
-        .in('message_id', messageIds)
-        .eq('status', 'failed')
-
-      if (failedRowsError) {
-        console.error('Failed to load failed-attempt counters', {
-          queue,
-          error: failedRowsError,
-        })
-      } else {
-        for (const row of failedRows ?? []) {
-          const messageId = row?.message_id
-          if (typeof messageId !== 'string' || !messageId) continue
-          failedAttemptsByMessageId.set(
-            messageId,
-            (failedAttemptsByMessageId.get(messageId) ?? 0) + 1
-          )
-        }
-      }
-    }
-
-    for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i]
-      const payload = msg.message
-      const failedAttempts =
-        payload?.message_id && typeof payload.message_id === 'string'
-          ? (failedAttemptsByMessageId.get(payload.message_id) ?? 0)
-          : 0
-
-      // Drop expired messages (TTL exceeded)
-      if (payload.queued_at) {
-        const ageMs = Date.now() - new Date(payload.queued_at).getTime()
-        const maxAgeMs = ttlMinutes[queue] * 60 * 1000
-        if (ageMs > maxAgeMs) {
-          console.warn('Email expired (TTL exceeded)', {
-            queue,
-            msg_id: msg.msg_id,
-            queued_at: payload.queued_at,
-            ttl_minutes: ttlMinutes[queue],
-          })
-          await moveToDlq(supabase, queue, msg, `TTL exceeded (${ttlMinutes[queue]} minutes)`)
-          continue
-        }
-      }
-
-      // Move to DLQ if max failed send attempts reached.
-      if (failedAttempts >= MAX_RETRIES) {
-        await moveToDlq(supabase, queue, msg, `Max retries (${MAX_RETRIES}) exceeded (attempted ${failedAttempts} times)`)
-        continue
-      }
-
-      // Guard: skip if another worker already sent this message (VT expired race)
-      if (payload.message_id) {
-        const { data: alreadySent } = await supabase
-          .from('email_send_log')
-          .select('id')
-          .eq('message_id', payload.message_id)
-          .eq('status', 'sent')
-          .maybeSingle()
-
-        if (alreadySent) {
-          console.warn('Skipping duplicate send (already sent)', {
-            queue,
-            msg_id: msg.msg_id,
-            message_id: payload.message_id,
-          })
-          const { error: dupDelError } = await supabase.rpc('delete_email', {
-            queue_name: queue,
-            message_id: msg.msg_id,
-          })
-          if (dupDelError) {
-            console.error('Failed to delete duplicate message from queue', { queue, msg_id: msg.msg_id, error: dupDelError })
-          }
-          continue
-        }
-      }
-
-      try {
-        await sendLovableEmail(
-          {
-            run_id: payload.run_id,
-            to: payload.to,
-            from: payload.from,
-            sender_domain: payload.sender_domain,
-            subject: payload.subject,
-            html: payload.html,
-            text: payload.text,
-            purpose: payload.purpose,
-            label: payload.label,
-            idempotency_key: payload.idempotency_key,
-            unsubscribe_token: payload.unsubscribe_token,
-            message_id: payload.message_id,
-          },
-          // sendUrl is optional — when LOVABLE_SEND_URL is not set, the library
-          // falls back to the default Lovable API endpoint (https://api.lovable.dev).
-          // Set LOVABLE_SEND_URL as a Supabase secret to override (e.g. for local dev).
-          { apiKey, sendUrl: Deno.env.get('LOVABLE_SEND_URL') }
-        )
-
-        // Log success
-        await supabase.from('email_send_log').insert({
-          message_id: payload.message_id,
-          template_name: payload.label || queue,
-          recipient_email: payload.to,
-          status: 'sent',
-        })
-
-        // Delete from queue
-        const { error: delError } = await supabase.rpc('delete_email', {
-          queue_name: queue,
-          message_id: msg.msg_id,
-        })
-        if (delError) {
-          console.error('Failed to delete sent message from queue', { queue, msg_id: msg.msg_id, error: delError })
-        }
-        totalProcessed++
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        console.error('Email send failed', {
-          queue,
-          msg_id: msg.msg_id,
-          read_ct: msg.read_ct,
-          failed_attempts: failedAttempts,
-          error: errorMsg,
-        })
-
-        if (isRateLimited(error)) {
-          await supabase.from('email_send_log').insert({
-            message_id: payload.message_id,
-            template_name: payload.label || queue,
-            recipient_email: payload.to,
-            status: 'rate_limited',
-            error_message: errorMsg.slice(0, 1000),
-          })
-
-          const retryAfterSecs = getRetryAfterSeconds(error)
-          await supabase
-            .from('email_send_state')
-            .update({
-              retry_after_until: new Date(
-                Date.now() + retryAfterSecs * 1000
-              ).toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', 1)
-
-          // Stop processing — remaining messages stay in queue (VT expires, retried next cycle)
-          return new Response(
-            JSON.stringify({ processed: totalProcessed, stopped: 'rate_limited' }),
-            { headers: { 'Content-Type': 'application/json' } }
-          )
-        }
-
-        // 403 means emails are disabled for this project — retrying won't help.
-        // Move straight to DLQ and stop processing the rest of the batch.
-        if (isForbidden(error)) {
-          await moveToDlq(supabase, queue, msg, 'Emails disabled for this project')
-          return new Response(
-            JSON.stringify({ processed: totalProcessed, stopped: 'emails_disabled' }),
-            { headers: { 'Content-Type': 'application/json' } }
-          )
-        }
-
-        // Log non-429 failures to track real retry attempts.
-        await supabase.from('email_send_log').insert({
-          message_id: payload.message_id,
-          template_name: payload.label || queue,
-          recipient_email: payload.to,
-          status: 'failed',
-          error_message: errorMsg.slice(0, 1000),
-        })
-        if (payload?.message_id && typeof payload.message_id === 'string') {
-          failedAttemptsByMessageId.set(payload.message_id, failedAttempts + 1)
-        }
-
-        // Non-429 errors: message stays invisible until VT expires, then retried
-      }
-
-      // Small delay between sends to smooth bursts
-      if (i < messages.length - 1) {
-        await new Promise((r) => setTimeout(r, sendDelayMs))
-      }
-    }
-  }
-
-  return new Response(
-    JSON.stringify({ processed: totalProcessed }),
-    { headers: { 'Content-Type': 'application/json' } }
+function CheckoutStepper({ step }: { step: number }) {
+  const steps = ['Cart', 'Shipping', 'Payment']
+  return (
+    <div className="flex items-center justify-center mb-8">
+      {steps.map((label, i) => (
+        <div key={label} className="flex items-center">
+          <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-colors ${
+            i < step ? 'bg-green-500 text-white' : i === step ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+          }`}>
+            {i < step ? '✓' : i + 1}
+          </div>
+          <span className={`ml-2 text-sm font-medium hidden sm:inline ${i === step ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>
+          {i < steps.length - 1 && <div className={`w-8 sm:w-16 h-0.5 mx-2 ${i < step ? 'bg-green-500' : 'bg-border'}`} />}
+        </div>
+      ))}
+    </div>
   )
-})
+}
+
+export default function CheckoutPage() {
+  const { items, totalPrice, clearCart, totalItems, updateQuantity, removeFromCart } = useCart()
+  const navigate = useNavigate()
+  const [phone, setPhone] = useState('')
+  const [name, setName] = useState('')
+  const [status, setStatus] = useState<PaymentStatus>('idle')
+  const [error, setError] = useState('')
+  const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [postalCode, setPostalCode] = useState('')
+  const [county, setCounty] = useState('')
+  const [country, setCountry] = useState('Kenya')
+  const [email, setEmail] = useState('')
+  const [step, setStep] = useState(0)
+  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([])
+  const [selectedShipping, setSelectedShipping] = useState<ShippingMethod | null>(null)
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([])
+  const [selectedPayment, setSelectedPayment] = useState<string>('mpesa')
+  const { userId, authChecked, name: accountName, email: accountEmail } = useCheckoutAuth()
+
+  useEffect(() => {
+    if (accountName) setName(prev => prev || accountName)
+    if (accountEmail) setEmail(prev => prev || accountEmail)
+  }, [accountName, accountEmail])
+
+  // Load shipping & payment methods
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [ship, pay] = await Promise.all([
+          fetchPublicTable<ShippingMethod>('shipping_methods', 'select=*&is_active=eq.true&order=price.asc'),
+          fetchPublicTable<PaymentMethodOption>('payment_methods', 'select=*&is_active=eq.true&order=created_at.asc'),
+        ])
+        setShippingMethods(ship || [])
+        setPaymentMethods(pay || [])
+        if (pay?.length) setSelectedPayment(pay[0].provider)
+      } catch { /* ignore */ }
+    }
+    load()
+  }, [])
+
+  const isInternational = country !== 'Kenya'
+  const filteredShipping = shippingMethods.filter(m => isInternational ? m.type === 'international' : m.type === 'local')
+  const shippingCost = selectedShipping?.price || 0
+  const grandTotal = totalPrice + shippingCost
+
+  const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
+
+  // Helper function to insert transactional email directly into Lovable's database queue
+  const sendOrderEmail = useCallback(async (orderId: string) => {
+    const targetEmail = email || accountEmail;
+    if (!targetEmail) {
+      console.log("Skipping email transmission: No email address available.");
+      return;
+    }
+
+    // Build the dynamic HTML items table rows
+    const itemsHtml = items.map(item => `
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; color: #374151;">${item.name} (x${item.quantity})</td>
+        <td style="padding: 8px 0; text-align: right; border-bottom: 1px solid #eee; font-size: 14px; font-weight: 600; color: #111827;">KSh ${(item.price * item.quantity).toLocaleString()}</td>
+      </tr>
+    `).join('');
+
+    const emailHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #10b981; margin: 0 0 8px 0; font-size: 24px; font-weight: 700;">Order Confirmed!</h2>
+          <p style="color: #4b5563; margin: 0; font-size: 14px;">Thank you for your order, ${name}.</p>
+        </div>
+        
+        <p style="color: #374151; font-size: 15px; line-height: 1.5;">Your order <strong>#${orderId}</strong> has been successfully received and is being prepared for dispatch.</p>
+        
+        <div style="margin: 24px 0; background-color: #f9fafb; border-radius: 8px; padding: 16px;">
+          <h3 style="margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-weight: 700;">Items Ordered</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 2px solid #e5e7eb; flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 15px; font-weight: 700; color: #374151;">Grand Total:</span>
+            <span style="font-size: 18px; font-weight: 800; color: #10b981; float: right;">KSh ${grandTotal.toLocaleString()}</span>
+          </div>
+          <div style="clear: both;"></div>
+        </div>
+
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 13px; color: #6b7280; line-height: 1.5;">
+          <p style="margin: 0 0 4px 0;"><strong>Delivery Method:</strong> ${selectedShipping?.name || 'Standard Delivery'}</p>
+          <p style="margin: 0;">If you have any questions or want to update your details, please reach out to our team immediately.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      // Direct integration into pgmq.send('transactional_emails', ...) wrapper via Supabase RPC
+      const { error: rpcError } = await supabase.rpc('enqueue_transactional_email', {
+        recipient_email: targetEmail,
+        subject_text: `Order Confirmation #${orderId}`,
+        html_body: emailHtml,
+        template_label: 'order-confirmation'
+      });
+
+      if (rpcError) throw rpcError;
+      console.log("Order email successfully appended to pgmq background transactional queue.");
+    } catch (err) {
+      console.error("Failed to append order confirmation email to database queue:", err);
+    }
+  }, [email, accountEmail, name, grandTotal, items, selectedShipping]);
+
+  const handleMpesaPayment = useCallback(async () => {
+    if (!userId) {
+      toast.error('Please log in first')
+      navigate('/auth', { state: { returnTo: '/checkout' } })
+      return
+    }
+    if (!phone || phone.length < 9) { setError('Please enter a valid phone number'); return }
+    if (!name.trim()) { setError('Please enter your name'); return }
+    if (items.length === 0) return
+
+    setError('')
+    setStatus('creating')
+
+    try {
+      const orderItems = items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity }))
+
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          phone, customer_name: name, total_amount: grandTotal,
+          items: orderItems as any, status: selectedPayment === 'cod' ? 'confirmed' : 'pending', user_id: userId,
+          shipping_address: { address, city, county, postal_code: postalCode, country, email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost },
+        })
+        .select('id').single()
+
+      if (orderError || !order) throw new Error('Failed to create order')
+
+      // Cash on Delivery (COD) route
+      if (selectedPayment === 'cod') {
+        await sendOrderEmail(order.id)
+        setStatus('success')
+        clearCart()
+        toast.success('Order placed! Pay on delivery 🎉')
+        return
+      }
+
+      // M-Pesa Payment Pipeline
+      setStatus('pushing')
+      const { data: stkData, error: stkError } = await supabase.functions.invoke(
+        'mpesa-stk-push', { body: { phone, amount: grandTotal, order_id: order.id } }
+      )
+      if (stkError) throw new Error(stkError.message)
+      if (stkData?.ResponseCode !== '0') throw new Error(stkData?.ResponseDescription || 'Failed to initiate M-Pesa payment')
+
+      setStatus('polling')
+      const checkoutRequestId = stkData.CheckoutRequestID
+      let attempts = 0
+
+      const poll = async () => {
+        attempts++
+        try {
+          const { data: queryData } = await supabase.functions.invoke(
+            'mpesa-stk-push?action=query', { body: { checkout_request_id: checkoutRequestId } }
+          )
+          if (queryData?.ResultCode === '0' || queryData?.ResultCode === 0) {
+            await sendOrderEmail(order.id)
+            setStatus('success'); clearCart(); toast.success('Payment successful! Asante sana 🎉'); return
+          }
+          if (queryData?.ResultCode && queryData.ResultCode !== '0') {
+            if (queryData.errorCode === '500.001.1001' || queryData.ResultCode === '1032') {
+              setStatus('failed'); setError('Payment was cancelled. Please try again.'); return
+            }
+          }
+        } catch { /* ignore */ }
+
+        if (attempts < 15) {
+          setTimeout(poll, 4000)
+        } else {
+          const { data: orderCheck } = await supabase.from('orders').select('status').eq('id', order.id).single()
+          if (orderCheck?.status === 'paid') { 
+            await sendOrderEmail(order.id)
+            setStatus('success'); clearCart(); toast.success('Payment successful! 🎉') 
+          }
+          else { setStatus('failed'); setError('Payment timed out. If money was deducted, contact us on WhatsApp.') }
+        }
+      }
+      setTimeout(poll, 4000)
+    } catch (err: any) {
+      setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
+    }
+  }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, clearCart, navigate, sendOrderEmail])
+
+  if (status === 'success') {
+    return (
+      <div className="bg-background min-h-screen pt-24 pb-16">
+        <div className="container mx-auto px-4 text-center py-20 max-w-md">
+          <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
+          <h1 className="font-display text-3xl font-bold text-foreground mb-3">Order Confirmed!</h1>
+          <p className="text-muted-foreground mb-8">
+            {selectedPayment === 'cod' ? "Your order has been placed. Pay on delivery." : "Payment successful! We'll reach out via WhatsApp for delivery details."}
+          </p>
+          <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase rounded-lg">Continue Shopping</Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="bg-background min-h-screen pt-24 pb-16">
+        <div className="container mx-auto px-4 text-center py-20">
+          <ShoppingBag className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h1 className="font-display text-2xl font-bold text-foreground mb-2">Your cart is empty</h1>
+          <p className="text-muted-foreground mb-6">Add some items before checking out</p>
+          <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase rounded-lg">Go to Shop</Link>
+        </div>
+      </div>
+    )
+  }
+
+  const isProcessing = status === 'creating' || status === 'pushing' || status === 'polling'
+  const canGoToShipping = items.length > 0
+  const canGoToPayment = name.trim() && phone.length >= 9 && selectedShipping
+
+  return (
+    <div className="bg-muted/30 min-h-screen pt-24 pb-16">
+      <div className="container mx-auto px-4 max-w-4xl">
+        <button onClick={() => step > 0 ? setStep(step - 1) : navigate(-1)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4 transition-colors text-sm">
+          <ArrowLeft className="w-4 h-4" /> {step > 0 ? 'Back' : 'Continue Shopping'}
+        </button>
+
+        <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">Checkout</h1>
+        <CheckoutStepper step={step} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            {/* Step 0: Cart Summary List */}
+            {step === 0 && (
+              <div className="bg-card border border-border rounded-lg">
+                <div className="p-4 border-b border-border">
+                  <h2 className="font-display font-semibold text-foreground flex items-center gap-2">
+                    <ShoppingBag className="w-5 h-5 text-primary" /> Cart ({totalItems} items)
+                  </h2>
+                </div>
+                <div className="divide-y divide-border">
+                  {items.map(item => (
+                    <div key={item.id} className="p-4 flex gap-4">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-20 h-20 object-cover rounded-lg border border-border flex-shrink-0" />
+                      ) : (
+                        <div className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-xs flex-shrink-0">No img</div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-foreground text-sm truncate">{item.name}</h3>
+                        <p className="text-primary font-bold text-sm mt-1">KSh {item.price.toLocaleString()}</p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <div className="flex items-center border border-border rounded-lg">
+                            <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1.5 hover:bg-accent transition-colors rounded-l-lg"><Minus className="w-3.5 h-3.5" /></button>
+                            <span className="px-3 text-sm font-medium min-w-[2rem] text-center">{item.quantity}</span>
+                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1.5 hover:bg-accent transition-colors rounded-r-lg"><Plus className="w-3.5 h-3.5" /></button>
+                          </div>
+                          <button onClick={() => removeFromCart(item.id)} className="text-destructive hover:text-destructive/80 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-bold text-foreground text-sm">KSh {(item.price * item.quantity).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="p-4 border-t border-border">
+                  <button onClick={() => setStep(1)} disabled={!canGoToShipping}
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50" style={{ minHeight: '48px' }}>
+                    Proceed to Shipping
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 1: Shipping Addresses & Method */}
+            {step === 1 && (
+              <div className="bg-card border border-border rounded-lg">
+                <div className="p-4 border-b border-border">
+                  <h2 className="font-display font-semibold text-foreground flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-primary" /> Shipping Details
+                  </h2>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Full Name *</label>
+                      <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Linda Amollo"
+                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Phone Number *</label>
+                      <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0748207000"
+                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Email (optional)</label>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com"
+                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Country</label>
+                    <select value={country} onChange={e => { setCountry(e.target.value); setSelectedShipping(null) }}
+                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm">
+                      <option value="Kenya">🇰🇪 Kenya</option>
+                      <option value="Tanzania">🇹🇿 Tanzania</option>
+                      <option value="Uganda">🇺🇬 Uganda</option>
+                      <option value="Rwanda">🇷🇼 Rwanda</option>
+                      <option value="Ethiopia">🇪🇹 Ethiopia</option>
+                      <option value="Other">🌍 Other (International)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Street Address</label>
+                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate"
+                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {country === 'Kenya' ? (
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">County</label>
+                        <select value={county} onChange={e => setCounty(e.target.value)}
+                          className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm">
+                          <option value="">Select county</option>
+                          {kenyanCounties.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">City / Town</label>
+                        <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City"
+                          className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Postal Code</label>
+                      <input type="text" value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="00100"
+                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                    </div>
+                  </div>
+
+                  {/* Delivery Selection */}
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
+                    </label>
+                    {filteredShipping.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No shipping methods available for this destination.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredShipping.map(m => (
+                          <label key={m.id}
+                            className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                              selectedShipping?.id === m.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                            }`}>
+                            <input type="radio" name="shipping" checked={selectedShipping?.id === m.id}
+                              onChange={() => setSelectedShipping(m)} className="accent-primary" />
+                            <div className="flex-1">
+                              <p className="font-medium text-foreground text-sm">{m.name}</p>
+                              <p className="text-xs text-muted-foreground">{m.estimated_days} · {(m.regions || []).join(', ')}</p>
+                            </div>
+                            <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button onClick={() => setStep(2)} disabled={!canGoToPayment}
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 mt-2" style={{ minHeight: '48px' }}>
+                    Proceed to Payment
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Gateway Payment Triggers */}
+            {step === 2 && (
+              <div className="bg-card border border-border rounded-lg">
+                <div className="p-4 border-b border-border">
+                  <h2 className="font-display font-semibold text-foreground flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-primary" /> Payment
+                  </h2>
+                </div>
+                <div className="p-4 space-y-4">
+                  {paymentMethods.length > 1 && (
+                    <div className="space-y-2">
+                      {paymentMethods.map(pm => (
+                        <label key={pm.id}
+                          className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                            selectedPayment === pm.provider ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                          }`}>
+                          <input type="radio" name="payment" checked={selectedPayment === pm.provider}
+                            onChange={() => setSelectedPayment(pm.provider)} className="accent-primary" />
+                          <div>
+                            <p className="font-medium text-foreground text-sm">{pm.name}</p>
+                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay via M-Pesa STK Push</p>}
+                            {pm.provider === 'pesapal' && <p className="text-xs text-muted-foreground">Pay with card or mobile money</p>}
+                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Pay when you receive your order</p>}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedPayment === 'mpesa' && (
+                    <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4">
+                      <p className="text-sm text-green-800 dark:text-green-200">
+                        <strong>How it works:</strong> Click "Pay Now" and you'll receive an M-Pesa STK push prompt on <strong>{phone}</strong>. Enter your PIN to clear.
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedPayment === 'cod' && (
+                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} when package is delivered via {selectedShipping?.name}.
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedPayment === 'pesapal' && (
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
+                      <p className="text-sm text-amber-800 dark:text-amber-200">
+                        <strong>Pesapal:</strong> You'll be forwarded to the secure portal for processing international Visa/Mastercard payments.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="text-sm text-muted-foreground space-y-1 border-t border-border pt-3">
+                    <p><strong className="text-foreground">Delivering to:</strong> {name}</p>
+                    {address && <p>{address}, {county || city} {postalCode}</p>}
+                    {selectedShipping && <p>Via {selectedShipping.name} ({selectedShipping.estimated_days})</p>}
+                    <p>Phone: {phone}</p>
+                  </div>
+
+                  {error && (
+                    <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
+                      <XCircle className="w-4 h-4 flex-shrink-0" /> {error}
+                    </div>
+                  )}
+
+                  <button onClick={handleMpesaPayment} disabled={isProcessing || !authChecked}
+                    className={`w-full py-4 font-bold text-sm tracking-wider uppercase rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2 ${
+                      selectedPayment === 'mpesa' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                      selectedPayment === 'cod' ? 'bg-primary hover:bg-primary/90 text-primary-foreground' :
+                      'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`} style={{ minHeight: '52px' }}>
+                    {!authChecked && <><Loader2 className="w-5 h-5 animate-spin" /> Verifying account...</>}
+                    {authChecked && status === 'creating' && <><Loader2 className="w-5 h-5 animate-spin" /> Creating order...</>}
+                    {authChecked && status === 'pushing' && <><Loader2 className="w-5 h-5 animate-spin" /> Sending STK push...</>}
+                    {authChecked && status === 'polling' && <><Loader2 className="w-5 h-5 animate-spin" /> Waiting for payment PIN...</>}
+                    {authChecked && (status === 'idle' || status === 'failed') && (
+                      selectedPayment === 'cod' ? 'Place Order' : `Pay KSh ${grandTotal.toLocaleString()} Now`
+                    )}
+                  </button>
+
+                  {status === 'polling' && (
+                    <p className="text-center text-sm text-muted-foreground animate-pulse">Check your phone and enter your M-Pesa PIN to finalize the purchase.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sticky Side Summary Details */}
+          <div className="lg:col-span-1">
+            <div className="bg-card border border-border rounded-lg sticky top-28">
+              <div className="p-4 border-b border-border">
+                <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wider">Order Summary</h2>
+              </div>
+              <div className="p-4 space-y-3">
+                {items.map(item => (
+                  <div key={item.id} className="flex justify-between items-start text-sm">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-foreground truncate block">{item.name}</span>
+                      <span className="text-muted-foreground text-xs">Qty: {item.quantity}</span>
+                    </div>
+                    <span className="font-semibold text-foreground ml-2 whitespace-nowrap">KSh {(item.price * item.quantity).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-border p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-foreground">KSh {totalPrice.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Shipping</span>
+                  {selectedShipping ? (
+                    <span className="text-foreground font-medium">KSh {shippingCost.toLocaleString()}</span>
+                  ) : (
+                    <span className="text-muted-foreground italic text-xs">Select at next step</span>
+                  )}
+                </div>
+                <div className="border-t border-border pt-2 flex justify-between">
+                  <span className="font-display font-bold text-foreground">Total</span>
+                  <span className="font-bold text-lg text-primary">KSh {grandTotal.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="p-4 pt-0">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <ShieldCheck className="w-4 h-4 text-green-500" />
+                  <span>Secure automated checkout</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
