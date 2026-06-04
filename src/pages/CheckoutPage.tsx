@@ -84,6 +84,37 @@ export default function CheckoutPage() {
 
   const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
 
+  // Helper function to dispatch order confirmation emails via Edge Function
+  const sendOrderEmail = useCallback(async (orderId: string) => {
+    const targetEmail = email || accountEmail;
+    if (!targetEmail) {
+      console.log("Skipping email transmission: No email address available.");
+      return;
+    }
+
+    try {
+      await supabase.functions.invoke('process-email-queue', {
+        body: {
+          templateName: "order-confirmation",
+          recipientEmail: targetEmail,
+          templateData: {
+            customerName: name,
+            orderNumber: orderId,
+            totalAmount: `KSh ${grandTotal.toLocaleString()}`,
+            items: items.map(item => ({
+              name: item.name,
+              quantity: item.quantity,
+              price: `KSh ${(item.price * item.quantity).toLocaleString()}`
+            }))
+          }
+        }
+      });
+      console.log("Order email confirmation enqueued successfully.");
+    } catch (err) {
+      console.error("Failed to enqueue order confirmation email:", err);
+    }
+  }, [email, accountEmail, name, grandTotal, items]);
+
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) {
       toast.error('Please log in first')
@@ -111,14 +142,16 @@ export default function CheckoutPage() {
 
       if (orderError || !order) throw new Error('Failed to create order')
 
+      // Cash on Delivery Pipeline Flow
       if (selectedPayment === 'cod') {
+        await sendOrderEmail(order.id)
         setStatus('success')
         clearCart()
         toast.success('Order placed! Pay on delivery 🎉')
         return
       }
 
-      // M-Pesa flow
+      // M-Pesa Pipeline Flow
       setStatus('pushing')
       const { data: stkData, error: stkError } = await supabase.functions.invoke(
         'mpesa-stk-push', { body: { phone, amount: grandTotal, order_id: order.id } }
@@ -137,6 +170,7 @@ export default function CheckoutPage() {
             'mpesa-stk-push?action=query', { body: { checkout_request_id: checkoutRequestId } }
           )
           if (queryData?.ResultCode === '0' || queryData?.ResultCode === 0) {
+            await sendOrderEmail(order.id)
             setStatus('success'); clearCart(); toast.success('Payment successful! Asante sana 🎉'); return
           }
           if (queryData?.ResultCode && queryData.ResultCode !== '0') {
@@ -150,7 +184,10 @@ export default function CheckoutPage() {
           setTimeout(poll, 4000)
         } else {
           const { data: orderCheck } = await supabase.from('orders').select('status').eq('id', order.id).single()
-          if (orderCheck?.status === 'paid') { setStatus('success'); clearCart(); toast.success('Payment successful! 🎉') }
+          if (orderCheck?.status === 'paid') { 
+            await sendOrderEmail(order.id)
+            setStatus('success'); clearCart(); toast.success('Payment successful! 🎉') 
+          }
           else { setStatus('failed'); setError('Payment timed out. If money was deducted, contact us on WhatsApp.') }
         }
       }
@@ -158,7 +195,7 @@ export default function CheckoutPage() {
     } catch (err: any) {
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
-  }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, clearCart, navigate])
+  }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, clearCart, navigate, sendOrderEmail])
 
   if (status === 'success') {
     return (
@@ -443,7 +480,7 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          {/* Order Summary */}
+          {/* Order Summary Side panel */}
           <div className="lg:col-span-1">
             <div className="bg-card border border-border rounded-lg sticky top-28">
               <div className="p-4 border-b border-border">
