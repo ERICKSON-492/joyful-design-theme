@@ -217,18 +217,45 @@ export default function CheckoutPage() {
     setStatus('creating')
 
     try {
-      const orderItems = items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity }))
+      // Create a single order object explicitly - FIXED
+      const orderData = {
+        phone: phone,
+        customer_name: name,
+        total_amount: grandTotal,
+        items: items.map(i => ({ 
+          id: i.id, 
+          name: i.name, 
+          price: i.price, 
+          quantity: i.quantity 
+        })),
+        status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
+        user_id: userId,
+        shipping_address: {
+          address: address,
+          city: city,
+          county: county,
+          postal_code: postalCode,
+          country: country,
+          email: email,
+          shipping_method: selectedShipping?.name,
+          shipping_cost: shippingCost
+        }
+      }
+
+      console.log('📦 Order data being sent:', orderData) // Debug log
 
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .insert({
-          phone, customer_name: name, total_amount: grandTotal,
-          items: orderItems as any, status: selectedPayment === 'cod' ? 'confirmed' : 'pending', user_id: userId,
-          shipping_address: { address, city, county, postal_code: postalCode, country, email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost },
-        })
-        .select('id').single()
+        .insert(orderData)  // Use the single object
+        .select('id')
+        .single()
 
-      if (orderError || !order) throw new Error('Failed to create order')
+      if (orderError) {
+        console.error('❌ Order creation error:', orderError)
+        throw new Error(orderError.message)
+      }
+
+      console.log('✅ Order created:', order)
 
       // Cash on Delivery Pipeline Flow
       if (selectedPayment === 'cod') {
@@ -281,6 +308,7 @@ export default function CheckoutPage() {
       }
       setTimeout(poll, 4000)
     } catch (err: any) {
+      console.error('❌ Catch block error:', err)
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
   }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, clearCart, navigate, sendOrderEmail])
