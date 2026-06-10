@@ -87,28 +87,42 @@ export default function AdminOrders() {
   };
 
   const updateStatus = async (id: string, newStatus: string) => {
-    const order = orders.find(o => o.id === id)
-    if (!order || order.status === newStatus) return
+  const order = orders.find(o => o.id === id)
+  if (!order || order.status === newStatus) return
 
-    setUpdating(id)
+  setUpdating(id)
 
+  try {
+    // First, update the order status in database
+    console.log(`Updating order ${id} to status: ${newStatus}`);
+    
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', id)
+
+    if (updateError) {
+      console.error('Database update error:', updateError);
+      throw updateError
+    }
+
+    // Update local state immediately
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
+    
+    console.log('Order status updated successfully');
+
+    // Get customer email for notification
+    const customerEmail = getCustomerEmail(order)
+    
+    if (!customerEmail) {
+      toast.success('Status updated (no email on file)')
+      return
+    }
+
+    // Try to send email notification (don't block status update if email fails)
     try {
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({ status: newStatus })
-        .eq('id', id)
-
-      if (updateError) throw updateError
-
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
-
-      const customerEmail = getCustomerEmail(order)
-      if (!customerEmail) {
-        toast.success('Status updated (no email on file)')
-        return
-      }
-
-      // Send email using the edge function
+      console.log('Sending email notification to:', customerEmail);
+      
       const { error: emailError } = await supabase.functions.invoke('send-email', {
         body: {
           to: customerEmail,
@@ -118,20 +132,23 @@ export default function AdminOrders() {
       })
 
       if (emailError) {
-        console.error('Order status email failed', emailError)
-        toast.error('Status updated, but email notification failed')
-        return
+        console.error('Email error:', emailError);
+        toast.warning('Status updated, but email notification failed')
+      } else {
+        toast.success('Status updated & email sent!')
       }
-
-      toast.success('Status updated & email sent!')
-    } catch (error) {
-      console.error('Order status update failed', error)
-      toast.error('Failed to update order status')
-    } finally {
-      setUpdating(null)
+    } catch (emailErr) {
+      console.error('Email sending failed:', emailErr);
+      toast.warning('Status updated, but email notification failed')
     }
+    
+  } catch (error) {
+    console.error('Order status update failed:', error)
+    toast.error('Failed to update order status')
+  } finally {
+    setUpdating(null)
   }
-
+}
   const filtered = orders.filter(o => {
     const matchesSearch = !search || 
       (o.customer_name?.toLowerCase().includes(search.toLowerCase())) ||
