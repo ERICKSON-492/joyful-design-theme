@@ -3,17 +3,13 @@ import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-function optimizeImageUrl(url: string): string {
+function optimizeImageUrl(url: string, width?: number): string {
   if (!url) return ''
-  // If it's already a full URL, return it
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return url
-  }
-  // If it's a storage path, construct the full URL
-  if (url.startsWith('/storage/') || url.startsWith('storage/')) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    return `${supabaseUrl}/storage/v1/object/public/${url.replace(/^\/?storage\/v1\/object\/public\//, '')}`
-  }
+  // Add your image optimization logic here (Cloudinary, etc.)
+  // Example with Cloudinary (if you have it):
+  // if (width) {
+  //   return url.replace('/upload/', `/upload/w_${width},q_80,f_auto/`)
+  // }
   return url
 }
 
@@ -24,41 +20,27 @@ interface Slide {
   subtitle: string
   cta_text: string
   cta_link: string
+  image_mobile?: string // Optional mobile-specific image
+  image_tablet?: string // Optional tablet-specific image
 }
-
-const fallbackImages = [
-  'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?w=1920&h=1080&fit=crop', // African beads
-  'https://images.unsplash.com/photo-1485291571150-772bcfc10da5?w=1920&h=1080&fit=crop', // African art
-]
 
 const fallbackSlides: Slide[] = [
   {
-    id: 'fallback-hero-1',
-    image_url: fallbackImages[0],
+    id: 'fallback-hero',
+    image_url: '',
     title: 'USHANGA CHRONICLES',
     subtitle: 'One bead. A thousand stories.',
     cta_text: 'Explore the Tribe',
     cta_link: '/shop',
   },
-  {
-    id: 'fallback-hero-2',
-    image_url: fallbackImages[1],
-    title: 'Handcrafted Excellence',
-    subtitle: 'Authentic African Beads & Jewelry',
-    cta_text: 'Shop Now',
-    cta_link: '/shop',
-  },
 ]
 
 const normalizeSlides = (data: Partial<Slide>[] | null | undefined): Slide[] => {
-  if (!data || data.length === 0) {
-    console.log('No slides found, using fallback')
-    return fallbackSlides
-  }
+  if (!data || data.length === 0) return fallbackSlides
 
   const cleanedSlides = data.map((slide, index) => ({
     id: slide.id || `hero-slide-${index}`,
-    image_url: slide.image_url || fallbackSlides[index % fallbackSlides.length].image_url,
+    image_url: slide.image_url || '',
     title: slide.title?.trim() || fallbackSlides[0].title,
     subtitle: slide.subtitle?.trim() || fallbackSlides[0].subtitle,
     cta_text: slide.cta_text?.trim() || fallbackSlides[0].cta_text,
@@ -93,39 +75,37 @@ export function HeroSection() {
       try {
         const data = await fetchPublicTable<Slide>(
           'hero_slides',
-          'select=id,image_url,title,subtitle,cta_text,cta_link&is_active=eq.true&order=display_order.asc'
+          'select=id,image_url,title,subtitle,cta_text,cta_link,image_mobile,image_tablet&is_active=eq.true&order=display_order.asc'
         )
 
-        console.log('Fetched hero slides:', data)
-        
         if (!isMounted) return
         const normalized = normalizeSlides(data)
-        console.log('Normalized slides:', normalized)
         setSlides(normalized)
 
         // Preload first two images
         normalized.slice(0, 2).forEach((slide, index) => {
           if (!slide.image_url) return
-          const href = optimizeImageUrl(slide.image_url)
-          console.log(`Preloading image ${index}:`, href)
           
-          if (index === 0 && typeof document !== 'undefined') {
-            const existing = document.head.querySelector(
-              `link[rel="preload"][as="image"][data-hero-preload="true"]`
-            )
-            if (existing) existing.remove()
-            const link = document.createElement('link')
-            link.rel = 'preload'
-            link.as = 'image'
-            link.href = href
-            link.setAttribute('fetchpriority', 'high')
-            link.setAttribute('data-hero-preload', 'true')
-            document.head.appendChild(link)
+          const desktopSrc = optimizeImageUrl(slide.image_url)
+          const mobileSrc = slide.image_mobile ? optimizeImageUrl(slide.image_mobile) : desktopSrc
+          
+          // Preload desktop image
+          const linkDesktop = document.createElement('link')
+          linkDesktop.rel = 'preload'
+          linkDesktop.as = 'image'
+          linkDesktop.href = desktopSrc
+          linkDesktop.setAttribute('fetchpriority', index === 0 ? 'high' : 'auto')
+          document.head.appendChild(linkDesktop)
+          
+          // Preload mobile image separately
+          if (mobileSrc !== desktopSrc) {
+            const linkMobile = document.createElement('link')
+            linkMobile.rel = 'preload'
+            linkMobile.as = 'image'
+            linkMobile.href = mobileSrc
+            linkMobile.setAttribute('media', '(max-width: 768px)')
+            document.head.appendChild(linkMobile)
           }
-          const img = new window.Image()
-          img.src = href
-          img.onload = () => console.log(`Image ${index} loaded:`, href)
-          img.onerror = () => console.error(`Image ${index} failed to load:`, href)
         })
       } catch (err) {
         console.error('HeroSection fetch error:', err)
@@ -191,33 +171,37 @@ export function HeroSection() {
   }
 
   const handleImageLoad = (slideId: string) => {
-    console.log('Image loaded for slide:', slideId)
     setImagesLoaded(prev => ({ ...prev, [slideId]: true }))
   }
 
-  const handleImageError = (slideId: string, url: string) => {
-    console.error('Image failed to load for slide:', slideId, url)
-    setImagesLoaded(prev => ({ ...prev, [slideId]: false }))
+  // Get responsive image URL based on screen size
+  const getResponsiveImageUrl = (slide: Slide) => {
+    if (isMobile && slide.image_mobile) {
+      return optimizeImageUrl(slide.image_mobile)
+    }
+    return optimizeImageUrl(slide.image_url)
   }
 
   const visibleIndices = useMemo(() => {
+    const prev = (activeIndex - 1 + safeSlides.length) % safeSlides.length
     const next = (activeIndex + 1) % safeSlides.length
-    return new Set([activeIndex, next])
+    return new Set([prev, activeIndex, next])
   }, [activeIndex, safeSlides.length])
 
   return (
     <section
-      className="relative w-full h-[70vh] sm:h-[80vh] md:h-screen overflow-hidden touch-pan-y"
+      className="relative w-full h-[70vh] sm:h-[80vh] md:h-screen overflow-hidden"
       aria-label="Hero"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)' }}
     >
       {/* Images */}
       {safeSlides.map((slide, index) => {
         if (!visibleIndices.has(index)) return null
         const isActive = index === activeIndex
-        const imageUrl = optimizeImageUrl(slide.image_url)
+        const imageUrl = getResponsiveImageUrl(slide)
         
         return (
           <div
@@ -227,27 +211,47 @@ export function HeroSection() {
             }`}
           >
             {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={slide.subtitle || slide.title}
-                loading={index === 0 ? 'eager' : 'lazy'}
-                fetchPriority={index === 0 ? 'high' : 'auto'}
-                decoding={index === 0 ? 'sync' : 'async'}
-                className="h-full w-full object-cover object-center"
-                onLoad={() => handleImageLoad(slide.id)}
-                onError={() => handleImageError(slide.id, imageUrl)}
-                style={{
-                  transform: 'translateZ(0)',
-                }}
-              />
+              <picture>
+                {/* Mobile (up to 640px) */}
+                <source
+                  media="(max-width: 640px)"
+                  srcSet={slide.image_mobile ? optimizeImageUrl(slide.image_mobile) : imageUrl}
+                />
+                {/* Tablet (641px - 1024px) */}
+                <source
+                  media="(max-width: 1024px)"
+                  srcSet={slide.image_tablet ? optimizeImageUrl(slide.image_tablet) : imageUrl}
+                />
+                {/* Desktop (1025px and above) */}
+                <source
+                  media="(min-width: 1025px)"
+                  srcSet={imageUrl}
+                />
+                <img
+                  src={imageUrl}
+                  alt={slide.subtitle || slide.title}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                  fetchPriority={index === 0 ? 'high' : 'auto'}
+                  decoding={index === 0 ? 'sync' : 'async'}
+                  className="h-full w-full object-cover object-center"
+                  onLoad={() => handleImageLoad(slide.id)}
+                  style={{
+                    transform: 'translateZ(0)',
+                    willChange: 'transform',
+                  }}
+                />
+              </picture>
             ) : (
-              <div className="h-full w-full bg-gradient-to-br from-primary/30 via-accent/50 to-primary/20" />
+              <div
+                className="h-full w-full"
+                style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)' }}
+              />
             )}
           </div>
         )
       })}
 
-      {/* Gradient Overlay */}
+      {/* Gradient Overlay - responsive */}
       <div
         className="absolute inset-0 z-[2]"
         style={{
@@ -255,14 +259,14 @@ export function HeroSection() {
         }}
       />
 
-      {/* Content */}
+      {/* Content - responsive typography */}
       <div className="absolute inset-0 z-[3] flex items-center justify-center px-4 sm:px-6 text-center">
         <div className="max-w-3xl mx-auto">
-          <div key={activeSlide.id} className="transition-all duration-500 ease-out">
+          <div key={activeSlide.id} className="animate-fade-in">
             <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-2 sm:mb-3 md:mb-4 leading-[1.1] tracking-wide drop-shadow-lg">
               {activeSlide.title}
             </h1>
-            <p className="text-primary text-base sm:text-lg md:text-xl lg:text-2xl font-display italic mb-6 sm:mb-8 md:mb-10 drop-shadow-md px-2">
+            <p className="text-gold-400 text-base sm:text-lg md:text-xl lg:text-2xl font-display italic mb-6 sm:mb-8 md:mb-10 drop-shadow-md px-2">
               {activeSlide.subtitle}
             </p>
             <Link
@@ -276,7 +280,7 @@ export function HeroSection() {
         </div>
       </div>
 
-      {/* Navigation Arrows - Desktop only */}
+      {/* Navigation Arrows - visible only on tablet/desktop, hidden on mobile */}
       {safeSlides.length > 1 && !isMobile && (
         <>
           <button
@@ -307,14 +311,14 @@ export function HeroSection() {
                 index === activeIndex
                   ? 'w-6 sm:w-8 md:w-10 h-1.5 sm:h-2 bg-primary shadow-md'
                   : 'w-2 sm:w-3 h-1.5 sm:h-2 bg-white/40 hover:bg-white/60'
-              } rounded-full cursor-pointer`}
+              } rounded-full`}
               aria-label={`Go to slide ${index + 1}`}
             />
           ))}
         </div>
       )}
 
-      {/* Loading indicator */}
+      {/* Loading indicator for first slide */}
       {!imagesLoaded[activeSlide.id] && activeSlide.image_url && (
         <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black/20">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
