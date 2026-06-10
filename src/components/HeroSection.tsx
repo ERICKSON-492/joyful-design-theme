@@ -3,9 +3,17 @@ import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-function optimizeImageUrl(url: string, width?: number): string {
+function optimizeImageUrl(url: string): string {
   if (!url) return ''
-  // Add your image optimization logic here if needed
+  // If it's already a full URL, return it
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // If it's a storage path, construct the full URL
+  if (url.startsWith('/storage/') || url.startsWith('storage/')) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    return `${supabaseUrl}/storage/v1/object/public/${url.replace(/^\/?storage\/v1\/object\/public\//, '')}`
+  }
   return url
 }
 
@@ -16,27 +24,41 @@ interface Slide {
   subtitle: string
   cta_text: string
   cta_link: string
-  image_mobile?: string
-  image_tablet?: string
 }
+
+const fallbackImages = [
+  'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?w=1920&h=1080&fit=crop', // African beads
+  'https://images.unsplash.com/photo-1485291571150-772bcfc10da5?w=1920&h=1080&fit=crop', // African art
+]
 
 const fallbackSlides: Slide[] = [
   {
-    id: 'fallback-hero',
-    image_url: '',
+    id: 'fallback-hero-1',
+    image_url: fallbackImages[0],
     title: 'USHANGA CHRONICLES',
     subtitle: 'One bead. A thousand stories.',
     cta_text: 'Explore the Tribe',
     cta_link: '/shop',
   },
+  {
+    id: 'fallback-hero-2',
+    image_url: fallbackImages[1],
+    title: 'Handcrafted Excellence',
+    subtitle: 'Authentic African Beads & Jewelry',
+    cta_text: 'Shop Now',
+    cta_link: '/shop',
+  },
 ]
 
 const normalizeSlides = (data: Partial<Slide>[] | null | undefined): Slide[] => {
-  if (!data || data.length === 0) return fallbackSlides
+  if (!data || data.length === 0) {
+    console.log('No slides found, using fallback')
+    return fallbackSlides
+  }
 
   const cleanedSlides = data.map((slide, index) => ({
     id: slide.id || `hero-slide-${index}`,
-    image_url: slide.image_url || '',
+    image_url: slide.image_url || fallbackSlides[index % fallbackSlides.length].image_url,
     title: slide.title?.trim() || fallbackSlides[0].title,
     subtitle: slide.subtitle?.trim() || fallbackSlides[0].subtitle,
     cta_text: slide.cta_text?.trim() || fallbackSlides[0].cta_text,
@@ -74,14 +96,19 @@ export function HeroSection() {
           'select=id,image_url,title,subtitle,cta_text,cta_link&is_active=eq.true&order=display_order.asc'
         )
 
+        console.log('Fetched hero slides:', data)
+        
         if (!isMounted) return
         const normalized = normalizeSlides(data)
+        console.log('Normalized slides:', normalized)
         setSlides(normalized)
 
         // Preload first two images
         normalized.slice(0, 2).forEach((slide, index) => {
           if (!slide.image_url) return
           const href = optimizeImageUrl(slide.image_url)
+          console.log(`Preloading image ${index}:`, href)
+          
           if (index === 0 && typeof document !== 'undefined') {
             const existing = document.head.querySelector(
               `link[rel="preload"][as="image"][data-hero-preload="true"]`
@@ -97,6 +124,8 @@ export function HeroSection() {
           }
           const img = new window.Image()
           img.src = href
+          img.onload = () => console.log(`Image ${index} loaded:`, href)
+          img.onerror = () => console.error(`Image ${index} failed to load:`, href)
         })
       } catch (err) {
         console.error('HeroSection fetch error:', err)
@@ -162,7 +191,13 @@ export function HeroSection() {
   }
 
   const handleImageLoad = (slideId: string) => {
+    console.log('Image loaded for slide:', slideId)
     setImagesLoaded(prev => ({ ...prev, [slideId]: true }))
+  }
+
+  const handleImageError = (slideId: string, url: string) => {
+    console.error('Image failed to load for slide:', slideId, url)
+    setImagesLoaded(prev => ({ ...prev, [slideId]: false }))
   }
 
   const visibleIndices = useMemo(() => {
@@ -177,12 +212,12 @@ export function HeroSection() {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)' }}
     >
       {/* Images */}
       {safeSlides.map((slide, index) => {
         if (!visibleIndices.has(index)) return null
         const isActive = index === activeIndex
+        const imageUrl = optimizeImageUrl(slide.image_url)
         
         return (
           <div
@@ -191,24 +226,22 @@ export function HeroSection() {
               isActive ? 'opacity-100 z-10' : 'opacity-0 z-0'
             }`}
           >
-            {slide.image_url ? (
+            {imageUrl ? (
               <img
-                src={optimizeImageUrl(slide.image_url)}
+                src={imageUrl}
                 alt={slide.subtitle || slide.title}
                 loading={index === 0 ? 'eager' : 'lazy'}
                 fetchPriority={index === 0 ? 'high' : 'auto'}
                 decoding={index === 0 ? 'sync' : 'async'}
                 className="h-full w-full object-cover object-center"
                 onLoad={() => handleImageLoad(slide.id)}
+                onError={() => handleImageError(slide.id, imageUrl)}
                 style={{
                   transform: 'translateZ(0)',
                 }}
               />
             ) : (
-              <div
-                className="h-full w-full"
-                style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)' }}
-              />
+              <div className="h-full w-full bg-gradient-to-br from-primary/30 via-accent/50 to-primary/20" />
             )}
           </div>
         )
