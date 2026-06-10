@@ -85,7 +85,7 @@ export default function CheckoutPage() {
 
   const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
 
-  // Helper: enqueue order confirmation email with full itemised receipt
+  // Helper: send order confirmation email with full itemised receipt using Edge Function
   const sendOrderEmail = useCallback(async (orderId: string) => {
     const targetEmail = email || accountEmail;
     if (!targetEmail) {
@@ -136,7 +136,7 @@ export default function CheckoutPage() {
         <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;color:#374151;">
           <div style="font-weight:600;color:#111827;">${item.name}</div>
           <div style="font-size:12px;color:#6b7280;margin-top:2px;">Qty ${item.quantity} × KSh ${item.price.toLocaleString()}</div>
-        </td>
+        </tr>
         <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;font-weight:700;color:#111827;text-align:right;white-space:nowrap;">
           KSh ${(item.price * item.quantity).toLocaleString()}
         </td>
@@ -209,17 +209,26 @@ export default function CheckoutPage() {
       </div>
     `;
 
+    // Send email using the Edge Function instead of RPC
     try {
-      const { error: rpcError } = await supabase.rpc('enqueue_transactional_email', {
-        recipient_email: targetEmail,
-        subject_text: `Ushanga Chronicles · Order Receipt #${orderId}`,
-        html_body: emailHtml,
-        template_label: 'order-confirmation',
+      console.log('📧 Sending email via Edge Function to:', targetEmail);
+      
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: targetEmail,
+          subject: `Ushanga Chronicles · Order Receipt #${orderId}`,
+          html: emailHtml,
+        }
       });
-      if (rpcError) throw rpcError;
-      console.log("Order confirmation email enqueued.");
+      
+      if (error) {
+        console.error('❌ Edge Function error:', error);
+        throw error;
+      }
+      
+      console.log('✅ Order confirmation email sent successfully!', data);
     } catch (err) {
-      console.error("Failed to enqueue order confirmation email:", err);
+      console.error("❌ Failed to send email:", err);
     }
   }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, address, city, county, postalCode, country]);
 
