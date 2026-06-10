@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
@@ -107,8 +108,39 @@ export default function CheckoutPage() {
 
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
 
+    // Generate the PDF receipt, upload to storage, get a signed download link
+    const shippingAddressLine = [address, county || city, postalCode, country].filter(Boolean).join(', ')
+    const receiptUrl = await generateAndUploadReceipt({
+      orderId,
+      customerName: name,
+      email: targetEmail,
+      phone,
+      items: items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
+      subtotal,
+      shippingLabel: selectedShipping?.name,
+      shippingCost,
+      grandTotal,
+      shippingAddress: shippingAddressLine,
+    })
+
+    const receiptBlock = receiptUrl
+      ? `
+        <div style="margin:18px 0;text-align:center;">
+          <a href="${receiptUrl}"
+             style="display:inline-block;background-color:#D4A017;color:#ffffff;text-decoration:none;
+                    padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:0.03em;">
+            ⬇ Download PDF Receipt
+          </a>
+          <p style="margin:8px 0 0 0;font-size:11px;color:#9ca3af;">Link valid for 12 months. Keep it for your records.</p>
+        </div>`
+      : ''
+
     const emailHtml = `
       <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;background-color:#ffffff;">
+        <div style="text-align:center;padding:14px 0;border-bottom:3px solid #D4A017;margin-bottom:18px;">
+          <div style="font-family:'Playfair Display',Georgia,serif;font-size:22px;font-weight:800;color:#1A1A1A;letter-spacing:0.04em;">USHANGA CHRONICLES</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px;letter-spacing:0.08em;text-transform:uppercase;">One bead. A thousand stories.</div>
+        </div>
         <div style="text-align:center;margin-bottom:24px;">
           <h2 style="color:#D4A017;margin:0 0 8px 0;font-size:24px;font-weight:700;">Asante for your order!</h2>
           <p style="color:#4b5563;margin:0;font-size:14px;">Hi ${name || 'there'}, your order has been received.</p>
@@ -142,9 +174,17 @@ export default function CheckoutPage() {
           </table>
         </div>
 
+        ${receiptBlock}
+
         <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;line-height:1.5;">
           ${selectedShipping ? `<p style="margin:0 0 4px 0;"><strong style="color:#374151;">Delivery:</strong> ${selectedShipping.name} (${selectedShipping.estimated_days || 'soon'})</p>` : ''}
           <p style="margin:0;">Any questions? Reply to this email or reach us on WhatsApp.</p>
+        </div>
+
+        <div style="margin-top:24px;padding-top:14px;border-top:1px solid #f3f4f6;text-align:center;font-size:11px;color:#9ca3af;line-height:1.6;">
+          Sent from <strong style="color:#1A1A1A;">Ushanga Chronicles</strong> · Nairobi, Kenya<br/>
+          admin@ushangachronicles.com · +254 748 207 000<br/>
+          <a href="https://ushangachronicles.com/privacy-policy" style="color:#9ca3af;text-decoration:underline;">Privacy Policy</a>
         </div>
       </div>
     `;
@@ -152,7 +192,7 @@ export default function CheckoutPage() {
     try {
       const { error: rpcError } = await supabase.rpc('enqueue_transactional_email', {
         recipient_email: targetEmail,
-        subject_text: `Ushanga Chronicles: Order Confirmation #${orderId}`,
+        subject_text: `Ushanga Chronicles · Order Receipt #${orderId}`,
         html_body: emailHtml,
         template_label: 'order-confirmation',
       });
@@ -161,7 +201,7 @@ export default function CheckoutPage() {
     } catch (err) {
       console.error("Failed to enqueue order confirmation email:", err);
     }
-  }, [email, accountEmail, name, grandTotal, items, selectedShipping, shippingCost]);
+  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, address, city, county, postalCode, country]);
 
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) {

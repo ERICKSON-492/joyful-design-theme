@@ -32,6 +32,7 @@ const MyOrdersPage = lazy(() => import('../pages/MyOrdersPage'))
 const ResetPasswordPage = lazy(() => import('../pages/ResetPasswordPage'))
 const UnsubscribePage = lazy(() => import('../pages/UnsubscribePage'))
 const FAQPage = lazy(() => import('../pages/FAQPage'))
+const PrivacyPolicyPage = lazy(() => import('../pages/PrivacyPolicyPage'))
 
 function RouteLoader() {
   return (
@@ -90,6 +91,7 @@ export function AnimatedRoutes() {
           <Route path="/reset-password" element={<PageTransition><ResetPasswordPage /></PageTransition>} />
           <Route path="/unsubscribe" element={<PageTransition><UnsubscribePage /></PageTransition>} />
           <Route path="/faq" element={<PageTransition><FAQPage /></PageTransition>} />
+          <Route path="/privacy-policy" element={<PageTransition><PrivacyPolicyPage /></PageTransition>} />
           <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
         </Routes>
       </AnimatePresence>
