@@ -72,6 +72,11 @@ export function Footer() {
 
         <div className="border-t border-white/10 pt-6 text-center text-xs">
           <p>© {new Date().getFullYear()} Ushanga Chronicles. One bead. A thousand stories.</p>
+          <p className="mt-2">
+            <Link to="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+            <span className="mx-2">·</span>
+            <Link to="/faq" className="hover:text-primary transition-colors">FAQ</Link>
+          </p>
         </div>
       </div>
     </footer>
