@@ -42,10 +42,49 @@ export default function AdminOrders() {
     if (!order.shipping_address || typeof order.shipping_address !== 'object' || Array.isArray(order.shipping_address)) {
       return null
     }
-
     const email = (order.shipping_address as Record<string, unknown>).email
     return typeof email === 'string' && email.trim() ? email.trim() : null
   }
+
+  const generateStatusEmailHtml = (order: Order, newStatus: string) => {
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
+        <div style="text-align: center; padding: 14px 0; border-bottom: 3px solid #D4A017; margin-bottom: 18px;">
+          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 800; color: #1A1A1A; letter-spacing: 0.04em;">USHANGA CHRONICLES</div>
+          <div style="font-size: 11px; color: #6b7280; margin-top: 2px; letter-spacing: 0.08em; text-transform: uppercase;">One bead. A thousand stories.</div>
+        </div>
+        
+        <h2 style="color: #1A1A1A; margin: 0 0 16px 0;">Hello ${order.customer_name || 'Customer'},</h2>
+        
+        <p style="color: #374151; font-size: 15px; line-height: 1.5;">Your order <strong>#${order.id.slice(0, 8)}</strong> has been updated!</p>
+        
+        <div style="margin: 24px 0; background-color: #fafafa; border-radius: 8px; padding: 20px; text-align: center;">
+          <p style="font-size: 28px; font-weight: 700; margin: 0; color: #D4A017;">
+            ${newStatus.toUpperCase()}
+          </p>
+        </div>
+        
+        ${newStatus === 'shipped' && order.tracking_number ? `
+          <div style="margin: 16px 0; padding: 12px; background-color: #f0f9ff; border-radius: 8px;">
+            <p style="margin: 0;"><strong>Tracking Number:</strong> ${order.tracking_number}</p>
+          </div>
+        ` : ''}
+        
+        <div style="margin: 16px 0; padding: 12px; background-color: #f9f9f9; border-radius: 8px;">
+          <p style="margin: 0;"><strong>Order Total:</strong> KSh ${Number(order.total_amount).toLocaleString()}</p>
+        </div>
+        
+        <p style="color: #374151; font-size: 14px;">Thank you for shopping with Ushanga Chronicles!</p>
+        
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f3f4f6; text-align: center; font-size: 12px; color: #9ca3af;">
+          <p style="margin: 0;">Questions? Reply to this email or WhatsApp +254 748 207 000</p>
+          <p style="margin: 8px 0 0 0;">
+            <a href="https://ushangachronicles.com/privacy-policy" style="color: #9ca3af;">Privacy Policy</a>
+          </p>
+        </div>
+      </div>
+    `;
+  };
 
   const updateStatus = async (id: string, newStatus: string) => {
     const order = orders.find(o => o.id === id)
@@ -69,19 +108,13 @@ export default function AdminOrders() {
         return
       }
 
-      const { error: emailError } = await supabase.functions.invoke('send-transactional-email', {
+      // Send email using the edge function
+      const { error: emailError } = await supabase.functions.invoke('send-email', {
         body: {
-          templateName: 'order-status-update',
-          recipientEmail: customerEmail,
-          idempotencyKey: `order-status-${id}-${newStatus}`,
-          templateData: {
-            customerName: order.customer_name || 'Customer',
-            orderId: id,
-            status: newStatus,
-            trackingNumber: order.tracking_number || '',
-            totalAmount: Number(order.total_amount).toLocaleString(),
-          },
-        },
+          to: customerEmail,
+          subject: `Order #${id.slice(0, 8)} Status Update - Ushanga Chronicles`,
+          html: generateStatusEmailHtml(order, newStatus)
+        }
       })
 
       if (emailError) {
@@ -90,7 +123,7 @@ export default function AdminOrders() {
         return
       }
 
-      toast.success('Status updated & email notification sent')
+      toast.success('Status updated & email sent!')
     } catch (error) {
       console.error('Order status update failed', error)
       toast.error('Failed to update order status')
