@@ -5,11 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 function optimizeImageUrl(url: string, width?: number): string {
   if (!url) return ''
-  // Add your image optimization logic here (Cloudinary, etc.)
-  // Example with Cloudinary (if you have it):
-  // if (width) {
-  //   return url.replace('/upload/', `/upload/w_${width},q_80,f_auto/`)
-  // }
+  // Add your image optimization logic here if needed
   return url
 }
 
@@ -20,8 +16,8 @@ interface Slide {
   subtitle: string
   cta_text: string
   cta_link: string
-  image_mobile?: string // Optional mobile-specific image
-  image_tablet?: string // Optional tablet-specific image
+  image_mobile?: string
+  image_tablet?: string
 }
 
 const fallbackSlides: Slide[] = [
@@ -75,7 +71,7 @@ export function HeroSection() {
       try {
         const data = await fetchPublicTable<Slide>(
           'hero_slides',
-          'select=id,image_url,title,subtitle,cta_text,cta_link,image_mobile,image_tablet&is_active=eq.true&order=display_order.asc'
+          'select=id,image_url,title,subtitle,cta_text,cta_link&is_active=eq.true&order=display_order.asc'
         )
 
         if (!isMounted) return
@@ -85,27 +81,22 @@ export function HeroSection() {
         // Preload first two images
         normalized.slice(0, 2).forEach((slide, index) => {
           if (!slide.image_url) return
-          
-          const desktopSrc = optimizeImageUrl(slide.image_url)
-          const mobileSrc = slide.image_mobile ? optimizeImageUrl(slide.image_mobile) : desktopSrc
-          
-          // Preload desktop image
-          const linkDesktop = document.createElement('link')
-          linkDesktop.rel = 'preload'
-          linkDesktop.as = 'image'
-          linkDesktop.href = desktopSrc
-          linkDesktop.setAttribute('fetchpriority', index === 0 ? 'high' : 'auto')
-          document.head.appendChild(linkDesktop)
-          
-          // Preload mobile image separately
-          if (mobileSrc !== desktopSrc) {
-            const linkMobile = document.createElement('link')
-            linkMobile.rel = 'preload'
-            linkMobile.as = 'image'
-            linkMobile.href = mobileSrc
-            linkMobile.setAttribute('media', '(max-width: 768px)')
-            document.head.appendChild(linkMobile)
+          const href = optimizeImageUrl(slide.image_url)
+          if (index === 0 && typeof document !== 'undefined') {
+            const existing = document.head.querySelector(
+              `link[rel="preload"][as="image"][data-hero-preload="true"]`
+            )
+            if (existing) existing.remove()
+            const link = document.createElement('link')
+            link.rel = 'preload'
+            link.as = 'image'
+            link.href = href
+            link.setAttribute('fetchpriority', 'high')
+            link.setAttribute('data-hero-preload', 'true')
+            document.head.appendChild(link)
           }
+          const img = new window.Image()
+          img.src = href
         })
       } catch (err) {
         console.error('HeroSection fetch error:', err)
@@ -174,23 +165,14 @@ export function HeroSection() {
     setImagesLoaded(prev => ({ ...prev, [slideId]: true }))
   }
 
-  // Get responsive image URL based on screen size
-  const getResponsiveImageUrl = (slide: Slide) => {
-    if (isMobile && slide.image_mobile) {
-      return optimizeImageUrl(slide.image_mobile)
-    }
-    return optimizeImageUrl(slide.image_url)
-  }
-
   const visibleIndices = useMemo(() => {
-    const prev = (activeIndex - 1 + safeSlides.length) % safeSlides.length
     const next = (activeIndex + 1) % safeSlides.length
-    return new Set([prev, activeIndex, next])
+    return new Set([activeIndex, next])
   }, [activeIndex, safeSlides.length])
 
   return (
     <section
-      className="relative w-full h-[70vh] sm:h-[80vh] md:h-screen overflow-hidden"
+      className="relative w-full h-[70vh] sm:h-[80vh] md:h-screen overflow-hidden touch-pan-y"
       aria-label="Hero"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -201,7 +183,6 @@ export function HeroSection() {
       {safeSlides.map((slide, index) => {
         if (!visibleIndices.has(index)) return null
         const isActive = index === activeIndex
-        const imageUrl = getResponsiveImageUrl(slide)
         
         return (
           <div
@@ -210,37 +191,19 @@ export function HeroSection() {
               isActive ? 'opacity-100 z-10' : 'opacity-0 z-0'
             }`}
           >
-            {imageUrl ? (
-              <picture>
-                {/* Mobile (up to 640px) */}
-                <source
-                  media="(max-width: 640px)"
-                  srcSet={slide.image_mobile ? optimizeImageUrl(slide.image_mobile) : imageUrl}
-                />
-                {/* Tablet (641px - 1024px) */}
-                <source
-                  media="(max-width: 1024px)"
-                  srcSet={slide.image_tablet ? optimizeImageUrl(slide.image_tablet) : imageUrl}
-                />
-                {/* Desktop (1025px and above) */}
-                <source
-                  media="(min-width: 1025px)"
-                  srcSet={imageUrl}
-                />
-                <img
-                  src={imageUrl}
-                  alt={slide.subtitle || slide.title}
-                  loading={index === 0 ? 'eager' : 'lazy'}
-                  fetchPriority={index === 0 ? 'high' : 'auto'}
-                  decoding={index === 0 ? 'sync' : 'async'}
-                  className="h-full w-full object-cover object-center"
-                  onLoad={() => handleImageLoad(slide.id)}
-                  style={{
-                    transform: 'translateZ(0)',
-                    willChange: 'transform',
-                  }}
-                />
-              </picture>
+            {slide.image_url ? (
+              <img
+                src={optimizeImageUrl(slide.image_url)}
+                alt={slide.subtitle || slide.title}
+                loading={index === 0 ? 'eager' : 'lazy'}
+                fetchPriority={index === 0 ? 'high' : 'auto'}
+                decoding={index === 0 ? 'sync' : 'async'}
+                className="h-full w-full object-cover object-center"
+                onLoad={() => handleImageLoad(slide.id)}
+                style={{
+                  transform: 'translateZ(0)',
+                }}
+              />
             ) : (
               <div
                 className="h-full w-full"
@@ -251,7 +214,7 @@ export function HeroSection() {
         )
       })}
 
-      {/* Gradient Overlay - responsive */}
+      {/* Gradient Overlay */}
       <div
         className="absolute inset-0 z-[2]"
         style={{
@@ -259,14 +222,14 @@ export function HeroSection() {
         }}
       />
 
-      {/* Content - responsive typography */}
+      {/* Content */}
       <div className="absolute inset-0 z-[3] flex items-center justify-center px-4 sm:px-6 text-center">
         <div className="max-w-3xl mx-auto">
-          <div key={activeSlide.id} className="animate-fade-in">
+          <div key={activeSlide.id} className="transition-all duration-500 ease-out">
             <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-2 sm:mb-3 md:mb-4 leading-[1.1] tracking-wide drop-shadow-lg">
               {activeSlide.title}
             </h1>
-            <p className="text-gold-400 text-base sm:text-lg md:text-xl lg:text-2xl font-display italic mb-6 sm:mb-8 md:mb-10 drop-shadow-md px-2">
+            <p className="text-primary text-base sm:text-lg md:text-xl lg:text-2xl font-display italic mb-6 sm:mb-8 md:mb-10 drop-shadow-md px-2">
               {activeSlide.subtitle}
             </p>
             <Link
@@ -280,7 +243,7 @@ export function HeroSection() {
         </div>
       </div>
 
-      {/* Navigation Arrows - visible only on tablet/desktop, hidden on mobile */}
+      {/* Navigation Arrows - Desktop only */}
       {safeSlides.length > 1 && !isMobile && (
         <>
           <button
@@ -311,14 +274,14 @@ export function HeroSection() {
                 index === activeIndex
                   ? 'w-6 sm:w-8 md:w-10 h-1.5 sm:h-2 bg-primary shadow-md'
                   : 'w-2 sm:w-3 h-1.5 sm:h-2 bg-white/40 hover:bg-white/60'
-              } rounded-full`}
+              } rounded-full cursor-pointer`}
               aria-label={`Go to slide ${index + 1}`}
             />
           ))}
         </div>
       )}
 
-      {/* Loading indicator for first slide */}
+      {/* Loading indicator */}
       {!imagesLoaded[activeSlide.id] && activeSlide.image_url && (
         <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black/20">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
