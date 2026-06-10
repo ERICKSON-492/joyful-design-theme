@@ -93,23 +93,24 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Itemised rows: name, qty, unit price, line total
-    const itemsHtml = items.map(item => `
-      <tr>
-        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;color:#374151;">
-          <div style="font-weight:600;color:#111827;">${item.name}</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:2px;">Qty ${item.quantity} × KSh ${item.price.toLocaleString()}</div>
-        </td>
-        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;font-weight:700;color:#111827;text-align:right;white-space:nowrap;">
-          KSh ${(item.price * item.quantity).toLocaleString()}
-        </td>
-      </tr>
-    `).join('');
-
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+    const shippingAddressLine = [address, county || city, postalCode, country].filter(Boolean).join(', ')
+
+    console.log('🔵 Attempting to generate receipt...')
+    console.log('🔵 Receipt input:', {
+      orderId,
+      customerName: name,
+      email: targetEmail,
+      phone,
+      items: items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
+      subtotal,
+      shippingLabel: selectedShipping?.name,
+      shippingCost,
+      grandTotal,
+      shippingAddress: shippingAddressLine,
+    })
 
     // Generate the PDF receipt, upload to storage, get a signed download link
-    const shippingAddressLine = [address, county || city, postalCode, country].filter(Boolean).join(', ')
     const receiptUrl = await generateAndUploadReceipt({
       orderId,
       customerName: name,
@@ -122,6 +123,25 @@ export default function CheckoutPage() {
       grandTotal,
       shippingAddress: shippingAddressLine,
     })
+
+    console.log('🔵 Receipt URL result:', receiptUrl)
+
+    if (!receiptUrl) {
+      console.error('❌ Receipt URL is null - upload failed!')
+    }
+
+    // Itemised rows: name, qty, unit price, line total
+    const itemsHtml = items.map(item => `
+      <tr>
+        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;color:#374151;">
+          <div style="font-weight:600;color:#111827;">${item.name}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px;">Qty ${item.quantity} × KSh ${item.price.toLocaleString()}</div>
+        </td>
+        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;font-weight:700;color:#111827;text-align:right;white-space:nowrap;">
+          KSh ${(item.price * item.quantity).toLocaleString()}
+        </td>
+      </tr>
+    `).join('');
 
     const receiptBlock = receiptUrl
       ? `
@@ -217,7 +237,7 @@ export default function CheckoutPage() {
     setStatus('creating')
 
     try {
-      // Create a single order object explicitly - FIXED
+      // Create a single order object explicitly
       const orderData = {
         phone: phone,
         customer_name: name,
@@ -242,11 +262,11 @@ export default function CheckoutPage() {
         }
       }
 
-      console.log('📦 Order data being sent:', orderData) // Debug log
+      console.log('📦 Order data being sent:', orderData)
 
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .insert(orderData)  // Use the single object
+        .insert(orderData)
         .select('id')
         .single()
 
