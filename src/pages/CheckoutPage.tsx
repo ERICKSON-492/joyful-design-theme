@@ -84,7 +84,7 @@ export default function CheckoutPage() {
 
   const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
 
-  // Helper function to dispatch order confirmation emails via Edge Function
+  // Helper: enqueue order confirmation email with full itemised receipt
   const sendOrderEmail = useCallback(async (orderId: string) => {
     const targetEmail = email || accountEmail;
     if (!targetEmail) {
@@ -92,28 +92,76 @@ export default function CheckoutPage() {
       return;
     }
 
+    // Itemised rows: name, qty, unit price, line total
+    const itemsHtml = items.map(item => `
+      <tr>
+        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;color:#374151;">
+          <div style="font-weight:600;color:#111827;">${item.name}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:2px;">Qty ${item.quantity} × KSh ${item.price.toLocaleString()}</div>
+        </td>
+        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;font-weight:700;color:#111827;text-align:right;white-space:nowrap;">
+          KSh ${(item.price * item.quantity).toLocaleString()}
+        </td>
+      </tr>
+    `).join('');
+
+    const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+
+    const emailHtml = `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;background-color:#ffffff;">
+        <div style="text-align:center;margin-bottom:24px;">
+          <h2 style="color:#D4A017;margin:0 0 8px 0;font-size:24px;font-weight:700;">Asante for your order!</h2>
+          <p style="color:#4b5563;margin:0;font-size:14px;">Hi ${name || 'there'}, your order has been received.</p>
+        </div>
+
+        <p style="color:#374151;font-size:15px;line-height:1.5;">Order <strong>#${orderId}</strong> is now being prepared. Here are your items:</p>
+
+        <div style="margin:20px 0;background-color:#fafafa;border-radius:8px;padding:16px;">
+          <h3 style="margin:0 0 12px 0;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;font-weight:700;">Order Summary</h3>
+          <table style="width:100%;border-collapse:collapse;">
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <table style="width:100%;border-collapse:collapse;margin-top:14px;">
+            <tbody>
+              <tr>
+                <td style="padding:4px 8px;font-size:13px;color:#6b7280;">Subtotal</td>
+                <td style="padding:4px 8px;font-size:13px;color:#374151;text-align:right;">KSh ${subtotal.toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td style="padding:4px 8px;font-size:13px;color:#6b7280;">Shipping${selectedShipping ? ` (${selectedShipping.name})` : ''}</td>
+                <td style="padding:4px 8px;font-size:13px;color:#374151;text-align:right;">KSh ${shippingCost.toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 8px;font-size:15px;font-weight:800;color:#111827;border-top:2px solid #e5e7eb;">Grand Total</td>
+                <td style="padding:10px 8px;font-size:18px;font-weight:800;color:#D4A017;text-align:right;border-top:2px solid #e5e7eb;">KSh ${grandTotal.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;line-height:1.5;">
+          ${selectedShipping ? `<p style="margin:0 0 4px 0;"><strong style="color:#374151;">Delivery:</strong> ${selectedShipping.name} (${selectedShipping.estimated_days || 'soon'})</p>` : ''}
+          <p style="margin:0;">Any questions? Reply to this email or reach us on WhatsApp.</p>
+        </div>
+      </div>
+    `;
+
     try {
-      await supabase.functions.invoke('process-email-queue', {
-        body: {
-          templateName: "order-confirmation",
-          recipientEmail: targetEmail,
-          templateData: {
-            customerName: name,
-            orderNumber: orderId,
-            totalAmount: `KSh ${grandTotal.toLocaleString()}`,
-            items: items.map(item => ({
-              name: item.name,
-              quantity: item.quantity,
-              price: `KSh ${(item.price * item.quantity).toLocaleString()}`
-            }))
-          }
-        }
+      const { error: rpcError } = await supabase.rpc('enqueue_transactional_email', {
+        recipient_email: targetEmail,
+        subject_text: `Ushanga Chronicles: Order Confirmation #${orderId}`,
+        html_body: emailHtml,
+        template_label: 'order-confirmation',
       });
-      console.log("Order email confirmation enqueued successfully.");
+      if (rpcError) throw rpcError;
+      console.log("Order confirmation email enqueued.");
     } catch (err) {
       console.error("Failed to enqueue order confirmation email:", err);
     }
-  }, [email, accountEmail, name, grandTotal, items]);
+  }, [email, accountEmail, name, grandTotal, items, selectedShipping, shippingCost]);
 
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) {
