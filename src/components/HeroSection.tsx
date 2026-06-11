@@ -31,7 +31,7 @@ const normalizeSlides = (
 ): Slide[] => {
   if (!data || data.length === 0) return fallbackSlides
 
-  const cleanedSlides = data.map((slide, index) => ({
+  return data.map((slide, index) => ({
     id: slide.id || `hero-slide-${index}`,
     image_url: slide.image_url || '',
     title: slide.title?.trim() || fallbackSlides[0].title,
@@ -39,10 +39,6 @@ const normalizeSlides = (
     cta_text: slide.cta_text?.trim() || fallbackSlides[0].cta_text,
     cta_link: slide.cta_link?.trim() || fallbackSlides[0].cta_link,
   }))
-
-  return cleanedSlides.length > 0
-    ? cleanedSlides
-    : fallbackSlides
 }
 
 export function HeroSection() {
@@ -63,53 +59,24 @@ export function HeroSection() {
 
         const normalized = normalizeSlides(data)
         setSlides(normalized)
+        
+        // Safely adjust current index if the newly loaded slide array length is shorter
+        setCurrent((prev) => (prev >= normalized.length ? 0 : prev))
 
-        if (typeof window !== 'undefined') {
-          normalized.slice(0, 2).forEach((slide, index) => {
-            if (!slide.image_url) return
-
-            const href = optimizeImageUrl(slide.image_url)
-
-            if (
-              index === 0 &&
-              typeof document !== 'undefined'
-            ) {
-              document
-                .querySelectorAll(
-                  'link[data-hero-preload="true"]'
-                )
-                .forEach((el) => el.remove())
-
-              const preloadLink =
-                document.createElement('link')
-
-              preloadLink.rel = 'preload'
-              preloadLink.as = 'image'
-              preloadLink.href = href
-              preloadLink.setAttribute(
-                'fetchpriority',
-                'high'
-              )
-              preloadLink.setAttribute(
-                'data-hero-preload',
-                'true'
-              )
-
-              document.head.appendChild(preloadLink)
+        // Preload upcoming slide images natively via browser cache allocation
+        if (typeof window !== 'undefined' && normalized.length > 1) {
+          normalized.slice(0, 2).forEach((slide) => {
+            if (slide.image_url) {
+              const img = new Image()
+              img.src = optimizeImageUrl(slide.image_url)
             }
-
-            const img = new Image()
-            img.src = href
           })
         }
       } catch (error) {
-        console.error(
-          'HeroSection fetch error:',
-          error
-        )
-
+        console.error('HeroSection fetch error:', error)
         if (isMounted) {
           setSlides(fallbackSlides)
+          setCurrent(0)
         }
       }
     }
@@ -122,61 +89,24 @@ export function HeroSection() {
   }, [])
 
   const safeSlides = useMemo(
-    () =>
-      slides.length > 0
-        ? slides
-        : fallbackSlides,
+    () => (slides.length > 0 ? slides : fallbackSlides),
     [slides]
   )
 
-  useEffect(() => {
-    if (current >= safeSlides.length) {
-      setCurrent(0)
-    }
-  }, [current, safeSlides.length])
-
-  const activeIndex =
-    current < safeSlides.length ? current : 0
-
-  const activeSlide =
-    safeSlides[activeIndex] || fallbackSlides[0]
+  // Derive target indexes safely inline during rendering execution
+  const activeIndex = current < safeSlides.length ? current : 0
+  const activeSlide = safeSlides[activeIndex] || fallbackSlides[0]
 
   const nextSlide = useCallback(() => {
-    setCurrent((prev) =>
-      safeSlides.length > 0
-        ? (prev + 1) % safeSlides.length
-        : 0
-    )
+    setCurrent((prev) => (safeSlides.length > 0 ? (prev + 1) % safeSlides.length : 0))
   }, [safeSlides.length])
 
   useEffect(() => {
-    if (
-      typeof window === 'undefined' ||
-      safeSlides.length <= 1
-    ) {
-      return
-    }
+    if (typeof window === 'undefined' || safeSlides.length <= 1) return
 
-    const timer = window.setInterval(
-      nextSlide,
-      4500
-    )
-
-    return () => {
-      window.clearInterval(timer)
-    }
+    const timer = window.setInterval(nextSlide, 4500)
+    return () => window.clearInterval(timer)
   }, [nextSlide, safeSlides.length])
-
-  const visibleIndices = useMemo(() => {
-    if (safeSlides.length === 1) {
-      return new Set([0])
-    }
-
-    return new Set([
-      activeIndex,
-      (activeIndex + 1) % safeSlides.length,
-    ])
-  }, [activeIndex, safeSlides.length])
 
   return (
     <section
@@ -188,35 +118,16 @@ export function HeroSection() {
       }}
     >
       {safeSlides.map((slide, index) => {
-        if (!visibleIndices.has(index)) return null
-
-        const isActive =
-          index === activeIndex
+        const isActive = index === activeIndex
 
         return slide.image_url ? (
           <img
             key={slide.id}
-            src={optimizeImageUrl(
-              slide.image_url
-            )}
-            alt={
-              slide.subtitle || slide.title
-            }
-            loading={
-              index === 0
-                ? 'eager'
-                : 'lazy'
-            }
-            decoding={
-              index === 0
-                ? 'sync'
-                : 'async'
-            }
-            fetchPriority={
-              index === 0
-                ? 'high'
-                : 'auto'
-            }
+            src={optimizeImageUrl(slide.image_url)}
+            alt={slide.subtitle || slide.title}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            decoding={index === 0 ? 'sync' : 'async'}
+            fetchPriority={index === 0 ? 'high' : 'auto'}
             className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-out"
             style={{
               zIndex: isActive ? 1 : 0,
@@ -226,9 +137,10 @@ export function HeroSection() {
         ) : (
           <div
             key={slide.id}
-            className="absolute inset-0 h-full w-full"
+            className="absolute inset-0 h-full w-full transition-opacity duration-500 ease-out"
             style={{
               zIndex: isActive ? 1 : 0,
+              opacity: isActive ? 1 : 0,
               background:
                 'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)',
             }}
@@ -236,6 +148,7 @@ export function HeroSection() {
         )
       })}
 
+      {/* Decorative Dark Overlay */}
       <div
         className="absolute inset-0 z-[2]"
         style={{
@@ -244,12 +157,10 @@ export function HeroSection() {
         }}
       />
 
+      {/* Slide Content Display */}
       <div className="absolute inset-0 z-[3] flex items-center justify-center px-6 text-center">
         <div className="max-w-3xl">
-          <div
-            key={activeSlide.id}
-            className="animate-fade-in"
-          >
+          <div key={activeSlide.id} className="animate-fade-in">
             <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-4 leading-[1.1] tracking-wide drop-shadow-lg">
               {activeSlide.title}
             </h1>
@@ -271,26 +182,19 @@ export function HeroSection() {
         </div>
       </div>
 
+      {/* Carousel Indicator Track */}
       {safeSlides.length > 1 && (
         <div className="absolute bottom-8 left-1/2 z-[4] flex -translate-x-1/2 gap-3">
-          {safeSlides.map(
-            (slide, index) => (
-              <button
-                key={slide.id}
-                onClick={() =>
-                  setCurrent(index)
-                }
-                className={`h-1.5 rounded-full transition-all duration-500 ${
-                  index === activeIndex
-                    ? 'w-10 bg-primary shadow-md'
-                    : 'w-5 bg-white/40 hover:bg-white/60'
-                }`}
-                aria-label={`Go to slide ${
-                  index + 1
-                }`}
-              />
-            )
-          )}
+          {safeSlides.map((slide, index) => (
+            <button
+              key={slide.id}
+              onClick={() => setCurrent(index)}
+              className={`h-1.5 rounded-full transition-all duration-500 ${
+                index === activeIndex ? 'w-10 bg-primary shadow-md' : 'w-5 bg-white/40 hover:bg-white/60'
+              }`}
+              aria-label={`Go to slide ${index + 1}`}
+            />
+          ))}
         </div>
       )}
     </section>
