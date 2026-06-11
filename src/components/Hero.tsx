@@ -23,7 +23,6 @@ const slides = [
 export function Hero() {
   const [current, setCurrent] = useState(0)
 
-  // Memoized navigation functions to prevent unnecessary rerenders
   const next = useCallback(() => {
     setCurrent((c) => (c + 1) % slides.length)
   }, [])
@@ -36,17 +35,13 @@ export function Hero() {
     setCurrent(index)
   }, [])
 
-  // Combined background preloading & auto-slider controller
   useEffect(() => {
     if (slides.length <= 1) return
 
-    // Preload the next index ahead of time natively via browser cache allocation
     const nextIndex = (current + 1) % slides.length
     const img = new Image()
     img.src = slides[nextIndex].image
 
-    // Setting up the interval loop. It automatically tears down and resets 
-    // whenever 'current' changes due to manual user interaction.
     const timer = window.setInterval(next, 5000)
 
     return () => window.clearInterval(timer)
@@ -79,23 +74,34 @@ export function Hero() {
               className="w-full h-full object-cover object-center"
             />
 
-            {/* Overlay to ensure text contrast */}
             <div className="absolute inset-0 bg-black/45" />
 
-            {/* Content container */}
             <div className="absolute inset-0 z-20 flex items-center justify-center px-4 text-center">
-              <div className="max-w-3xl">
-                <h2 className="font-display text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-semibold text-white mb-4 leading-tight">
+              {/* VITAL CHANGE: Adding key={current} here forces this container to
+                remount on every slide change, re-triggering CSS animations.
+              */}
+              <div key={current} className="max-w-3xl">
+                <h2
+                  className={`font-display text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-semibold text-white mb-4 leading-tight ${
+                    isCurrent ? 'animate-hero-content' : 'opacity-0'
+                  }`}
+                >
                   {slide.title}
                 </h2>
 
-                <p className="text-white/90 text-base sm:text-lg md:text-xl mb-8 font-body font-light max-w-2xl mx-auto">
+                <p
+                  className={`text-white/90 text-base sm:text-lg md:text-xl mb-8 font-body font-light max-w-2xl mx-auto ${
+                    isCurrent ? 'animate-hero-content animation-delay-200' : 'opacity-0'
+                  }`}
+                >
                   {slide.subtitle}
                 </p>
 
                 <a
                   href={slide.href}
-                  className="inline-block bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 text-sm md:text-base font-semibold tracking-wider uppercase transition-all duration-300 rounded-sm shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                  className={`inline-block bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 text-sm md:text-base font-semibold tracking-wider uppercase transition-all duration-300 rounded-sm shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${
+                    isCurrent ? 'animate-hero-content animation-delay-400' : 'opacity-0'
+                  }`}
                 >
                   {slide.cta}
                 </a>
@@ -105,7 +111,6 @@ export function Hero() {
         )
       })}
 
-      {/* Manual Navigation - Previous */}
       <button
         onClick={prev}
         className="absolute left-3 md:left-5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-sm p-2 md:p-3 rounded-full transition-colors z-30"
@@ -114,7 +119,6 @@ export function Hero() {
         <ChevronLeft className="w-5 h-5 md:w-6 md:h-6 text-white" />
       </button>
 
-      {/* Manual Navigation - Next */}
       <button
         onClick={next}
         className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-sm p-2 md:p-3 rounded-full transition-colors z-30"
@@ -123,7 +127,6 @@ export function Hero() {
         <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-white" />
       </button>
 
-      {/* Dot Indicators */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-30">
         {slides.map((_, i) => (
           <button
