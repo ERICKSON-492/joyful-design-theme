@@ -349,6 +349,24 @@ export type Database = {
         }
         Relationships: []
       }
+      newsletter_digest_state: {
+        Row: {
+          id: number
+          last_sent_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          last_sent_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          last_sent_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       newsletter_subscribers: {
         Row: {
           created_at: string
