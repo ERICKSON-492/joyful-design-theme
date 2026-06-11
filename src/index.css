@@ -167,3 +167,30 @@ html {
     transition: opacity 500ms ease;
   }
 }
+/* Custom Hero Text Animations */
+@keyframes hero-text-in {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Base class applied to animating elements */
+.animate-hero-content {
+  animation: hero-text-in 0.8s ease-out forwards;
+  /* Ensure starting state is hidden before animation runs */
+  opacity: 0; 
+}
+
+/* Staggered delays so they don't all pop in at once */
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.animation-delay-400 {
+  animation-delay: 400ms;
+}
