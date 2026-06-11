@@ -13,15 +13,17 @@ function escapeHtml(s: string): string {
 
 function buildEmail(opts: {
   products: any[]
+  posts: any[]
   unsubscribeUrl: string
 }): { subject: string; html: string } {
-  const { products, unsubscribeUrl } = opts
-  const count = products.length
-  const subject = count === 1
-    ? `New from Ushanga Chronicles: ${products[0].name}`
-    : `${count} new pieces just landed at Ushanga Chronicles`
+  const { products, posts, unsubscribeUrl } = opts
+  const count = products.length + posts.length
+  let subject: string
+  if (count === 1 && products.length === 1) subject = `New from Ushanga Chronicles: ${products[0].name}`
+  else if (count === 1 && posts.length === 1) subject = `From the Chronicle: ${posts[0].title}`
+  else subject = `${count} new from Ushanga Chronicles`
 
-  const cards = products.map((p) => {
+  const productCards = products.map((p) => {
     const img = (p.image_urls && p.image_urls[0]) || p.image_url || ''
     const price = p.price_min && p.price_max && p.price_min !== p.price_max
       ? `KSh ${Number(p.price_min).toLocaleString()} – ${Number(p.price_max).toLocaleString()}`
@@ -32,12 +34,31 @@ function buildEmail(opts: {
         <tr>
           ${img ? `<td width="140" style="padding:0;"><a href="${link}"><img src="${escapeHtml(img)}" width="140" height="140" alt="${escapeHtml(p.name)}" style="display:block; width:140px; height:140px; object-fit:cover; border:0;"></a></td>` : ''}
           <td style="padding:16px 18px; vertical-align:top; font-family: Georgia, 'Playfair Display', serif;">
+            <span style="display:inline-block; background:#D4A017; color:#1A1A1A; font-family:Arial,sans-serif; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:3px 8px; border-radius:3px; margin-bottom:8px;">New Piece</span>
             <a href="${link}" style="color:#1A1A1A; text-decoration:none;">
               <h3 style="margin:0 0 6px 0; font-size:18px; font-weight:700;">${escapeHtml(p.name)}</h3>
             </a>
             <p style="margin:0 0 10px 0; color:#D4A017; font-family: Arial, sans-serif; font-weight:700; font-size:14px;">${price}</p>
             <p style="margin:0 0 12px 0; color:#555; font-family: Arial, sans-serif; font-size:13px; line-height:1.5;">${escapeHtml((p.description || '').slice(0, 140))}${(p.description || '').length > 140 ? '…' : ''}</p>
             <a href="${link}" style="display:inline-block; background:#D4A017; color:#1A1A1A; text-decoration:none; padding:8px 16px; font-family: Arial, sans-serif; font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; border-radius:4px;">Claim This</a>
+          </td>
+        </tr>
+      </table>`
+  }).join('')
+
+  const postCards = posts.map((post) => {
+    const link = `${SITE_URL}/chronicle/${post.slug}`
+    return `
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 20px 0; border:1px solid #ecdfc7; border-radius:8px; overflow:hidden;">
+        <tr>
+          ${post.cover_image_url ? `<td width="140" style="padding:0;"><a href="${link}"><img src="${escapeHtml(post.cover_image_url)}" width="140" height="140" alt="${escapeHtml(post.title)}" style="display:block; width:140px; height:140px; object-fit:cover; border:0;"></a></td>` : ''}
+          <td style="padding:16px 18px; vertical-align:top; font-family: Georgia, 'Playfair Display', serif;">
+            <span style="display:inline-block; background:#1A1A1A; color:#FFFDF7; font-family:Arial,sans-serif; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:3px 8px; border-radius:3px; margin-bottom:8px;">From the Chronicle</span>
+            <a href="${link}" style="color:#1A1A1A; text-decoration:none;">
+              <h3 style="margin:0 0 6px 0; font-size:18px; font-weight:700;">${escapeHtml(post.title)}</h3>
+            </a>
+            <p style="margin:0 0 12px 0; color:#555; font-family: Arial, sans-serif; font-size:13px; line-height:1.5;">${escapeHtml((post.excerpt || '').slice(0, 180))}</p>
+            <a href="${link}" style="display:inline-block; background:#1A1A1A; color:#FFFDF7; text-decoration:none; padding:8px 16px; font-family: Arial, sans-serif; font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; border-radius:4px;">Read Story</a>
           </td>
         </tr>
       </table>`
@@ -55,7 +76,7 @@ function buildEmail(opts: {
             <h2 style="font-family: Georgia, serif; color:#1A1A1A; font-size:22px; margin:0 0 8px 0;">${count === 1 ? 'A new piece for the Tribe' : 'New pieces for the Tribe'}</h2>
             <p style="font-family: Arial, sans-serif; color:#444; font-size:14px; line-height:1.5; margin:0;">Freshly handcrafted in Nairobi and just added to the collection.</p>
           </td></tr>
-          <tr><td>${cards}</td></tr>
+          <tr><td>${productCards}${postCards}</td></tr>
           <tr><td style="text-align:center; padding:24px 0 12px 0;">
             <a href="${SITE_URL}/shop" style="display:inline-block; background:#1A1A1A; color:#FFFDF7; text-decoration:none; padding:12px 28px; font-family: Arial, sans-serif; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; border-radius:4px;">Explore the Tribe</a>
           </td></tr>
@@ -94,8 +115,20 @@ Deno.serve(async (req) => {
       .limit(20)
     if (prodErr) throw prodErr
 
-    if (!products || products.length === 0) {
-      return new Response(JSON.stringify({ ok: true, sent: 0, reason: 'no_new_products' }), {
+    // 2b. New Chronicle posts since last digest
+    const { data: posts } = await supabase
+      .from('chronicle_posts')
+      .select('id, title, slug, excerpt, cover_image_url, published_at')
+      .eq('is_published', true)
+      .gt('published_at', since)
+      .order('published_at', { ascending: false })
+      .limit(10)
+
+    const productList = products || []
+    const postList = posts || []
+
+    if (productList.length === 0 && postList.length === 0) {
+      return new Response(JSON.stringify({ ok: true, sent: 0, reason: 'no_new_content' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -117,7 +150,7 @@ Deno.serve(async (req) => {
         const token = crypto.randomUUID().replace(/-/g, '')
         await supabase.from('email_unsubscribe_tokens').insert({ email, token })
         const unsubscribeUrl = `${SITE_URL}/unsubscribe?token=${token}`
-        const { subject, html } = buildEmail({ products, unsubscribeUrl })
+        const { subject, html } = buildEmail({ products: productList, posts: postList, unsubscribeUrl })
 
         const { error: rpcErr } = await supabase.rpc('enqueue_transactional_email', {
           recipient_email: email,
@@ -138,7 +171,7 @@ Deno.serve(async (req) => {
       .update({ last_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', 1)
 
-    return new Response(JSON.stringify({ ok: true, products: products.length, sent, failed }), {
+    return new Response(JSON.stringify({ ok: true, products: productList.length, posts: postList.length, sent, failed }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (e: any) {
