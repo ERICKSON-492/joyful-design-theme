@@ -71,13 +71,10 @@ export function Hero() {
               loading={i === 0 ? 'eager' : 'lazy'}
               decoding={i === 0 ? 'sync' : 'async'}
               fetchPriority={i === 0 ? 'high' : 'auto'}
-              className="w-full h-full object-cover md:object-cover object-center block md:object-cover"
+              className="w-full h-full object-cover object-center"
             />
 
-            {/* Add this new div for mobile background */}
-            <div className="md:hidden absolute inset-0 bg-black/60 z-[1]" />
-
-            <div className="absolute inset-0 bg-black/45 md:bg-black/45" />
+            <div className="absolute inset-0 bg-black/45" />
 
             <div className="absolute inset-0 z-20 flex items-center justify-center px-4 text-center">
               <div key={current} className="max-w-3xl">
@@ -141,13 +138,18 @@ export function Hero() {
         ))}
       </div>
 
-      {/* Pure CSS solution for mobile image handling */}
+      {/* Mobile-specific image positioning to minimize cropping */}
       <style>{`
         @media (max-width: 768px) {
           img {
-            object-fit: contain !important;
-            object-position: top center !important;
-            background-color: #000;
+            object-fit: cover !important;
+            object-position: center 30% !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          img {
+            object-position: center 25% !important;
           }
         }
       `}</style>
