@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { useCurrency } from '@/contexts/CurrencyContext'
 
 interface Product {
   id: string
@@ -13,6 +14,7 @@ interface Product {
 
 export function RelatedProducts({ productId, category }: { productId: string; category: string }) {
   const [products, setProducts] = useState<Product[]>([])
+  const { format } = useCurrency()
 
   useEffect(() => {
     fetchPublicTable<Product>(
@@ -40,7 +42,7 @@ export function RelatedProducts({ productId, category }: { productId: string; ca
             </div>
             <h3 className="text-sm font-medium text-foreground line-clamp-1 group-hover:text-primary transition-colors">{p.name}</h3>
             <p className="text-sm text-primary font-semibold mt-0.5">
-              {p.price_min ? `From KSh ${p.price_min.toLocaleString()}` : `KSh ${p.price.toLocaleString()}`}
+              {p.price_min ? `From ${format(p.price_min)}` : format(p.price)}
             </p>
           </Link>
         ))}
