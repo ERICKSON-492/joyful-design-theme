@@ -189,6 +189,10 @@ export function Navbar() {
 
             {/* Right side: search + admin + cart + mobile menu */}
             <div className="flex items-center gap-0.5">
+              {/* Currency switcher (mobile shows compact, desktop already in top bar) */}
+              <div className="md:hidden mr-1 px-2 py-1.5 border border-border rounded-full">
+                <CurrencySwitcher compact />
+              </div>
               {/* Search - inline on desktop */}
               <div className="hidden lg:block relative mr-2">
                 <form onSubmit={handleSearch} className="flex items-center">
