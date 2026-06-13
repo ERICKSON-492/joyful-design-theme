@@ -4,10 +4,12 @@ import { X, Plus, Minus, Trash2, ShoppingBag, LogIn } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
+import { useCurrency } from '@/contexts/CurrencyContext'
 
 export function CartDrawer() {
   const { items, isOpen, setIsOpen, removeFromCart, updateQuantity, totalItems, totalPrice, clearCart } = useCart()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { format, currency } = useCurrency()
 
   useEffect(() => {
     const check = async () => {
@@ -76,7 +78,7 @@ export function CartDrawer() {
                     )}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-sm text-foreground truncate">{item.name}</h3>
-                      <p className="text-primary font-bold text-sm mt-0.5">KSh {item.price.toLocaleString()}</p>
+                      <p className="text-primary font-bold text-sm mt-0.5">{format(item.price)}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity - 1)}
@@ -109,8 +111,13 @@ export function CartDrawer() {
               <div className="border-t border-border p-4 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="font-display font-semibold text-foreground">Total</span>
-                  <span className="font-bold text-lg text-primary">KSh {totalPrice.toLocaleString()}</span>
+                  <span className="font-bold text-lg text-primary">{format(totalPrice)}</span>
                 </div>
+                {currency !== 'KES' && (
+                  <p className="text-[11px] text-muted-foreground text-center">
+                    Approx. shown in {currency}. You will be charged <span className="font-semibold">KSh {totalPrice.toLocaleString()}</span> at checkout.
+                  </p>
+                )}
                 {isLoggedIn ? (
                   <Link
                     to="/checkout"
