@@ -1,15 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package, Home, BookOpen, Store, Palette, Users, Truck } from 'lucide-react'
+import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package, Home, BookOpen, Store, Palette, Users, Truck, ChevronDown, Sparkles, Gem, Sofa, PawPrint } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
 
+const shopCategories = [
+  { label: 'All Products', href: '/shop', icon: Store },
+  { label: 'Jewelry & Apparel', href: '/shop?cat=wear-it', icon: Gem },
+  { label: 'Home Decor & Tableware', href: '/shop?cat=live-with-it', icon: Sofa },
+  { label: 'Pet Accessories', href: '/shop?cat=for-your-pet', icon: PawPrint },
+]
+
 const navLinks = [
   { label: 'Home', href: '/' },
   { label: 'The Chronicle', href: '/about-us' },
-  { label: 'Shop', href: '/shop' },
-  { label: 'Create Yours', href: '/custom-order' },
+  { label: 'Shop', href: '/shop', isShop: true },
   { label: 'Tribe Looks', href: '/tribe-looks' },
   { label: 'Wholesale', href: '/wholesale-gifting' },
 ]
@@ -20,6 +26,8 @@ export function Navbar() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [shopOpen, setShopOpen] = useState(false)
+  const shopRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
   const navigate = useNavigate()
   const { totalItems, setIsOpen: setCartOpen } = useCart()
@@ -43,7 +51,16 @@ export function Navbar() {
   useEffect(() => {
     setIsOpen(false)
     setSearchOpen(false)
+    setShopOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (shopRef.current && !shopRef.current.contains(e.target as Node)) setShopOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,24 +111,76 @@ export function Navbar() {
 
             {/* Desktop Nav Links - centered */}
             <div className="hidden lg:flex items-center gap-7 mx-6">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.label}
-                  to={link.href}
-                  className={`text-sm font-medium transition-colors hover:text-primary relative py-1 whitespace-nowrap ${
-                    location.pathname === link.href ? 'text-primary' : 'text-foreground'
-                  }`}
-                >
-                  {link.label}
-                  {location.pathname === link.href && (
-                    <motion.div
-                      layoutId="nav-underline"
-                      className="absolute -bottom-0.5 left-0 right-0 h-0.5 bg-primary"
-                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                    />
-                  )}
-                </Link>
-              ))}
+              {navLinks.map((link) => {
+                if (link.isShop) {
+                  const active = location.pathname.startsWith('/shop')
+                  return (
+                    <div key={link.label} className="relative" ref={shopRef}>
+                      <button
+                        onClick={() => setShopOpen(o => !o)}
+                        onMouseEnter={() => setShopOpen(true)}
+                        className={`text-sm font-medium transition-colors hover:text-primary relative py-1 whitespace-nowrap flex items-center gap-1 ${active ? 'text-primary' : 'text-foreground'}`}
+                      >
+                        Shop <ChevronDown className={`w-3.5 h-3.5 transition-transform ${shopOpen ? 'rotate-180' : ''}`} />
+                        {active && (
+                          <motion.div layoutId="nav-underline" className="absolute -bottom-0.5 left-0 right-0 h-0.5 bg-primary" transition={{ type: 'spring', stiffness: 300, damping: 30 }} />
+                        )}
+                      </button>
+                      <AnimatePresence>
+                        {shopOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.15 }}
+                            onMouseLeave={() => setShopOpen(false)}
+                            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-background border border-border shadow-xl rounded-md overflow-hidden z-50"
+                          >
+                            {shopCategories.map(c => {
+                              const Icon = c.icon
+                              return (
+                                <Link key={c.label} to={c.href} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground hover:bg-accent hover:text-primary transition-colors">
+                                  <Icon className="w-4 h-4 text-primary" />
+                                  {c.label}
+                                </Link>
+                              )
+                            })}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )
+                }
+                return (
+                  <Link
+                    key={link.label}
+                    to={link.href}
+                    className={`text-sm font-medium transition-colors hover:text-primary relative py-1 whitespace-nowrap ${
+                      location.pathname === link.href ? 'text-primary' : 'text-foreground'
+                    }`}
+                  >
+                    {link.label}
+                    {location.pathname === link.href && (
+                      <motion.div
+                        layoutId="nav-underline"
+                        className="absolute -bottom-0.5 left-0 right-0 h-0.5 bg-primary"
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                      />
+                    )}
+                  </Link>
+                )
+              })}
+              <Link
+                to="/custom-order"
+                className={`text-sm font-bold transition-all whitespace-nowrap inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border-2 border-primary ${
+                  location.pathname === '/custom-order'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-primary hover:bg-primary hover:text-primary-foreground'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Create Yours
+              </Link>
             </div>
 
             {/* Right side: search + admin + cart + mobile menu */}
@@ -276,12 +345,15 @@ export function Navbar() {
               {/* Nav Links */}
               <nav className="flex-1 overflow-y-auto py-4">
                 {[
-                  { ...navLinks[0], icon: Home },
-                  { ...navLinks[1], icon: BookOpen },
-                  { ...navLinks[2], icon: Store },
-                  { ...navLinks[3], icon: Palette },
-                  { ...navLinks[4], icon: Users },
-                  { ...navLinks[5], icon: Truck },
+                  { label: 'Home', href: '/', icon: Home },
+                  { label: 'The Chronicle', href: '/about-us', icon: BookOpen },
+                  { label: 'Shop — All', href: '/shop', icon: Store },
+                  { label: 'Jewelry & Apparel', href: '/shop?cat=wear-it', icon: Gem },
+                  { label: 'Home Decor & Tableware', href: '/shop?cat=live-with-it', icon: Sofa },
+                  { label: 'Pet Accessories', href: '/shop?cat=for-your-pet', icon: PawPrint },
+                  { label: 'Create Yours', href: '/custom-order', icon: Palette },
+                  { label: 'Tribe Looks', href: '/tribe-looks', icon: Users },
+                  { label: 'Wholesale', href: '/wholesale-gifting', icon: Truck },
                 ].map((link) => {
                   const Icon = link.icon
                   return (
@@ -290,7 +362,7 @@ export function Navbar() {
                       to={link.href}
                       onClick={() => setIsOpen(false)}
                       className={`flex items-center gap-3 px-5 py-3.5 text-base font-medium transition-colors ${
-                        location.pathname === link.href
+                        location.pathname + location.search === link.href || (link.href === '/' && location.pathname === '/')
                           ? 'text-primary bg-primary/10 border-r-2 border-primary'
                           : 'text-foreground hover:bg-accent'
                       }`}

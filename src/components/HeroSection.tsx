@@ -181,6 +181,10 @@ export function HeroSection() {
               {activeSlide.subtitle}
             </p>
 
+            <p className="text-white/90 text-base md:text-lg max-w-2xl mx-auto mb-8 leading-relaxed drop-shadow">
+              Handcrafted, heritage-inspired African jewelry, pet accessories, and home decor made by artisans in Nairobi.
+            </p>
+
             <Link
               to={activeSlide.cta_link}
               className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-10 py-4 text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
