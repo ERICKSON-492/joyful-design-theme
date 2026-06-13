@@ -4,6 +4,7 @@ import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, Mes
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
+import { CurrencySwitcher } from './CurrencySwitcher'
 
 const shopCategories = [
   { label: 'All Products', href: '/shop', icon: Store },
@@ -96,6 +97,9 @@ export function Navbar() {
             <a href="tel:+254748207000" className="text-xs hover:opacity-70 transition-opacity">
               +254 748 207 000
             </a>
+          </div>
+          <div className="ml-3 hidden md:block">
+            <CurrencySwitcher />
           </div>
         </div>
       </div>
