@@ -71,15 +71,15 @@ export function Hero() {
               loading={i === 0 ? 'eager' : 'lazy'}
               decoding={i === 0 ? 'sync' : 'async'}
               fetchPriority={i === 0 ? 'high' : 'auto'}
-              className="w-full h-full object-cover object-center"
+              className="w-full h-full object-cover md:object-cover object-center block md:object-cover"
             />
 
-            <div className="absolute inset-0 bg-black/45" />
+            {/* Add this new div for mobile background */}
+            <div className="md:hidden absolute inset-0 bg-black/60 z-[1]" />
+
+            <div className="absolute inset-0 bg-black/45 md:bg-black/45" />
 
             <div className="absolute inset-0 z-20 flex items-center justify-center px-4 text-center">
-              {/* VITAL CHANGE: Adding key={current} here forces this container to
-                remount on every slide change, re-triggering CSS animations.
-              */}
               <div key={current} className="max-w-3xl">
                 <h2
                   className={`font-display text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-semibold text-white mb-4 leading-tight ${
@@ -140,6 +140,17 @@ export function Hero() {
           />
         ))}
       </div>
+
+      {/* Pure CSS solution for mobile image handling */}
+      <style>{`
+        @media (max-width: 768px) {
+          img {
+            object-fit: contain !important;
+            object-position: top center !important;
+            background-color: #000;
+          }
+        }
+      `}</style>
     </section>
   )
 }
