@@ -345,12 +345,15 @@ export function Navbar() {
               {/* Nav Links */}
               <nav className="flex-1 overflow-y-auto py-4">
                 {[
-                  { ...navLinks[0], icon: Home },
-                  { ...navLinks[1], icon: BookOpen },
-                  { ...navLinks[2], icon: Store },
-                  { ...navLinks[3], icon: Palette },
-                  { ...navLinks[4], icon: Users },
-                  { ...navLinks[5], icon: Truck },
+                  { label: 'Home', href: '/', icon: Home },
+                  { label: 'The Chronicle', href: '/about-us', icon: BookOpen },
+                  { label: 'Shop — All', href: '/shop', icon: Store },
+                  { label: 'Jewelry & Apparel', href: '/shop?cat=wear-it', icon: Gem },
+                  { label: 'Home Decor & Tableware', href: '/shop?cat=live-with-it', icon: Sofa },
+                  { label: 'Pet Accessories', href: '/shop?cat=for-your-pet', icon: PawPrint },
+                  { label: 'Create Yours', href: '/custom-order', icon: Palette },
+                  { label: 'Tribe Looks', href: '/tribe-looks', icon: Users },
+                  { label: 'Wholesale', href: '/wholesale-gifting', icon: Truck },
                 ].map((link) => {
                   const Icon = link.icon
                   return (
@@ -359,7 +362,7 @@ export function Navbar() {
                       to={link.href}
                       onClick={() => setIsOpen(false)}
                       className={`flex items-center gap-3 px-5 py-3.5 text-base font-medium transition-colors ${
-                        location.pathname === link.href
+                        location.pathname + location.search === link.href || (link.href === '/' && location.pathname === '/')
                           ? 'text-primary bg-primary/10 border-r-2 border-primary'
                           : 'text-foreground hover:bg-accent'
                       }`}
