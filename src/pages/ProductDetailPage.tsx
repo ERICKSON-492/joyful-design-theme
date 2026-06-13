@@ -7,6 +7,7 @@ import { ProductReviews } from '@/components/ProductReviews'
 import { RelatedProducts } from '@/components/RelatedProducts'
 import { RecentlyViewed } from '@/components/RecentlyViewed'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
+import { useCurrency } from '@/contexts/CurrencyContext'
 
 interface Product {
   id: string
