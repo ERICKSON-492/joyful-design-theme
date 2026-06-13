@@ -4,6 +4,7 @@ import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { useCurrency } from '@/contexts/CurrencyContext'
 
 interface Product {
   id: string
@@ -27,6 +28,7 @@ export function FeaturedProducts() {
   const [offset, setOffset] = useState(0)
   const [hasLoaded, setHasLoaded] = useState(false)
   const { addToCart } = useCart()
+  const { format } = useCurrency()
   const preloadedRef = useRef<Set<string>>(new Set())
 
   // Preload a list of image URLs into the browser cache
