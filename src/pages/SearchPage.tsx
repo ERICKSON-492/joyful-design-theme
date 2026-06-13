@@ -3,6 +3,7 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { useCurrency } from '@/contexts/CurrencyContext'
 
 const categoryList = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
 
@@ -25,6 +26,7 @@ export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { addToCart } = useCart()
+  const { format } = useCurrency()
 
   const initialQ = searchParams.get('q') || searchParams.get('search') || ''
   const initialCats = (searchParams.get('cats') || '').split(',').filter(Boolean)
@@ -337,9 +339,9 @@ export default function SearchPage() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{p.category}</p>
                     <div className="mb-2">
                       {p.price_min && p.price_max ? (
-                        <p className="text-foreground font-bold text-sm">KSh {p.price_min.toLocaleString()} - {p.price_max.toLocaleString()}</p>
+                        <p className="text-foreground font-bold text-sm">{format(p.price_min)} - {format(p.price_max)}</p>
                       ) : (
-                        <p className="text-foreground font-bold text-sm">KSh {p.price.toLocaleString()}</p>
+                        <p className="text-foreground font-bold text-sm">{format(p.price)}</p>
                       )}
                     </div>
                     <button

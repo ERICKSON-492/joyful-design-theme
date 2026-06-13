@@ -5,6 +5,7 @@ import { Footer } from './components/Footer'
 import { ChatWidget } from './components/ChatWidget'
 import { AnimatedRoutes } from './components/AnimatedRoutes'
 import { CartProvider } from './contexts/CartContext'
+import { CurrencyProvider } from './contexts/CurrencyContext'
 import { CartDrawer } from './components/CartDrawer'
 import { InstallAppPrompt } from './components/InstallAppPrompt'
 import { BackButton } from './components/BackButton'
@@ -51,9 +52,11 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <CartProvider>
-        <AppContent />
-      </CartProvider>
+      <CurrencyProvider>
+        <CartProvider>
+          <AppContent />
+        </CartProvider>
+      </CurrencyProvider>
     </BrowserRouter>
   )
 }

@@ -7,6 +7,7 @@ import { ProductReviews } from '@/components/ProductReviews'
 import { RelatedProducts } from '@/components/RelatedProducts'
 import { RecentlyViewed } from '@/components/RecentlyViewed'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
+import { useCurrency } from '@/contexts/CurrencyContext'
 
 interface Product {
   id: string
@@ -36,6 +37,7 @@ interface Variant {
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { addToCart } = useCart()
+  const { format } = useCurrency()
   const { addProduct: trackView } = useRecentlyViewed()
   const [product, setProduct] = useState<Product | null>(null)
   const [variants, setVariants] = useState<Variant[]>([])
@@ -232,12 +234,12 @@ export default function ProductDetailPage() {
             <div>
               {variants.length > 0 && !selectedVariant ? (
                 product.price_min && product.price_max ? (
-                  <p className="text-2xl font-bold text-primary">KSh {product.price_min.toLocaleString()} - {product.price_max.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-primary">{format(product.price_min)} - {format(product.price_max)}</p>
                 ) : (
-                  <p className="text-2xl font-bold text-primary">From KSh {Math.min(...variants.map(v => v.price)).toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-primary">From {format(Math.min(...variants.map(v => v.price)))}</p>
                 )
               ) : (
-                <p className="text-2xl font-bold text-primary">KSh {currentPrice.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-primary">{format(currentPrice)}</p>
               )}
             </div>
 
@@ -363,8 +365,8 @@ export default function ProductDetailPage() {
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground truncate">{product.name}</p>
             <p className="text-base font-bold text-primary leading-tight">
               {variants.length > 0 && !selectedVariant && product.price_min && product.price_max
-                ? `KSh ${product.price_min.toLocaleString()} - ${product.price_max.toLocaleString()}`
-                : `KSh ${currentPrice.toLocaleString()}`}
+                ? `${format(product.price_min)} - ${format(product.price_max)}`
+                : format(currentPrice)}
             </p>
           </div>
           <button

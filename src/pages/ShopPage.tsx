@@ -5,6 +5,7 @@ import { ShoppingBag, Clock } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { ProductCardVariants } from '@/components/ProductCardVariants'
 import { toast } from 'sonner'
+import { useCurrency } from '@/contexts/CurrencyContext'
 
 interface Product {
   id: string
@@ -36,6 +37,7 @@ export default function ShopPage() {
   const searchQuery = searchParams.get('search') || ''
   const catParam = searchParams.get('cat')
   const { addToCart } = useCart()
+  const { format } = useCurrency()
 
   useEffect(() => {
     const titleByCat: Record<string, string> = {
@@ -206,14 +208,14 @@ export default function ShopPage() {
                   <div className="mb-1">
                     {variantState[product.id]?.hasVariants ? (
                       <p className="text-foreground font-bold text-sm">
-                        KSh {(variantState[product.id]?.price ?? product.price).toLocaleString()}
+                        {format(variantState[product.id]?.price ?? product.price)}
                       </p>
                     ) : product.price_min && product.price_max ? (
                       <p className="text-foreground font-bold text-sm">
-                        KSh {product.price_min.toLocaleString()} - KSh {product.price_max.toLocaleString()}
+                        {format(product.price_min)} - {format(product.price_max)}
                       </p>
                     ) : (
-                      <p className="text-foreground font-bold text-sm">KSh {product.price.toLocaleString()}</p>
+                      <p className="text-foreground font-bold text-sm">{format(product.price)}</p>
                     )}
                   </div>
                   {product.is_preorder && product.preorder_label && (

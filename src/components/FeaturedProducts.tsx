@@ -4,6 +4,7 @@ import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { useCurrency } from '@/contexts/CurrencyContext'
 
 interface Product {
   id: string
@@ -27,6 +28,7 @@ export function FeaturedProducts() {
   const [offset, setOffset] = useState(0)
   const [hasLoaded, setHasLoaded] = useState(false)
   const { addToCart } = useCart()
+  const { format } = useCurrency()
   const preloadedRef = useRef<Set<string>>(new Set())
 
   // Preload a list of image URLs into the browser cache
@@ -128,7 +130,7 @@ export function FeaturedProducts() {
                 <Link to={`/product/${product.id}`}>
                   <h3 className="font-display text-xs md:text-sm font-semibold text-foreground mb-1 hover:text-primary transition-colors line-clamp-1">{product.name}</h3>
                   <p className="text-muted-foreground text-xs mb-2">
-                    KSh {product.price.toLocaleString()}
+                    {format(product.price)}
                   </p>
                 </Link>
                 <button
