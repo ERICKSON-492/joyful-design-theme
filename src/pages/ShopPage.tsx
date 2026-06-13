@@ -38,6 +38,16 @@ export default function ShopPage() {
   const { addToCart } = useCart()
 
   useEffect(() => {
+    const titleByCat: Record<string, string> = {
+      'wear-it': 'Jewelry & Apparel – Handmade Maasai Beaded Pieces | Ushanga Chronicles',
+      'live-with-it': 'African Home Decor & Tableware – Ushanga Chronicles',
+      'for-your-pet': 'Beaded Pet Accessories – Ushanga Chronicles',
+    }
+    document.title = (catParam && titleByCat[catParam])
+      || 'Handmade Maasai Beaded Jewelry & Home Decor – Ushanga Chronicles'
+  }, [catParam])
+
+  useEffect(() => {
     // Load taxonomy from DB
     Promise.all([
       fetchPublicTable<Category>('categories', 'select=id,name&is_active=eq.true&order=display_order.asc'),
