@@ -44,6 +44,19 @@ const normalizeSlides = (
 export function HeroSection() {
   const [slides, setSlides] = useState<Slide[]>(fallbackSlides)
   const [current, setCurrent] = useState(0)
+  const [isMobile, setIsMobile] = useState(false)
+
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -60,10 +73,8 @@ export function HeroSection() {
         const normalized = normalizeSlides(data)
         setSlides(normalized)
         
-        // Safely adjust current index if the newly loaded slide array length is shorter
         setCurrent((prev) => (prev >= normalized.length ? 0 : prev))
 
-        // Preload upcoming slide images natively via browser cache allocation
         if (typeof window !== 'undefined' && normalized.length > 1) {
           normalized.slice(0, 2).forEach((slide) => {
             if (slide.image_url) {
@@ -93,7 +104,6 @@ export function HeroSection() {
     [slides]
   )
 
-  // Derive target indexes safely inline during rendering execution
   const activeIndex = current < safeSlides.length ? current : 0
   const activeSlide = safeSlides[activeIndex] || fallbackSlides[0]
 
@@ -128,10 +138,18 @@ export function HeroSection() {
             loading={index === 0 ? 'eager' : 'lazy'}
             decoding={index === 0 ? 'sync' : 'async'}
             fetchPriority={index === 0 ? 'high' : 'auto'}
-            className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-out"
+            className={`absolute inset-0 h-full w-full transition-opacity duration-500 ease-out ${
+              !isMobile ? 'object-cover' : ''
+            }`}
             style={{
               zIndex: isActive ? 1 : 0,
               opacity: isActive ? 1 : 0,
+              // Mobile-specific styles to prevent cropping
+              ...(isMobile && {
+                objectFit: 'contain',
+                objectPosition: 'top center',
+                backgroundColor: '#000',
+              }),
             }}
           />
         ) : (
