@@ -138,18 +138,12 @@ export function HeroSection() {
             loading={index === 0 ? 'eager' : 'lazy'}
             decoding={index === 0 ? 'sync' : 'async'}
             fetchPriority={index === 0 ? 'high' : 'auto'}
-            className={`absolute inset-0 h-full w-full transition-opacity duration-500 ease-out ${
-              !isMobile ? 'object-cover' : ''
-            }`}
+            className="absolute inset-0 h-full w-full transition-opacity duration-500 ease-out"
             style={{
               zIndex: isActive ? 1 : 0,
               opacity: isActive ? 1 : 0,
-              // Mobile-specific styles to prevent cropping
-              ...(isMobile && {
-                objectFit: 'contain',
-                objectPosition: 'top center',
-                backgroundColor: '#000',
-              }),
+              objectFit: 'cover',
+              objectPosition: isMobile ? 'center 30%' : 'center center',
             }}
           />
         ) : (
@@ -215,6 +209,22 @@ export function HeroSection() {
           ))}
         </div>
       )}
+
+      {/* Optional: Add CSS for even better mobile cropping control */}
+      <style>{`
+        @media (max-width: 768px) {
+          /* Adjust object position based on image content */
+          img {
+            object-position: center 30% !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          img {
+            object-position: center 25% !important;
+          }
+        }
+      `}</style>
     </section>
   )
 }
