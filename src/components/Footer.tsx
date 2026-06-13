@@ -56,6 +56,7 @@ export function Footer() {
               <li><Link to="/tribe-looks" className="hover:text-primary transition-colors">Tribe Looks</Link></li>
               <li><Link to="/wholesale-gifting" className="hover:text-primary transition-colors">Wholesale & Gifting</Link></li>
               <li><Link to="/faq" className="hover:text-primary transition-colors">FAQ & Help</Link></li>
+              <li><Link to="/shipping-returns" className="hover:text-primary transition-colors">Shipping & Returns</Link></li>
             </ul>
           </div>
 
@@ -74,6 +75,8 @@ export function Footer() {
           <p>© {new Date().getFullYear()} Ushanga Chronicles. One bead. A thousand stories.</p>
           <p className="mt-2">
             <Link to="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+            <span className="mx-2">·</span>
+            <Link to="/shipping-returns" className="hover:text-primary transition-colors">Shipping & Returns</Link>
             <span className="mx-2">·</span>
             <Link to="/faq" className="hover:text-primary transition-colors">FAQ</Link>
           </p>
