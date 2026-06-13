@@ -130,7 +130,7 @@ export function FeaturedProducts() {
                 <Link to={`/product/${product.id}`}>
                   <h3 className="font-display text-xs md:text-sm font-semibold text-foreground mb-1 hover:text-primary transition-colors line-clamp-1">{product.name}</h3>
                   <p className="text-muted-foreground text-xs mb-2">
-                    KSh {product.price.toLocaleString()}
+                    {format(product.price)}
                   </p>
                 </Link>
                 <button
