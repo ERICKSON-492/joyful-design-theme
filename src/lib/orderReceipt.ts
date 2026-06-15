@@ -116,7 +116,7 @@ async function buildPdf(input: ReceiptInput): Promise<Blob> {
 
   // QR code linking to order tracking / verification
   try {
-    const qrTarget = `https://ushangachronicles.lovable.app/my-orders?order=${encodeURIComponent(input.orderId)}`
+    const qrTarget = `https://ushangachronicles.com/my-orders?order=${encodeURIComponent(input.orderId)}`
     const qrDataUrl = await QRCode.toDataURL(qrTarget, {
       margin: 0,
       width: 240,
