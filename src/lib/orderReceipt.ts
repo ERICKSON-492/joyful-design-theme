@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import QRCode from 'qrcode'
 import { supabase } from '@/integrations/supabase/client'
 
 export interface ReceiptItem {
@@ -23,7 +24,7 @@ export interface ReceiptInput {
 const PRIMARY = '#D4A017'
 const DARK = '#1A1A1A'
 
-function buildPdf(input: ReceiptInput): Blob {
+async function buildPdf(input: ReceiptInput): Promise<Blob> {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
   let y = 50
@@ -113,6 +114,25 @@ function buildPdf(input: ReceiptInput): Blob {
   doc.text('Questions? WhatsApp +254 748 207 000 or admin@ushangachronicles.com', 40, 814)
   doc.text('ushangachronicles.com', W - 40, 800, { align: 'right' })
 
+  // QR code linking to order tracking / verification
+  try {
+    const qrTarget = `https://ushangachronicles.lovable.app/my-orders?order=${encodeURIComponent(input.orderId)}`
+    const qrDataUrl = await QRCode.toDataURL(qrTarget, {
+      margin: 0,
+      width: 240,
+      color: { dark: DARK, light: '#FFFFFF' },
+    })
+    const qrSize = 80
+    const qrX = W - 40 - qrSize
+    const qrY = 740 - qrSize
+    doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize)
+    doc.setTextColor(DARK)
+    doc.setFontSize(8)
+    doc.text('Scan to track your order', qrX + qrSize / 2, qrY + qrSize + 12, { align: 'center' })
+  } catch (err) {
+    console.error('QR code generation failed', err)
+  }
+
   return doc.output('blob')
 }
 
@@ -122,7 +142,7 @@ function buildPdf(input: ReceiptInput): Blob {
  */
 export async function generateAndUploadReceipt(input: ReceiptInput): Promise<string | null> {
   try {
-    const blob = buildPdf(input)
+    const blob = await buildPdf(input)
     const path = `${input.orderId}/receipt-${Date.now()}.pdf`
     const { error: upErr } = await supabase.storage
       .from('order-receipts')
