@@ -45,16 +45,18 @@ export function HeroSection() {
   const [slides, setSlides] = useState<Slide[]>(fallbackSlides)
   const [current, setCurrent] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
+  const [imagesLoaded, setImagesLoaded] = useState<Record<string, boolean>>({})
+  const [hasFetched, setHasFetched] = useState(false)
 
   // Detect mobile viewport
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768)
     }
-    
+
     checkMobile()
     window.addEventListener('resize', checkMobile)
-    
+
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
@@ -72,7 +74,8 @@ export function HeroSection() {
 
         const normalized = normalizeSlides(data)
         setSlides(normalized)
-        
+        setHasFetched(true)
+
         setCurrent((prev) => (prev >= normalized.length ? 0 : prev))
 
         if (typeof window !== 'undefined' && normalized.length > 1) {
@@ -88,6 +91,7 @@ export function HeroSection() {
         if (isMounted) {
           setSlides(fallbackSlides)
           setCurrent(0)
+          setHasFetched(true)
         }
       }
     }
@@ -118,15 +122,24 @@ export function HeroSection() {
     return () => window.clearInterval(timer)
   }, [nextSlide, safeSlides.length])
 
+  const handleImageLoad = (id: string) => {
+    setImagesLoaded((prev) => ({ ...prev, [id]: true }))
+  }
+
   return (
     <section
-      className="relative w-full h-[85vh] md:h-screen overflow-hidden"
+      className="relative w-full h-[70vh] sm:h-[80vh] md:h-screen overflow-hidden"
       aria-label="Hero"
       style={{
         background:
           'linear-gradient(135deg, hsl(var(--primary) / 0.3) 0%, hsl(var(--accent) / 0.5) 50%, hsl(var(--primary) / 0.2) 100%)',
       }}
     >
+      {/* Skeleton shimmer shown while first image loads */}
+      {!imagesLoaded[safeSlides[0]?.id] && safeSlides[0]?.image_url && (
+        <div className="absolute inset-0 z-[1] animate-pulse bg-gradient-to-br from-[hsl(var(--primary)/0.15)] via-[hsl(var(--accent)/0.25)] to-[hsl(var(--primary)/0.1)]" />
+      )}
+
       {safeSlides.map((slide, index) => {
         const isActive = index === activeIndex
 
@@ -138,18 +151,21 @@ export function HeroSection() {
             loading={index === 0 ? 'eager' : 'lazy'}
             decoding={index === 0 ? 'sync' : 'async'}
             fetchPriority={index === 0 ? 'high' : 'auto'}
-            className="absolute inset-0 h-full w-full transition-opacity duration-500 ease-out"
+            onLoad={() => handleImageLoad(slide.id)}
+            className={`hero-slide-img absolute inset-0 h-full w-full transition-opacity duration-700 ease-out ${
+              imagesLoaded[slide.id] ? 'opacity-100' : 'opacity-0'
+            }`}
             style={{
               zIndex: isActive ? 1 : 0,
-              opacity: isActive ? 1 : 0,
+              opacity: isActive ? (imagesLoaded[slide.id] ? 1 : 0) : 0,
               objectFit: 'cover',
-              objectPosition: isMobile ? 'center 30%' : 'center center',
+              objectPosition: isMobile ? 'center 25%' : 'center center',
             }}
           />
         ) : (
           <div
             key={slide.id}
-            className="absolute inset-0 h-full w-full transition-opacity duration-500 ease-out"
+            className="absolute inset-0 h-full w-full transition-opacity duration-700 ease-out"
             style={{
               zIndex: isActive ? 1 : 0,
               opacity: isActive ? 1 : 0,
@@ -165,32 +181,30 @@ export function HeroSection() {
         className="absolute inset-0 z-[2]"
         style={{
           background:
-            'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.30) 50%, rgba(0,0,0,0.50) 100%)',
+            'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.40) 50%, rgba(0,0,0,0.55) 100%)',
         }}
       />
 
       {/* Slide Content Display */}
-      <div className="absolute inset-0 z-[3] flex items-center justify-center px-6 text-center">
+      <div className="absolute inset-0 z-[3] flex items-center justify-center px-4 sm:px-6 text-center">
         <div className="max-w-3xl">
-          <div key={activeSlide.id} className="animate-fade-in">
-            <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-4 leading-[1.1] tracking-wide drop-shadow-lg">
+          <div key={activeSlide.id}>
+            <h1 className="font-display text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-3 sm:mb-4 leading-[1.1] tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
               {activeSlide.title}
             </h1>
 
-            <p className="text-primary text-xl md:text-2xl lg:text-3xl font-display italic mb-10 drop-shadow-md">
+            <p className="text-[#F0D878] text-lg sm:text-xl md:text-2xl lg:text-3xl font-display italic mb-6 sm:mb-10 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
               {activeSlide.subtitle}
             </p>
 
-            <p className="text-white/90 text-base md:text-lg max-w-2xl mx-auto mb-8 leading-relaxed drop-shadow">
+            <p className="text-white/90 text-sm sm:text-base md:text-lg max-w-2xl mx-auto mb-6 sm:mb-8 leading-relaxed drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]">
               Handcrafted, heritage-inspired African jewelry, pet accessories, and home decor made by artisans in Nairobi.
             </p>
 
             <Link
               to={activeSlide.cta_link}
-              className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-10 py-4 text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-              style={{
-                minHeight: '44px',
-              }}
+              className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-8 sm:px-10 py-3.5 sm:py-4 text-xs sm:text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              style={{ minHeight: '44px' }}
             >
               {activeSlide.cta_text}
             </Link>
@@ -200,7 +214,7 @@ export function HeroSection() {
 
       {/* Carousel Indicator Track */}
       {safeSlides.length > 1 && (
-        <div className="absolute bottom-8 left-1/2 z-[4] flex -translate-x-1/2 gap-3">
+        <div className="absolute bottom-6 sm:bottom-8 left-1/2 z-[4] flex -translate-x-1/2 gap-3">
           {safeSlides.map((slide, index) => (
             <button
               key={slide.id}
@@ -213,22 +227,6 @@ export function HeroSection() {
           ))}
         </div>
       )}
-
-      {/* Optional: Add CSS for even better mobile cropping control */}
-      <style>{`
-        @media (max-width: 768px) {
-          /* Adjust object position based on image content */
-          img {
-            object-position: center 30% !important;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          img {
-            object-position: center 25% !important;
-          }
-        }
-      `}</style>
     </section>
   )
 }
