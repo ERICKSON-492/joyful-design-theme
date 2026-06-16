@@ -20,11 +20,11 @@ export default function HomePage() {
       <Suspense fallback={<SectionFallback className="min-h-[500px] md:min-h-[600px]" />}>
         <ShopByCategory />
       </Suspense>
-      <Suspense fallback={<SectionFallback className="min-h-[500px] md:min-h-[650px]" />}>
-        <TheMaker />
-      </Suspense>
       <Suspense fallback={<SectionFallback className="min-h-[450px] md:min-h-[550px]" />}>
         <FeaturedProducts />
+      </Suspense>
+      <Suspense fallback={<SectionFallback className="min-h-[500px] md:min-h-[650px]" />}>
+        <TheMaker />
       </Suspense>
       <Suspense fallback={<SectionFallback className="min-h-[400px] md:min-h-[500px]" />}>
         <TribeLooksSection />
