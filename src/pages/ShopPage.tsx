@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { ProductCardVariants } from '@/components/ProductCardVariants'
-import { toast } from 'sonner'
 import { useCurrency } from '@/contexts/CurrencyContext'
 
 interface Product {
@@ -38,6 +37,7 @@ export default function ShopPage() {
   const catParam = searchParams.get('cat')
   const { addToCart } = useCart()
   const { format } = useCurrency()
+  const navigate = useNavigate()
 
   useEffect(() => {
     const titleByCat: Record<string, string> = {
@@ -107,6 +107,7 @@ export default function ShopPage() {
   const getButtonLabel = (product: Product) => {
     if (product.is_preorder) return 'Pre-Order'
     if (product.stock === 0) return 'Sold Out'
+    if (variantState[product.id]?.hasVariants) return 'Select Options'
     return 'Add to Cart'
   }
 
@@ -114,8 +115,8 @@ export default function ShopPage() {
 
   const handleAdd = (product: Product) => {
     const state = variantState[product.id]
-    if (state?.hasVariants && !state.selected) {
-      toast.error('Please select all options first')
+    if (state?.hasVariants) {
+      navigate(`/product/${product.id}`)
       return
     }
     const finalPrice = state?.price ?? product.price
@@ -224,20 +225,22 @@ export default function ShopPage() {
                     </p>
                   )}
                   {!product.is_preorder && !product.preorder_label && <div className="mb-2" />}
-                  <ProductCardVariants
-                    productId={product.id}
-                    basePrice={product.price}
-                    onVariantChange={(s) => setVariantState(prev => ({
-                      ...prev,
-                      [product.id]: {
-                        price: s.price,
-                        canOrder: s.canOrder,
-                        label: s.label,
-                        selected: !!s.variant,
-                        hasVariants: s.hasVariants,
-                      }
-                    }))}
-                  />
+                  <div className="hidden">
+                    <ProductCardVariants
+                      productId={product.id}
+                      basePrice={product.price}
+                      onVariantChange={(s) => setVariantState(prev => ({
+                        ...prev,
+                        [product.id]: {
+                          price: s.price,
+                          canOrder: s.canOrder,
+                          label: s.label,
+                          selected: !!s.variant,
+                          hasVariants: s.hasVariants,
+                        }
+                      }))}
+                    />
+                  </div>
                   <button
                     onClick={() => handleAdd(product)}
                     className={`w-full py-2.5 text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
