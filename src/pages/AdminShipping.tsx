@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { Plus, Trash2, Edit, X } from 'lucide-react'
+import { Plus, Trash2, Edit, X, Upload, Check } from 'lucide-react'
 
 interface ShippingMethod {
   id: string
@@ -16,12 +16,34 @@ interface ShippingMethod {
   regions: string[]
 }
 
+interface ParsedRow {
+  location: string
+  price: number
+  type: string
+  provider: string
+  estimated_days: string
+  // matched against existing methods so we know insert vs update
+  existingId?: string
+  status: 'new' | 'update' | 'error'
+  error?: string
+}
+
 export default function AdminShipping() {
   const [methods, setMethods] = useState<ShippingMethod[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ name: '', type: 'local', provider: '', estimated_days: '', price: '', is_active: true, regions: '' })
+
+  // ---- Bulk import state ----
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkType, setBulkType] = useState('local')
+  const [bulkProvider, setBulkProvider] = useState('')
+  const [bulkPreview, setBulkPreview] = useState<ParsedRow[]>([])
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkParseError, setBulkParseError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetch_ = async () => {
     const { data } = await supabase.from('shipping_methods').select('*').order('type', { ascending: true })
@@ -61,12 +83,139 @@ export default function AdminShipping() {
     toast.success('Deleted'); fetch_()
   }
 
+  // ---------------------------------------------------------------------
+  // BULK IMPORT
+  //
+  // Accepts pasted text or an uploaded .csv file. Each line becomes one
+  // shipping method whose `name` and `regions` are the location itself,
+  // so every location gets its own independent price.
+  //
+  // Supported line formats (comma or tab separated):
+  //   Nairobi, 300
+  //   Nairobi, 300, local, G4S
+  //   Nairobi, 300, local, G4S, 2-5 days
+  //
+  // A header row is optional — if the first line contains the words
+  // "location" and "price" it's skipped automatically.
+  // ---------------------------------------------------------------------
+  const resetBulkImport = () => {
+    setBulkText(''); setBulkPreview([]); setBulkParseError('')
+    setBulkType('local'); setBulkProvider('')
+    setShowBulkImport(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const splitLine = (line: string) => {
+    const delim = line.includes('\t') ? '\t' : ','
+    return line.split(delim).map(s => s.trim()).filter((_, i, arr) => arr.length > 0 ? true : true).map(s => s)
+  }
+
+  const parseBulkText = (text: string) => {
+    setBulkParseError('')
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+    if (lines.length === 0) { setBulkPreview([]); return }
+
+    let dataLines = lines
+    const firstLower = lines[0].toLowerCase()
+    if (firstLower.includes('location') && firstLower.includes('price')) {
+      dataLines = lines.slice(1)
+    }
+
+    const rows: ParsedRow[] = dataLines.map((line) => {
+      const cols = splitLine(line).filter(c => c.length > 0)
+      const location = cols[0] || ''
+      const priceRaw = cols[1] || ''
+      const price = parseFloat(priceRaw.replace(/[^0-9.]/g, ''))
+      const type = cols[2] || bulkType
+      const provider = cols[3] || bulkProvider
+      const estimated_days = cols[4] || ''
+
+      let status: ParsedRow['status'] = 'new'
+      let error: string | undefined
+
+      if (!location) { status = 'error'; error = 'Missing location' }
+      else if (isNaN(price)) { status = 'error'; error = 'Missing/invalid price' }
+
+      const existing = methods.find(
+        m => m.name.toLowerCase() === location.toLowerCase() && m.type === type
+      )
+      if (existing && status !== 'error') status = 'update'
+
+      return { location, price: isNaN(price) ? 0 : price, type, provider, estimated_days, existingId: existing?.id, status, error }
+    })
+
+    setBulkPreview(rows)
+  }
+
+  const handleBulkTextChange = (text: string) => {
+    setBulkText(text)
+    parseBulkText(text)
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = String(ev.target?.result || '')
+      setBulkText(text)
+      parseBulkText(text)
+    }
+    reader.onerror = () => setBulkParseError('Could not read that file.')
+    reader.readAsText(file)
+  }
+
+  const handleConfirmImport = async () => {
+    const validRows = bulkPreview.filter(r => r.status !== 'error')
+    if (validRows.length === 0) { toast.error('No valid rows to import'); return }
+    setBulkLoading(true)
+
+    let successCount = 0
+    let failCount = 0
+
+    for (const row of validRows) {
+      const payload = {
+        name: row.location,
+        type: row.type,
+        provider: row.provider,
+        estimated_days: row.estimated_days || null,
+        price: row.price,
+        is_active: true,
+        regions: [row.location],
+      }
+      if (row.existingId) {
+        const { error } = await supabase.from('shipping_methods').update(payload).eq('id', row.existingId)
+        if (error) failCount++; else successCount++
+      } else {
+        const { error } = await supabase.from('shipping_methods').insert(payload)
+        if (error) failCount++; else successCount++
+      }
+    }
+
+    setBulkLoading(false)
+    if (successCount) toast.success(`Imported ${successCount} location${successCount === 1 ? '' : 's'}`)
+    if (failCount) toast.error(`${failCount} row${failCount === 1 ? '' : 's'} failed`)
+    resetBulkImport()
+    fetch_()
+  }
+
+  const newCount = bulkPreview.filter(r => r.status === 'new').length
+  const updateCount = bulkPreview.filter(r => r.status === 'update').length
+  const errorCount = bulkPreview.filter(r => r.status === 'error').length
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Shipping Methods</h1>
-        <Button onClick={() => { resetForm(); setShowForm(true) }}><Plus className="w-4 h-4 mr-1" /> Add Method</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { resetBulkImport(); setShowBulkImport(true) }}>
+            <Upload className="w-4 h-4 mr-1" /> Bulk Import
+          </Button>
+          <Button onClick={() => { resetForm(); setShowForm(true) }}><Plus className="w-4 h-4 mr-1" /> Add Method</Button>
+        </div>
       </div>
+
+      {/* ---------- Manual add/edit modal (unchanged) ---------- */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
@@ -96,6 +245,97 @@ export default function AdminShipping() {
           </div>
         </div>
       )}
+
+      {/* ---------- Bulk import modal ---------- */}
+      {showBulkImport && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-xl font-bold">Bulk Import Locations & Prices</h2>
+              <button onClick={resetBulkImport}><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-sm font-medium block mb-1">Default Type</label>
+                <select value={bulkType} onChange={e => { setBulkType(e.target.value); parseBulkText(bulkText) }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="local">Local (Kenya)</option><option value="international">International</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Default Provider</label>
+                <Input value={bulkProvider} onChange={e => { setBulkProvider(e.target.value); parseBulkText(bulkText) }} placeholder="e.g. G4S" />
+              </div>
+            </div>
+
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-sm font-medium">Paste list, or upload a CSV</label>
+              <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="w-3 h-3 mr-1" /> Upload CSV
+              </Button>
+              <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
+            </div>
+            <textarea
+              value={bulkText}
+              onChange={e => handleBulkTextChange(e.target.value)}
+              rows={6}
+              placeholder={'Nairobi, 300\nMombasa, 500\nKisumu, 450\nNakuru, 400'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono mb-1"
+            />
+            <p className="text-xs text-muted-foreground mb-4">
+              One location per line: <code>Location, Price</code> — optionally add <code>, Type, Provider, Estimated Days</code> per row to override the defaults above.
+            </p>
+
+            {bulkParseError && <p className="text-sm text-destructive mb-4">{bulkParseError}</p>}
+
+            {bulkPreview.length > 0 && (
+              <div className="mb-4">
+                <div className="flex gap-3 text-xs mb-2">
+                  <span className="px-2 py-0.5 rounded bg-green-100 text-green-700">{newCount} new</span>
+                  <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700">{updateCount} updated</span>
+                  {errorCount > 0 && <span className="px-2 py-0.5 rounded bg-red-100 text-red-700">{errorCount} error{errorCount === 1 ? '' : 's'}</span>}
+                </div>
+                <div className="border border-border rounded-md max-h-60 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="text-left px-2 py-1.5">Location</th>
+                        <th className="text-left px-2 py-1.5">Price</th>
+                        <th className="text-left px-2 py-1.5">Type</th>
+                        <th className="text-left px-2 py-1.5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkPreview.map((row, i) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-2 py-1.5">{row.location || <span className="text-destructive">—</span>}</td>
+                          <td className="px-2 py-1.5">{row.error ? <span className="text-destructive">{row.error}</span> : `KSh ${row.price.toLocaleString()}`}</td>
+                          <td className="px-2 py-1.5">{row.type}</td>
+                          <td className="px-2 py-1.5">
+                            {row.status === 'new' && <span className="text-green-700">New</span>}
+                            {row.status === 'update' && <span className="text-blue-700">Update price</span>}
+                            {row.status === 'error' && <span className="text-destructive">Skipped</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <Button
+              type="button"
+              disabled={bulkLoading || bulkPreview.filter(r => r.status !== 'error').length === 0}
+              onClick={handleConfirmImport}
+              className="w-full"
+            >
+              {bulkLoading ? 'Importing...' : <><Check className="w-4 h-4 mr-1" /> Import {bulkPreview.filter(r => r.status !== 'error').length} Location{bulkPreview.filter(r => r.status !== 'error').length === 1 ? '' : 's'}</>}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         {['local', 'international'].map(type => {
           const group = methods.filter(m => m.type === type)
