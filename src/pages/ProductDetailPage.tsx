@@ -180,7 +180,6 @@ export default function ProductDetailPage() {
                   className="w-full h-full object-cover transition-opacity"
                   width={800}
                   height={800}
-                  // Performance Critical Overrides:
                   fetchPriority={safeIdx === 0 ? "high" : "auto"}
                   loading="eager"
                 />
@@ -215,7 +214,7 @@ export default function ProductDetailPage() {
                       className="w-full h-full object-cover" 
                       width={150}
                       height={150}
-                      loading="lazy" // Don't block primary screen layout with auxiliary images
+                      loading="lazy"
                     />
                   </button>
                 ))}
@@ -246,7 +245,7 @@ export default function ProductDetailPage() {
             {/* Badges */}
             <div className="flex flex-wrap gap-2">
               {product.is_preorder && (
-                <span className="bg-blue-600 text-white text-xs px-3 py-1.5 font-semibold flex items-center gap-1 rounded">
+                <span className="bg-neutral-800 text-white text-xs px-3 py-1.5 font-semibold flex items-center gap-1 rounded border border-border">
                   <Clock className="w-3 h-3" /> Pre-Order
                 </span>
               )}
@@ -261,8 +260,8 @@ export default function ProductDetailPage() {
             </div>
 
             {product.is_preorder && product.preorder_label && (
-              <p className="text-blue-600 text-sm font-medium flex items-center gap-1">
-                <Clock className="w-4 h-4" /> {product.preorder_label}
+              <p className="text-foreground text-sm font-medium flex items-center gap-1">
+                <Clock className="w-4 h-4 text-muted-foreground" /> {product.preorder_label}
               </p>
             )}
 
@@ -329,15 +328,11 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Add to Cart */}
+            {/* Add to Cart / Pre-Order Action Button (Desktop) */}
             <button
               onClick={handleAddToCart}
               disabled={!canOrder || needsVariant}
-              className={`w-full py-4 text-sm font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
-                product.is_preorder
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-foreground text-background hover:bg-primary hover:text-primary-foreground'
-              }`}
+              className="w-full py-4 text-sm font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg bg-foreground text-background hover:bg-primary hover:text-primary-foreground"
               style={{ minHeight: '52px' }}>
               <ShoppingBag className="w-5 h-5" />
               {getButtonLabel()}
@@ -372,11 +367,7 @@ export default function ProductDetailPage() {
           <button
             onClick={handleAddToCart}
             disabled={!canOrder || needsVariant}
-            className={`shrink-0 px-5 py-3 text-xs font-bold tracking-wider uppercase rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
-              product.is_preorder
-                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                : 'bg-foreground text-background hover:bg-primary hover:text-primary-foreground'
-            }`}
+            className="shrink-0 px-5 py-3 text-xs font-bold tracking-wider uppercase rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 bg-foreground text-background hover:bg-primary hover:text-primary-foreground"
             style={{ minHeight: '48px', minWidth: '160px' }}
           >
             <ShoppingBag className="w-4 h-4" />
