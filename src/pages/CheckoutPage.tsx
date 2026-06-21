@@ -96,12 +96,10 @@ export default function CheckoutPage() {
 
   // ---- FAILSAFE SHIPPING FILTERING PIPELINE ----
   const getFilteredShipping = () => {
-    // Step 1: Broad partition by region type ('local' vs 'international')
     const baseScopeFiltered = shippingMethods.filter(m => 
       isInternational ? m.type === 'international' : m.type === 'local'
     )
 
-    // Step 2: Try contextual matching based on location inputs
     if (!isInternational && baseScopeFiltered.length > 0) {
       const userLocationInput = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
       
@@ -109,7 +107,6 @@ export default function CheckoutPage() {
         const structuralMatches = baseScopeFiltered.filter(m => {
           const cleanMethodName = String(m.name || '').toLowerCase().trim()
           
-          // Flatten postgres array format safely into comparable strings
           let regionsArray: string[] = []
           if (Array.isArray(m.regions)) {
             regionsArray = m.regions.map(r => String(r || '').toLowerCase().trim())
@@ -125,15 +122,12 @@ export default function CheckoutPage() {
           )
         })
 
-        // If a specific regional method matches what they typed, return only those options
         if (structuralMatches.length > 0) {
           return structuralMatches
         }
       }
     }
 
-    // Step 3: ABSOLUTE FALLBACK - If text searching yields nothing, return ALL rows matching the scope 
-    // so that local delivery options are always present and visible.
     return baseScopeFiltered
   }
 
@@ -179,9 +173,7 @@ export default function CheckoutPage() {
     const receiptBlock = receiptUrl ? `
       <div style="margin:18px 0;text-align:center;">
         <a href="${receiptUrl}" style="display:inline-block;background-color:#D4A017;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;">
-          ⬇ Download PDF Receipt
-        </a>
-      </div>` : ''
+          </div>` : ''
 
     const emailHtml = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;background-color:#ffffff;">
@@ -258,21 +250,43 @@ export default function CheckoutPage() {
       }
 
       setStatus('pushing')
-      const { data: stkData, error: stkError } = await supabase.functions.invoke(
-        'mpesa-stk-push', { body: { phone, amount: grandTotal, order_id: order.id } }
+      
+      // FIX: Use explicit request options to avoid 404 router failure and pass aligned variable names
+      const { data: responsePayload, error: stkError } = await supabase.functions.invoke(
+        'mpesa-stk-push', 
+        { 
+          body: { 
+            phone: phone, 
+            amount: grandTotal, 
+            orderId: order.id // Aligned to edge function camelCase parser rule
+          } 
+        }
       )
+
       if (stkError) throw new Error(stkError.message)
-      if (stkData?.ResponseCode !== '0') throw new Error(stkData?.ResponseDescription || 'Failed to initiate M-Pesa payment')
+      
+      // Unpack nested execution results safely out of unified delivery schema
+      if (!responsePayload?.success) {
+        throw new Error(responsePayload?.error || 'Safaricom communication drop-out.')
+      }
+
+      const stkData = responsePayload.mpesa_response
 
       setStatus('polling')
-      const checkoutRequestId = stkData.CheckoutRequestID
+      const checkoutRequestId = stkData?.CheckoutRequestID || responsePayload?.checkoutRequestId
       let attempts = 0
 
       const poll = async () => {
         attempts++
         try {
           const { data: queryData } = await supabase.functions.invoke(
-            'mpesa-stk-push?action=query', { body: { checkout_request_id: checkoutRequestId } }
+            'mpesa-stk-push', 
+            { 
+              body: { 
+                action: 'query',
+                checkout_request_id: checkoutRequestId 
+              } 
+            }
           )
           if (queryData?.ResultCode === '0' || queryData?.ResultCode === 0) {
             await sendOrderEmail(order.id)
@@ -294,6 +308,7 @@ export default function CheckoutPage() {
       }
       setTimeout(poll, 4000)
     } catch (err: any) {
+      console.error("Execution failure context details:", err)
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
   }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, clearCart, navigate, sendOrderEmail])
@@ -341,7 +356,6 @@ export default function CheckoutPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
-            {/* Step 0: Cart summary review */}
             {step === 0 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -384,7 +398,6 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 1: Shipping and Delivery */}
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -452,7 +465,6 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  {/* Shipping rates list rendering zone */}
                   <div className="pt-2">
                     <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                       <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
@@ -490,7 +502,6 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 2: Gateway Payment */}
             {step === 2 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -549,7 +560,6 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          {/* Right Column Checkout Sticky Card Panels */}
           <div className="space-y-4">
             <div className="bg-card border border-border rounded-lg p-4 sticky top-24">
               <h2 className="font-display font-semibold text-foreground mb-4">Summary</h2>
