@@ -4,13 +4,13 @@ import { Link } from 'react-router-dom'
 // ==========================================
 // 1. STATIC ASSET IMPORTS (ALL LOWERCASE)
 // ==========================================
-import heroTribeImg from '@/assets/1781724309331.jpeg'
-import heroJewelryImg from '@/assets/1781724828046.jpg'
-import heroDecorImg from '@/assets/1781965391751.png'
+import heroTribeImg from '@/assets/hero/1781724309331.jpeg'
+import heroJewelryImg from '@/assets/hero/1781724828046.jpg'
+import heroDecorImg from '@/assets/hero/1781965391751.png'
 // Additional imported variants if you want to expand slides later:
-import variant3 from '@/assets/1781724604664.jpg'
-import variant4 from '@/assets/1781965440352.png'
-import variant5 from '@/assets/1781965498095.jpg'
+import variant3 from '@/assets/hero/1781724604664.jpg'
+import variant4 from '@/assets/hero/1781965440352.png'
+import variant5 from '@/assets/hero/1781965498095.jpg'
 
 // ==========================================
 // 2. TYPES & DATA CONFIGURATION
