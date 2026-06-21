@@ -3,7 +3,15 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import heroHotels from '@/assets/hero-hotels.jpg'
 import heroCorporate from '@/assets/hero-corporate.jpg'
 
-const slides = [
+interface Slide {
+  image: string
+  title: string
+  subtitle: string
+  cta: string
+  href: string
+}
+
+const slides: Slide[] = [
   {
     image: heroCorporate,
     title: 'Corporate Gifting',
@@ -35,17 +43,12 @@ export function Hero() {
     setCurrent(index)
   }, [])
 
+  // Auto-play presentation slide loop
   useEffect(() => {
     if (slides.length <= 1) return
-
-    const nextIndex = (current + 1) % slides.length
-    const img = new Image()
-    img.src = slides[nextIndex].image
-
     const timer = window.setInterval(next, 5000)
-
     return () => window.clearInterval(timer)
-  }, [current, next])
+  }, [next])
 
   return (
     <section
@@ -57,7 +60,7 @@ export function Hero() {
 
         return (
           <div
-            key={i}
+            key={slide.href + i}
             className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
               isCurrent ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
             }`}
@@ -68,16 +71,20 @@ export function Hero() {
               alt={slide.title || 'Hero image'}
               width={1920}
               height={1080}
+              // Performance attributes optimized for LCP on the first slide
               loading={i === 0 ? 'eager' : 'lazy'}
               decoding={i === 0 ? 'sync' : 'async'}
               fetchPriority={i === 0 ? 'high' : 'auto'}
-              className="w-full h-full object-cover object-center"
+              // Combined native Tailwind responsive art-direction to isolate style scope safely
+              className="w-full h-full object-cover object-center max-[480px]:object-[center_25%] max-[768px]:object-[center_30%]"
             />
 
+            {/* Decorative Dark Overlay */}
             <div className="absolute inset-0 bg-black/45" />
 
+            {/* Slide Content Display */}
             <div className="absolute inset-0 z-20 flex items-center justify-center px-4 text-center">
-              <div key={current} className="max-w-3xl">
+              <div className="max-w-3xl">
                 <h2
                   className={`font-display text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-semibold text-white mb-4 leading-tight ${
                     isCurrent ? 'animate-hero-content' : 'opacity-0'
@@ -108,6 +115,7 @@ export function Hero() {
         )
       })}
 
+      {/* Manual Slide Controls */}
       <button
         onClick={prev}
         className="absolute left-3 md:left-5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-sm p-2 md:p-3 rounded-full transition-colors z-30"
@@ -124,6 +132,7 @@ export function Hero() {
         <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-white" />
       </button>
 
+      {/* Carousel Pagination Tracks */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-30">
         {slides.map((_, i) => (
           <button
@@ -137,22 +146,6 @@ export function Hero() {
           />
         ))}
       </div>
-
-      {/* Mobile-specific image positioning to minimize cropping */}
-      <style>{`
-        @media (max-width: 768px) {
-          img {
-            object-fit: cover !important;
-            object-position: center 30% !important;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          img {
-            object-position: center 25% !important;
-          }
-        }
-      `}</style>
     </section>
   )
 }
