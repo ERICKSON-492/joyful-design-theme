@@ -53,26 +53,20 @@ export default function AdminShipping() {
     if (data) {
       console.log("RAW DATABASE EXTRACT:", data)
       
-      // Sanitization Layer: Cleans broken data states dynamically
       const cleanedAndNormalized = (data as any[])
         .filter(m => {
-          // Drop corrupted binary/encrypted rows containing unprintable control characters
           if (!m.name || /[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(m.name)) {
             return false
           }
           return true
         })
         .map(m => {
-          // Clean quotes out of the type field and downcase it
           const rawType = String(m.type || 'local').toLowerCase().replace(/"/g, '').trim()
-          
-          // Safety Router: Anything that isn't explicitly international routes to 'local'
           const resolvedType = rawType === 'international' ? 'international' : 'local'
 
           return {
             ...m,
             type: resolvedType,
-            // Strip out unmatched escaping quotes caused by CSV delimiter spills
             name: String(m.name || '').replace(/"/g, '').trim(),
             provider: String(m.provider || '').replace(/"/g, '').trim(),
             estimated_days: String(m.estimated_days || '').replace(/"/g, '').trim(),
@@ -91,14 +85,17 @@ export default function AdminShipping() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    const cleanName = form.name.trim()
     const payload = {
-      name: form.name.trim(), 
+      name: cleanName, 
       type: form.type.trim(), 
       provider: form.provider.trim() || null,
       estimated_days: form.estimated_days.trim() || null,
       price: parseFloat(form.price) || 0, 
       is_active: form.is_active,
-      regions: form.regions.split(',').map(r => r.trim()).filter(Boolean),
+      regions: form.regions.split(',').map(r => r.trim()).filter(Boolean).length > 0 
+        ? form.regions.split(',').map(r => r.trim()).filter(Boolean)
+        : [cleanName],
     }
     if (editId) {
       const { error } = await supabase.from('shipping_methods').update(payload).eq('id', editId)
@@ -146,7 +143,7 @@ export default function AdminShipping() {
 
     const rows: ParsedRow[] = dataLines.map((line) => {
       const cols = splitLine(line).filter(c => c.length > 0)
-      const location = (cols[0] || '').replace(/"/g, '')
+      const location = (cols[0] || '').replace(/"/g, '').trim()
       const priceRaw = cols[1] || ''
       const price = parseFloat(priceRaw.replace(/[^0-9.]/g, ''))
       
@@ -198,14 +195,17 @@ export default function AdminShipping() {
     let failCount = 0
 
     for (const row of validRows) {
+      // Clean trailing fragments to match spatial geography lookups precisely
+      const cleanLocation = row.location.trim()
+      
       const payload = {
-        name: row.location,
+        name: cleanLocation,
         type: row.type,
         provider: row.provider || null,
         estimated_days: row.estimated_days || null,
         price: row.price,
         is_active: true, 
-        regions: [row.location],
+        regions: [cleanLocation], // Populates database array cleanly
       }
       
       if (row.existingId) {
@@ -218,7 +218,7 @@ export default function AdminShipping() {
     }
 
     setBulkLoading(false)
-    if (successCount) toast.success(`Imported ${successCount} items successfully.`)
+    if (successCount) toast.success(`Imported ${successCount} locations successfully.`)
     if (failCount) toast.error(`${failCount} records failed.`)
     resetBulkImport()
     fetch_()
@@ -230,7 +230,7 @@ export default function AdminShipping() {
 
   return (
     <div className="p-4 max-w-7xl mx-auto">
-      {/* ---------- Header block ---------- */}
+      {/* ---------- Header Block ---------- */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Shipping Rates Dashboard</h1>
