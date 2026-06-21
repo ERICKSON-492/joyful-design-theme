@@ -79,7 +79,42 @@ export default function CheckoutPage() {
   }, [])
 
   const isInternational = country !== 'Kenya'
-  const filteredShipping = shippingMethods.filter(m => isInternational ? m.type === 'international' : m.type === 'local')
+
+  // ---- DYNAMIC AND RESILIENT SHIPPING FILTER PIPELINE ----
+  const getFilteredShipping = () => {
+    // 1. Initial filter by base scope geometry type
+    const scopeFiltered = shippingMethods.filter(m => 
+      isInternational ? m.type === 'international' : m.type === 'local'
+    )
+
+    // 2. If client is in Kenya, filter cleanly against their typed text fields
+    if (!isInternational) {
+      const userLocationInput = (county || city || address || '').trim().toLowerCase()
+      
+      if (userLocationInput) {
+        const directMatches = scopeFiltered.filter(m => {
+          const cleanMethodName = String(m.name || '').toLowerCase()
+          const regionsArray = Array.isArray(m.regions) ? m.regions : []
+          
+          return (
+            cleanMethodName.includes(userLocationInput) || 
+            userLocationInput.includes(cleanMethodName) ||
+            regionsArray.some(r => String(r || '').toLowerCase().includes(userLocationInput))
+          );
+        })
+
+        // If specific text matches exist, present those exact options
+        if (directMatches.length > 0) {
+          return directMatches
+        }
+      }
+    }
+
+    // 3. Fallback: Return standard options if nothing explicit matches yet
+    return scopeFiltered
+  }
+
+  const filteredShipping = getFilteredShipping()
   const shippingCost = selectedShipping?.price || 0
   const grandTotal = totalPrice + shippingCost
 
@@ -97,20 +132,7 @@ export default function CheckoutPage() {
     const shippingAddressLine = [address, county || city, postalCode, country].filter(Boolean).join(', ')
 
     console.log('🔵 Attempting to generate receipt...')
-    console.log('🔵 Receipt input:', {
-      orderId,
-      customerName: name,
-      email: targetEmail,
-      phone,
-      items: items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
-      subtotal,
-      shippingLabel: selectedShipping?.name,
-      shippingCost,
-      grandTotal,
-      shippingAddress: shippingAddressLine,
-    })
-
-    // Generate the PDF receipt, upload to storage, get a signed download link
+    
     const receiptUrl = await generateAndUploadReceipt({
       orderId,
       customerName: name,
@@ -124,19 +146,16 @@ export default function CheckoutPage() {
       shippingAddress: shippingAddressLine,
     })
 
-    console.log('🔵 Receipt URL result:', receiptUrl)
-
     if (!receiptUrl) {
       console.error('❌ Receipt URL is null - upload failed!')
     }
 
-    // Itemised rows: name, qty, unit price, line total
     const itemsHtml = items.map(item => `
       <tr>
         <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;color:#374151;">
           <div style="font-weight:600;color:#111827;">${item.name}</div>
           <div style="font-size:12px;color:#6b7280;margin-top:2px;">Qty ${item.quantity} × KSh ${item.price.toLocaleString()}</div>
-        </tr>
+        </td>
         <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;font-weight:700;color:#111827;text-align:right;white-space:nowrap;">
           KSh ${(item.price * item.quantity).toLocaleString()}
         </td>
@@ -200,33 +219,14 @@ export default function CheckoutPage() {
           ${selectedShipping ? `<p style="margin:0 0 4px 0;"><strong style="color:#374151;">Delivery:</strong> ${selectedShipping.name} (${selectedShipping.estimated_days || 'soon'})</p>` : ''}
           <p style="margin:0;">Any questions? Reply to this email or reach us on WhatsApp.</p>
         </div>
-
-        <div style="margin-top:24px;padding-top:14px;border-top:1px solid #f3f4f6;text-align:center;font-size:11px;color:#9ca3af;line-height:1.6;">
-          Sent from <strong style="color:#1A1A1A;">Ushanga Chronicles</strong> · Nairobi, Kenya<br/>
-          admin@ushangachronicles.com · +254 748 207 000<br/>
-          <a href="https://ushangachronicles.com/privacy-policy" style="color:#9ca3af;text-decoration:underline;">Privacy Policy</a>
-        </div>
       </div>
     `;
 
-    // Send email using the Edge Function instead of RPC
     try {
-      console.log('📧 Sending email via Edge Function to:', targetEmail);
-      
       const { data, error } = await supabase.functions.invoke('send-email', {
-        body: {
-          to: targetEmail,
-          subject: `Ushanga Chronicles · Order Receipt #${orderId}`,
-          html: emailHtml,
-        }
+        body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
       });
-      
-      if (error) {
-        console.error('❌ Edge Function error:', error);
-        throw error;
-      }
-      
-      console.log('✅ Order confirmation email sent successfully!', data);
+      if (error) throw error;
     } catch (err) {
       console.error("❌ Failed to send email:", err);
     }
@@ -246,17 +246,11 @@ export default function CheckoutPage() {
     setStatus('creating')
 
     try {
-      // Create a single order object explicitly
       const orderData = {
         phone: phone,
         customer_name: name,
         total_amount: grandTotal,
-        items: items.map(i => ({ 
-          id: i.id, 
-          name: i.name, 
-          price: i.price, 
-          quantity: i.quantity 
-        })),
+        items: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
         status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
         user_id: userId,
         shipping_address: {
@@ -271,31 +265,20 @@ export default function CheckoutPage() {
         }
       }
 
-      console.log('📦 Order data being sent:', orderData)
-
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert(orderData)
         .select('id')
         .single()
 
-      if (orderError) {
-        console.error('❌ Order creation error:', orderError)
-        throw new Error(orderError.message)
-      }
+      if (orderError) throw new Error(orderError.message)
 
-      console.log('✅ Order created:', order)
-
-      // Cash on Delivery Pipeline Flow
       if (selectedPayment === 'cod') {
         await sendOrderEmail(order.id)
-        setStatus('success')
-        clearCart()
-        toast.success('Order placed! Pay on delivery 🎉')
+        setStatus('success'); clearCart(); toast.success('Order placed! Pay on delivery 🎉')
         return
       }
 
-      // M-Pesa Pipeline Flow
       setStatus('pushing')
       const { data: stkData, error: stkError } = await supabase.functions.invoke(
         'mpesa-stk-push', { body: { phone, amount: grandTotal, order_id: order.id } }
@@ -315,12 +298,7 @@ export default function CheckoutPage() {
           )
           if (queryData?.ResultCode === '0' || queryData?.ResultCode === 0) {
             await sendOrderEmail(order.id)
-            setStatus('success'); clearCart(); toast.success('Payment successful! Asante sana 🎉'); return
-          }
-          if (queryData?.ResultCode && queryData.ResultCode !== '0') {
-            if (queryData.errorCode === '500.001.1001' || queryData.ResultCode === '1032') {
-              setStatus('failed'); setError('Payment was cancelled. Please try again.'); return
-            }
+            setStatus('success'); clearCart(); toast.success('Payment successful! 🎉'); return
           }
         } catch { /* ignore */ }
 
@@ -331,13 +309,13 @@ export default function CheckoutPage() {
           if (orderCheck?.status === 'paid') { 
             await sendOrderEmail(order.id)
             setStatus('success'); clearCart(); toast.success('Payment successful! 🎉') 
+          } else { 
+            setStatus('failed'); setError('Payment timed out. Contact us on WhatsApp if deducted.') 
           }
-          else { setStatus('failed'); setError('Payment timed out. If money was deducted, contact us on WhatsApp.') }
         }
       }
       setTimeout(poll, 4000)
     } catch (err: any) {
-      console.error('❌ Catch block error:', err)
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
   }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, clearCart, navigate, sendOrderEmail])
@@ -386,7 +364,6 @@ export default function CheckoutPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
-            {/* Step 0: Cart */}
             {step === 0 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -429,7 +406,6 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 1: Shipping */}
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -456,7 +432,6 @@ export default function CheckoutPage() {
                       className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
                   </div>
 
-                  {/* Country */}
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">Country</label>
                     <select value={country} onChange={e => { setCountry(e.target.value); setSelectedShipping(null) }}
@@ -499,7 +474,6 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  {/* Shipping Method Selection */}
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                       <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
@@ -517,7 +491,7 @@ export default function CheckoutPage() {
                               onChange={() => setSelectedShipping(m)} className="accent-primary" />
                             <div className="flex-1">
                               <p className="font-medium text-foreground text-sm">{m.name}</p>
-                              <p className="text-xs text-muted-foreground">{m.estimated_days} · {(m.regions || []).join(', ')}</p>
+                              <p className="text-xs text-muted-foreground">{m.estimated_days} {m.provider ? ` via ${m.provider}` : ''}</p>
                             </div>
                             <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
                           </label>
@@ -534,7 +508,6 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 2: Payment */}
             {step === 2 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -543,7 +516,6 @@ export default function CheckoutPage() {
                   </h2>
                 </div>
                 <div className="p-4 space-y-4">
-                  {/* Payment method selection */}
                   {paymentMethods.length > 1 && (
                     <div className="space-y-2">
                       {paymentMethods.map(pm => (
@@ -580,15 +552,6 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  {selectedPayment === 'pesapal' && (
-                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-4">
-                      <p className="text-sm text-amber-800 dark:text-amber-200">
-                        <strong>Pesapal:</strong> You'll be redirected to Pesapal to complete payment via card or mobile money.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Shipping summary */}
                   <div className="text-sm text-muted-foreground space-y-1 border-t border-border pt-3">
                     <p><strong className="text-foreground">Delivering to:</strong> {name}</p>
                     {address && <p>{address}, {county || city} {postalCode}</p>}
@@ -602,69 +565,37 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  <button onClick={handleMpesaPayment} disabled={isProcessing || !authChecked}
-                    className={`w-full py-4 font-bold text-sm tracking-wider uppercase rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2 ${
-                      selectedPayment === 'mpesa' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                      selectedPayment === 'cod' ? 'bg-primary hover:bg-primary/90 text-primary-foreground' :
-                      'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`} style={{ minHeight: '52px' }}>
-                    {!authChecked && <><Loader2 className="w-5 h-5 animate-spin" /> Verifying account...</>}
-                    {authChecked && status === 'creating' && <><Loader2 className="w-5 h-5 animate-spin" /> Creating order...</>}
-                    {authChecked && status === 'pushing' && <><Loader2 className="w-5 h-5 animate-spin" /> Sending STK push...</>}
-                    {authChecked && status === 'polling' && <><Loader2 className="w-5 h-5 animate-spin" /> Waiting for payment...</>}
-                    {authChecked && (status === 'idle' || status === 'failed') && (
-                      selectedPayment === 'cod' ? 'Place Order' : `Pay KSh ${grandTotal.toLocaleString()} Now`
-                    )}
+                  <button onClick={handleMpesaPayment} disabled={isProcessing}
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2" style={{ minHeight: '48px' }}>
+                    {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {status === 'creating' && 'Creating Order...'}
+                    {status === 'pushing' && 'Sending M-Pesa Prompt...'}
+                    {status === 'polling' && 'Waiting for your PIN confirmation...'}
+                    {status === 'idle' && (selectedPayment === 'cod' ? 'Confirm Order' : 'Pay Now')}
                   </button>
-
-                  {status === 'polling' && (
-                    <p className="text-center text-sm text-muted-foreground">Check your phone and enter your M-Pesa PIN to complete payment</p>
-                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Order Summary Side panel */}
-          <div className="lg:col-span-1">
-            <div className="bg-card border border-border rounded-lg sticky top-28">
-              <div className="p-4 border-b border-border">
-                <h2 className="font-display font-semibold text-foreground text-sm uppercase tracking-wider">Order Summary</h2>
-              </div>
-              <div className="p-4 space-y-3">
-                {items.map(item => (
-                  <div key={item.id} className="flex justify-between items-start text-sm">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-foreground truncate block">{item.name}</span>
-                      <span className="text-muted-foreground text-xs">Qty: {item.quantity}</span>
-                    </div>
-                    <span className="font-semibold text-foreground ml-2 whitespace-nowrap">KSh {(item.price * item.quantity).toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t border-border p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="text-foreground">KSh {totalPrice.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Shipping</span>
-                  {selectedShipping ? (
-                    <span className="text-foreground font-medium">KSh {shippingCost.toLocaleString()}</span>
-                  ) : (
-                    <span className="text-muted-foreground italic text-xs">Select at next step</span>
-                  )}
-                </div>
-                <div className="border-t border-border pt-2 flex justify-between">
-                  <span className="font-display font-bold text-foreground">Total</span>
-                  <span className="font-bold text-lg text-primary">KSh {grandTotal.toLocaleString()}</span>
+          {/* ---------- Right Column: Sticky Summary Panel ---------- */}
+          <div className="space-y-4">
+            <div className="bg-card border border-border rounded-lg p-4 sticky top-24">
+              <h2 className="font-display font-semibold text-foreground mb-4">Summary</h2>
+              <div className="space-y-2 text-sm border-b border-border pb-3 mb-3">
+                <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="font-medium text-foreground">KSh {totalPrice.toLocaleString()}</span></div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Shipping</span>
+                  <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : 'Calculated next'}</span>
                 </div>
               </div>
-              <div className="p-4 pt-0">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <ShieldCheck className="w-4 h-4 text-green-500" />
-                  <span>Secure checkout</span>
-                </div>
+              <div className="flex justify-between items-baseline mb-4">
+                <span className="font-semibold text-base text-foreground">Total</span>
+                <span className="text-xl font-extrabold text-primary">KSh {grandTotal.toLocaleString()}</span>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 flex gap-2 items-start text-xs text-muted-foreground">
+                <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span>Secure payment systems protected by end-to-end processing architecture.</span>
               </div>
             </div>
           </div>
