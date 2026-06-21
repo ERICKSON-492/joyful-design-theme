@@ -2,16 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 
 // ==========================================
-// 1. STATIC ASSET IMPORTS
+// 1. STATIC ASSET IMPORTS (ALL LOWERCASE)
 // ==========================================
-import heroTribeImg from '@/assets/hero/1781724309331.JPEG'
+import heroTribeImg from '@/assets/hero/1781724309331.jpeg'
 import heroJewelryImg from '@/assets/hero/1781724828046.jpg'
-import heroDecorImg from '@/assets/hero/1781965391751.PNG' 
-
-// Additional imported variants if you want to expand slides later:
-// import variant3 from '@/assets/hero/1781724604664.jpg'
-// import variant4 from '@/assets/hero/1781965440352.png'
-// import variant5 from '@/assets/hero/1781965498095.jpg'
+import heroDecorImg from '@/assets/hero/1781965391751.png'
 
 // ==========================================
 // 2. TYPES & DATA CONFIGURATION
@@ -44,7 +39,7 @@ const localSlides: Slide[] = [
   },
   {
     id: 'hero-decor',
-    image_url: heroDecorImg, // Now resolves perfectly without compile errors
+    image_url: heroDecorImg,
     title: 'NAIROBI ARTISANS',
     subtitle: 'Stunning home decor and pet accessories.',
     cta_text: 'View Decor',
