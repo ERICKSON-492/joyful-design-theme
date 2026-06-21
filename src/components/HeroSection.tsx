@@ -48,6 +48,30 @@ const localSlides: Slide[] = [
     cta_text: 'View Decor',
     cta_link: '/decor',
   },
+  {
+    id: 'hero-variant3',
+    image_url: variant3,
+    title: 'CRAFTED WITH PRIDE',
+    subtitle: 'Every piece tells a story.',
+    cta_text: 'Discover More',
+    cta_link: '/shop',
+  },
+  {
+    id: 'hero-variant4',
+    image_url: variant4,
+    title: 'TIMELESS TRADITIONS',
+    subtitle: 'Where culture meets craft.',
+    cta_text: 'Shop the Look',
+    cta_link: '/jewelry',
+  },
+  {
+    id: 'hero-variant5',
+    image_url: variant5,
+    title: 'MADE FOR EVERY HOME',
+    subtitle: 'Bring artisan beauty indoors.',
+    cta_text: 'See Collection',
+    cta_link: '/decor',
+  },
 ]
 
 export function HeroSection() {
@@ -106,7 +130,7 @@ export function HeroSection() {
       {/* ========================================== */}
       {localSlides.map((slide, index) => {
         const isActive = index === current
-        
+
         return (
           <img
             key={slide.id}
