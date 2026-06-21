@@ -200,10 +200,7 @@ export function HeroSection() {
         </div>
       )}
 
-      {/* Debug info - remove after testing */}
-      <div className="absolute bottom-20 left-4 z-50 bg-black/70 text-white px-3 py-1 text-xs rounded">
-        Slide: {current + 1}/{localSlides.length}
-      </div>
+      
     </section>
   )
 }
