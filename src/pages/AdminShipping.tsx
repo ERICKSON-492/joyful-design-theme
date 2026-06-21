@@ -22,7 +22,6 @@ interface ParsedRow {
   type: string
   provider: string
   estimated_days: string
-  // matched against existing methods so we know insert vs update
   existingId?: string
   status: 'new' | 'update' | 'error'
   error?: string
@@ -46,9 +45,13 @@ export default function AdminShipping() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetch_ = async () => {
-    const { data } = await supabase.from('shipping_methods').select('*').order('type', { ascending: true })
-    if (data) setMethods(data as any)
+    const { data, error } = await supabase.from('shipping_methods').select('*').order('type', { ascending: true })
+    if (error) {
+      toast.error('Failed to fetch methods: ' + error.message)
+    }
+    if (data) setMethods(data as ShippingMethod[])
   }
+  
   useEffect(() => { fetch_() }, [])
 
   const resetForm = () => { setForm({ name: '', type: 'local', provider: '', estimated_days: '', price: '', is_active: true, regions: '' }); setEditId(null); setShowForm(false) }
@@ -57,9 +60,12 @@ export default function AdminShipping() {
     e.preventDefault()
     setLoading(true)
     const payload = {
-      name: form.name, type: form.type, provider: form.provider,
-      estimated_days: form.estimated_days || null,
-      price: parseFloat(form.price) || 0, is_active: form.is_active,
+      name: form.name.trim(), 
+      type: form.type.trim(), 
+      provider: form.provider.trim(),
+      estimated_days: form.estimated_days.trim() || null,
+      price: parseFloat(form.price) || 0, 
+      is_active: form.is_active,
       regions: form.regions.split(',').map(r => r.trim()).filter(Boolean),
     }
     if (editId) {
@@ -73,7 +79,7 @@ export default function AdminShipping() {
   }
 
   const handleEdit = (m: ShippingMethod) => {
-    setForm({ name: m.name, type: m.type, provider: m.provider, estimated_days: m.estimated_days || '', price: String(m.price), is_active: m.is_active, regions: (m.regions || []).join(', ') })
+    setForm({ name: m.name, type: m.type, provider: m.provider || '', estimated_days: m.estimated_days || '', price: String(m.price), is_active: m.is_active, regions: (m.regions || []).join(', ') })
     setEditId(m.id); setShowForm(true)
   }
 
@@ -83,21 +89,6 @@ export default function AdminShipping() {
     toast.success('Deleted'); fetch_()
   }
 
-  // ---------------------------------------------------------------------
-  // BULK IMPORT
-  //
-  // Accepts pasted text or an uploaded .csv file. Each line becomes one
-  // shipping method whose `name` and `regions` are the location itself,
-  // so every location gets its own independent price.
-  //
-  // Supported line formats (comma or tab separated):
-  //   Nairobi, 300
-  //   Nairobi, 300, local, G4S
-  //   Nairobi, 300, local, G4S, 2-5 days
-  //
-  // A header row is optional — if the first line contains the words
-  // "location" and "price" it's skipped automatically.
-  // ---------------------------------------------------------------------
   const resetBulkImport = () => {
     setBulkText(''); setBulkPreview([]); setBulkParseError('')
     setBulkType('local'); setBulkProvider('')
@@ -107,7 +98,8 @@ export default function AdminShipping() {
 
   const splitLine = (line: string) => {
     const delim = line.includes('\t') ? '\t' : ','
-    return line.split(delim).map(s => s.trim()).filter((_, i, arr) => arr.length > 0 ? true : true).map(s => s)
+    // Replace carriage returns \r to stop invisible formatting breakages
+    return line.replace(/\r/g, '').split(delim).map(s => s.trim())
   }
 
   const parseBulkText = (text: string) => {
@@ -126,9 +118,11 @@ export default function AdminShipping() {
       const location = cols[0] || ''
       const priceRaw = cols[1] || ''
       const price = parseFloat(priceRaw.replace(/[^0-9.]/g, ''))
-      const type = cols[2] || bulkType
-      const provider = cols[3] || bulkProvider
-      const estimated_days = cols[4] || ''
+      
+      // Force cleanly trimmed fallback strings
+      const type = (cols[2] || bulkType).toLowerCase().trim()
+      const provider = (cols[3] || bulkProvider).trim()
+      const estimated_days = (cols[4] || '').trim()
 
       let status: ParsedRow['status'] = 'new'
       let error: string | undefined
@@ -177,12 +171,13 @@ export default function AdminShipping() {
       const payload = {
         name: row.location,
         type: row.type,
-        provider: row.provider,
+        provider: row.provider || null,
         estimated_days: row.estimated_days || null,
         price: row.price,
-        is_active: true,
+        is_active: true, // Explicitly enforce active visibility state
         regions: [row.location],
       }
+      
       if (row.existingId) {
         const { error } = await supabase.from('shipping_methods').update(payload).eq('id', row.existingId)
         if (error) failCount++; else successCount++
@@ -196,7 +191,7 @@ export default function AdminShipping() {
     if (successCount) toast.success(`Imported ${successCount} location${successCount === 1 ? '' : 's'}`)
     if (failCount) toast.error(`${failCount} row${failCount === 1 ? '' : 's'} failed`)
     resetBulkImport()
-    fetch_()
+    fetch_() // Refresh state cleanly
   }
 
   const newCount = bulkPreview.filter(r => r.status === 'new').length
@@ -204,7 +199,7 @@ export default function AdminShipping() {
   const errorCount = bulkPreview.filter(r => r.status === 'error').length
 
   return (
-    <div>
+    <div className="p-4 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Shipping Methods</h1>
         <div className="flex gap-2">
@@ -215,7 +210,7 @@ export default function AdminShipping() {
         </div>
       </div>
 
-      {/* ---------- Manual add/edit modal (unchanged) ---------- */}
+      {/* ---------- Manual Modal ---------- */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
@@ -246,7 +241,7 @@ export default function AdminShipping() {
         </div>
       )}
 
-      {/* ---------- Bulk import modal ---------- */}
+      {/* ---------- Bulk Import Modal ---------- */}
       {showBulkImport && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
@@ -283,7 +278,7 @@ export default function AdminShipping() {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono mb-1"
             />
             <p className="text-xs text-muted-foreground mb-4">
-              One location per line: <code>Location, Price</code> — optionally add <code>, Type, Provider, Estimated Days</code> per row to override the defaults above.
+              One location per line: <code>Location, Price</code> — optionally add <code>, Type, Provider, Estimated Days</code> per row.
             </p>
 
             {bulkParseError && <p className="text-sm text-destructive mb-4">{bulkParseError}</p>}
@@ -336,24 +331,34 @@ export default function AdminShipping() {
         </div>
       )}
 
-      <div className="space-y-3">
+      {/* ---------- Main View Grid ---------- */}
+      <div className="space-y-6 mt-4">
         {['local', 'international'].map(type => {
           const group = methods.filter(m => m.type === type)
           if (group.length === 0) return null
           return (
             <div key={type}>
-              <h2 className="font-display text-lg font-bold text-foreground mb-2 capitalize">{type === 'local' ? '🇰🇪 Local Couriers' : '🌍 International'}</h2>
-              <div className="grid gap-3">
+              <h2 className="font-display text-lg font-bold text-foreground mb-3 capitalize">
+                {type === 'local' ? '🇰🇪 Local Couriers' : '🌍 International'} ({group.length})
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {group.map(m => (
-                  <div key={m.id} className="bg-card border border-border rounded-lg p-4 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-foreground text-sm">{m.name}</h3>
-                      <p className="text-xs text-muted-foreground">{m.estimated_days} · KSh {m.price.toLocaleString()} · {(m.regions || []).join(', ')}</p>
+                  <div key={m.id} className="bg-card border border-border rounded-lg p-4 flex flex-col justify-between shadow-sm">
+                    <div className="mb-3">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="font-semibold text-foreground text-sm line-clamp-1">{m.name}</h3>
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${m.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {m.is_active ? 'Active' : 'Off'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-medium text-primary">KSh {m.price.toLocaleString()}</p>
+                      <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                        {m.provider ? `${m.provider} • ` : ''}{m.estimated_days || 'No timeframe'}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2 py-0.5 rounded ${m.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{m.is_active ? 'Active' : 'Off'}</span>
-                      <Button size="sm" variant="outline" onClick={() => handleEdit(m)}><Edit className="w-3 h-3" /></Button>
-                      <Button size="sm" variant="outline" onClick={() => handleDelete(m.id)} className="text-destructive"><Trash2 className="w-3 h-3" /></Button>
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                      <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => handleEdit(m)}><Edit className="w-3 h-3 mr-1" /> Edit</Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(m.id)}><Trash2 className="w-3 h-3" /></Button>
                     </div>
                   </div>
                 ))}
