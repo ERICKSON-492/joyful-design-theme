@@ -71,19 +71,22 @@ export default function CheckoutPage() {
     if (accountEmail) setEmail(prev => prev || accountEmail)
   }, [accountName, accountEmail])
 
-  // Load shipping & payment methods from the public interface
+  // Fetch shipping & payment data from Supabase
   useEffect(() => {
     const load = async () => {
       try {
+        console.log("🔵 Fetching shipping methods from database...")
         const [ship, pay] = await Promise.all([
           fetchPublicTable<ShippingMethod>('shipping_methods', 'select=*&is_active=eq.true&order=price.asc'),
           fetchPublicTable<PaymentMethodOption>('payment_methods', 'select=*&is_active=eq.true&order=created_at.asc'),
         ])
+        
+        console.log("🟢 Retreived Shipping Rows:", ship)
         setShippingMethods(ship || [])
         setPaymentMethods(pay || [])
         if (pay?.length) setSelectedPayment(pay[0].provider)
       } catch (err) {
-        console.error("Failed to fetch checkout table assets:", err)
+        console.error("❌ Checkout loading breakdown:", err)
       }
     }
     load()
@@ -91,21 +94,22 @@ export default function CheckoutPage() {
 
   const isInternational = country !== 'Kenya'
 
-  // ---- RESILIENT MULTI-LAYERED SHIPPING FILTER PIPELINE ----
+  // ---- FAILSAFE SHIPPING FILTERING PIPELINE ----
   const getFilteredShipping = () => {
-    // 1. Separate base regional logic types cleanly
+    // Step 1: Broad partition by region type ('local' vs 'international')
     const baseScopeFiltered = shippingMethods.filter(m => 
       isInternational ? m.type === 'international' : m.type === 'local'
     )
 
-    // 2. Local fallback contextual evaluation
+    // Step 2: Try contextual matching based on location inputs
     if (!isInternational && baseScopeFiltered.length > 0) {
       const userLocationInput = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
       
       if (userLocationInput) {
-        const dynamicMatches = baseScopeFiltered.filter(m => {
+        const structuralMatches = baseScopeFiltered.filter(m => {
           const cleanMethodName = String(m.name || '').toLowerCase().trim()
           
+          // Flatten postgres array format safely into comparable strings
           let regionsArray: string[] = []
           if (Array.isArray(m.regions)) {
             regionsArray = m.regions.map(r => String(r || '').toLowerCase().trim())
@@ -116,20 +120,20 @@ export default function CheckoutPage() {
           return (
             cleanMethodName.length > 0 && (
               userLocationInput.includes(cleanMethodName) || 
-              cleanMethodName.includes(userLocationInput) ||
               regionsArray.some(region => userLocationInput.includes(region) || region.includes(userLocationInput))
             )
           )
         })
 
-        // If explicit granular text patterns map successfully, return only those
-        if (dynamicMatches.length > 0) {
-          return dynamicMatches
+        // If a specific regional method matches what they typed, return only those options
+        if (structuralMatches.length > 0) {
+          return structuralMatches
         }
       }
     }
 
-    // 3. Absolute Fallback: Return all scope matching rates instead of showing an empty screen
+    // Step 3: ABSOLUTE FALLBACK - If text searching yields nothing, return ALL rows matching the scope 
+    // so that local delivery options are always present and visible.
     return baseScopeFiltered
   }
 
@@ -139,18 +143,13 @@ export default function CheckoutPage() {
 
   const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
 
-  // Helper: send order confirmation email with full itemised receipt using Edge Function
+  // Send invoice email notification
   const sendOrderEmail = useCallback(async (orderId: string) => {
     const targetEmail = email || accountEmail;
-    if (!targetEmail) {
-      console.log("Skipping email transmission: No email address available.");
-      return;
-    }
+    if (!targetEmail) return;
 
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
     const shippingAddressLine = [address, county || city, postalCode, country].filter(Boolean).join(', ')
-
-    console.log('🔵 Attempting to generate receipt...')
     
     const receiptUrl = await generateAndUploadReceipt({
       orderId,
@@ -165,89 +164,49 @@ export default function CheckoutPage() {
       shippingAddress: shippingAddressLine,
     })
 
-    if (!receiptUrl) {
-      console.error('❌ Receipt URL calculation returned null - cloud storage transaction execution failed!')
-    }
-
     const itemsHtml = items.map(item => `
       <tr>
         <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;color:#374151;">
           <div style="font-weight:600;color:#111827;">${item.name}</div>
           <div style="font-size:12px;color:#6b7280;margin-top:2px;">Qty ${item.quantity} × KSh ${item.price.toLocaleString()}</div>
         </td>
-        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;font-weight:700;color:#111827;text-align:right;white-space:nowrap;">
+        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;font-weight:700;color:#111827;text-align:right;">
           KSh ${(item.price * item.quantity).toLocaleString()}
         </td>
       </tr>
     `).join('');
 
-    const receiptBlock = receiptUrl
-      ? `
-        <div style="margin:18px 0;text-align:center;">
-          <a href="${receiptUrl}"
-             style="display:inline-block;background-color:#D4A017;color:#ffffff;text-decoration:none;
-                    padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:0.03em;">
-            ⬇ Download PDF Receipt
-          </a>
-          <p style="margin:8px 0 0 0;font-size:11px;color:#9ca3af;">Link valid for 12 months. Keep it for your records.</p>
-        </div>`
-      : ''
+    const receiptBlock = receiptUrl ? `
+      <div style="margin:18px 0;text-align:center;">
+        <a href="${receiptUrl}" style="display:inline-block;background-color:#D4A017;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;">
+          ⬇ Download PDF Receipt
+        </a>
+      </div>` : ''
 
     const emailHtml = `
-      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;background-color:#ffffff;">
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;background-color:#ffffff;">
         <div style="text-align:center;padding:14px 0;border-bottom:3px solid #D4A017;margin-bottom:18px;">
-          <div style="font-family:'Playfair Display',Georgia,serif;font-size:22px;font-weight:800;color:#1A1A1A;letter-spacing:0.04em;">USHANGA CHRONICLES</div>
-          <div style="font-size:11px;color:#6b7280;margin-top:2px;letter-spacing:0.08em;text-transform:uppercase;">One bead. A thousand stories.</div>
+          <div style="font-size:22px;font-weight:800;color:#1A1A1A;letter-spacing:0.04em;">USHANGA CHRONICLES</div>
         </div>
-        <div style="text-align:center;margin-bottom:24px;">
-          <h2 style="color:#D4A017;margin:0 0 8px 0;font-size:24px;font-weight:700;">Asante for your order!</h2>
-          <p style="color:#4b5563;margin:0;font-size:14px;">Hi ${name || 'there'}, your order has been received.</p>
-        </div>
-
-        <p style="color:#374151;font-size:15px;line-height:1.5;">Order <strong>#${orderId}</strong> is now being prepared. Here are your items:</p>
-
+        <h2 style="color:#D4A017;text-align:center;">Asante for your order!</h2>
+        <p>Hi ${name || 'there'}, your order <strong>#${orderId}</strong> has been received.</p>
         <div style="margin:20px 0;background-color:#fafafa;border-radius:8px;padding:16px;">
-          <h3 style="margin:0 0 12px 0;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;font-weight:700;">Order Summary</h3>
           <table style="width:100%;border-collapse:collapse;">
-            <tbody>
-              ${itemsHtml}
-            </tbody>
+            <tbody>${itemsHtml}</tbody>
           </table>
-
-          <table style="width:100%;border-collapse:collapse;margin-top:14px;">
-            <tbody>
-              <tr>
-                <td style="padding:4px 8px;font-size:13px;color:#6b7280;">Subtotal</td>
-                <td style="padding:4px 8px;font-size:13px;color:#374151;text-align:right;">KSh ${subtotal.toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td style="padding:4px 8px;font-size:13px;color:#6b7280;">Shipping${selectedShipping ? ` (${selectedShipping.name})` : ''}</td>
-                <td style="padding:4px 8px;font-size:13px;color:#374151;text-align:right;">KSh ${shippingCost.toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td style="padding:10px 8px;font-size:15px;font-weight:800;color:#111827;border-top:2px solid #e5e7eb;">Grand Total</td>
-                <td style="padding:10px 8px;font-size:18px;font-weight:800;color:#D4A017;text-align:right;border-top:2px solid #e5e7eb;">KSh ${grandTotal.toLocaleString()}</td>
-              </tr>
-            </tbody>
-          </table>
+          <hr style="border:0;border-top:1px solid #e5e7eb;margin:12px 0;" />
+          <p style="text-align:right;font-size:16px;font-weight:bold;">Grand Total: KSh ${grandTotal.toLocaleString()}</p>
         </div>
-
         ${receiptBlock}
-
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;line-height:1.5;">
-          ${selectedShipping ? `<p style="margin:0 0 4px 0;"><strong style="color:#374151;">Delivery:</strong> ${selectedShipping.name} (${selectedShipping.estimated_days || 'soon'})</p>` : ''}
-          <p style="margin:0;">Any questions? Reply to this email or reach us on WhatsApp.</p>
-        </div>
       </div>
     `;
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-email', {
+      await supabase.functions.invoke('send-email', {
         body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
       });
-      if (error) throw error;
     } catch (err) {
-      console.error("❌ Failed to forward transaction email transmission details:", err);
+      console.error("❌ Email transmission error:", err);
     }
   }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, address, city, county, postalCode, country]);
 
@@ -360,7 +319,6 @@ export default function CheckoutPage() {
         <div className="container mx-auto px-4 text-center py-20">
           <ShoppingBag className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
           <h1 className="font-display text-2xl font-bold text-foreground mb-2">Your cart is empty</h1>
-          <p className="text-muted-foreground mb-6">Add some items before checking out</p>
           <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase rounded-lg">Go to Shop</Link>
         </div>
       </div>
@@ -383,7 +341,7 @@ export default function CheckoutPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
-            {/* Step 0: Cart */}
+            {/* Step 0: Cart summary review */}
             {step === 0 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -419,14 +377,14 @@ export default function CheckoutPage() {
                 </div>
                 <div className="p-4 border-t border-border">
                   <button onClick={() => setStep(1)} disabled={!canGoToShipping}
-                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50" style={{ minHeight: '48px' }}>
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors" style={{ minHeight: '48px' }}>
                     Proceed to Shipping
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Step 1: Shipping */}
+            {/* Step 1: Shipping and Delivery */}
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -439,18 +397,18 @@ export default function CheckoutPage() {
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1.5">Full Name *</label>
                       <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Linda Amollo"
-                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1.5">Phone Number *</label>
                       <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0748207000"
-                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">Email (optional)</label>
                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com"
-                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                   </div>
 
                   <div>
@@ -461,7 +419,6 @@ export default function CheckoutPage() {
                       <option value="Tanzania">🇹🇿 Tanzania</option>
                       <option value="Uganda">🇺🇬 Uganda</option>
                       <option value="Rwanda">🇷🇼 Rwanda</option>
-                      <option value="Ethiopia">🇪🇹 Ethiopia</option>
                       <option value="Other">🌍 Other (International)</option>
                     </select>
                   </div>
@@ -469,7 +426,7 @@ export default function CheckoutPage() {
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">Street Address</label>
                     <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate"
-                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     {country === 'Kenya' ? (
@@ -485,23 +442,26 @@ export default function CheckoutPage() {
                       <div>
                         <label className="block text-sm font-medium text-foreground mb-1.5">City / Town</label>
                         <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City"
-                          className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                          className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm" />
                       </div>
                     )}
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1.5">Postal Code</label>
                       <input type="text" value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="00100"
-                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary text-sm" />
+                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm" />
                     </div>
                   </div>
 
-                  {/* Shipping Method Selection Option Interface */}
-                  <div>
+                  {/* Shipping rates list rendering zone */}
+                  <div className="pt-2">
                     <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                       <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
                     </label>
                     {filteredShipping.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No shipping methods available for this destination.</p>
+                      <div className="p-4 rounded-lg bg-muted text-center border border-dashed border-border">
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground mb-1" />
+                        <p className="text-xs text-muted-foreground">Loading available rates...</p>
+                      </div>
                     ) : (
                       <div className="space-y-2">
                         {filteredShipping.map(m => (
@@ -530,16 +490,16 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 2: Payment */}
+            {/* Step 2: Gateway Payment */}
             {step === 2 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
                   <h2 className="font-display font-semibold text-foreground flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-primary" /> Payment
+                    <CreditCard className="w-5 h-5 text-primary" /> Payment Options
                   </h2>
                 </div>
                 <div className="p-4 space-y-4">
-                  {paymentMethods.length > 1 && (
+                  {paymentMethods.length > 0 && (
                     <div className="space-y-2">
                       {paymentMethods.map(pm => (
                         <label key={pm.id}
@@ -550,9 +510,8 @@ export default function CheckoutPage() {
                             onChange={() => setSelectedPayment(pm.provider)} className="accent-primary" />
                           <div>
                             <p className="font-medium text-foreground text-sm">{pm.name}</p>
-                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay via M-Pesa STK Push</p>}
-                            {pm.provider === 'pesapal' && <p className="text-xs text-muted-foreground">Pay with card or mobile money</p>}
-                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Pay when you receive your order</p>}
+                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay safely via M-Pesa STK Push prompt</p>}
+                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Settle payment upon delivery physical arrival</p>}
                           </div>
                         </label>
                       ))}
@@ -560,27 +519,16 @@ export default function CheckoutPage() {
                   )}
 
                   {selectedPayment === 'mpesa' && (
-                    <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4">
-                      <p className="text-sm text-green-800 dark:text-green-200">
-                        <strong>How it works:</strong> Click "Pay Now" and you'll receive an M-Pesa STK push on <strong>{phone}</strong>. Enter your PIN to complete payment.
-                      </p>
+                    <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4 text-sm text-green-800 dark:text-green-200">
+                      <strong>How it works:</strong> An STK pin prompt will automatically fire directly to your handset <strong>{phone}</strong> instantly upon triggering validation processing.
                     </div>
                   )}
 
                   {selectedPayment === 'cod' && (
-                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
-                      <p className="text-sm text-blue-800 dark:text-blue-200">
-                        <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} when you receive your order. Delivery via {selectedShipping?.name}.
-                      </p>
+                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-200">
+                      <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} directly to the dispatch agent when your items arrive.
                     </div>
                   )}
-
-                  <div className="text-sm text-muted-foreground space-y-1 border-t border-border pt-3">
-                    <p><strong className="text-foreground">Delivering to:</strong> {name}</p>
-                    {address && <p>{address}, {county || city} {postalCode}</p>}
-                    {selectedShipping && <p>Via {selectedShipping.name} ({selectedShipping.estimated_days || 'Standard delivery'})</p>}
-                    <p>Phone: {phone}</p>
-                  </div>
 
                   {error && (
                     <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
@@ -591,17 +539,17 @@ export default function CheckoutPage() {
                   <button onClick={handleMpesaPayment} disabled={isProcessing}
                     className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2" style={{ minHeight: '48px' }}>
                     {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {status === 'creating' && 'Creating Order...'}
-                    {status === 'pushing' && 'Sending M-Pesa Prompt...'}
-                    {status === 'polling' && 'Waiting for your PIN confirmation...'}
-                    {status === 'idle' && (selectedPayment === 'cod' ? 'Confirm Order' : 'Pay Now')}
+                    {status === 'creating' && 'Processing Invoice...'}
+                    {status === 'pushing' && 'Dispatching Secure Handshake...'}
+                    {status === 'polling' && 'Awaiting Handset PIN Approval...'}
+                    {status === 'idle' && (selectedPayment === 'cod' ? 'Place Order' : 'Complete Checkout')}
                   </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Right Column: Sticky Summary Panel */}
+          {/* Right Column Checkout Sticky Card Panels */}
           <div className="space-y-4">
             <div className="bg-card border border-border rounded-lg p-4 sticky top-24">
               <h2 className="font-display font-semibold text-foreground mb-4">Summary</h2>
@@ -618,7 +566,7 @@ export default function CheckoutPage() {
               </div>
               <div className="bg-muted/50 rounded-lg p-3 flex gap-2 items-start text-xs text-muted-foreground">
                 <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <span>Secure payment systems protected by end-to-end processing architecture.</span>
+                <span>Protected encryption keeps checkout actions and transaction transfers heavily isolated.</span>
               </div>
             </div>
           </div>
