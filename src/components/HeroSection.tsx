@@ -136,8 +136,8 @@ export function HeroSection() {
             key={slide.id}
             src={slide.image_url}
             alt={slide.subtitle || slide.title}
-            loading={index === 0 ? 'eager' : 'lazy'}
-            decoding={index === 0 ? 'sync' : 'async'}
+            loading="eager"
+            decoding="async"
             fetchPriority={index === 0 ? 'high' : 'auto'}
             onLoad={() => handleImageLoad(slide.id)}
             className="absolute inset-0 h-full w-full transition-opacity duration-700 ease-out object-cover"
@@ -199,8 +199,6 @@ export function HeroSection() {
           ))}
         </div>
       )}
-
-      
     </section>
   )
 }
