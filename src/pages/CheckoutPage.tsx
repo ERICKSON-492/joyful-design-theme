@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard } from 'lucide-react'
+import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 
@@ -25,6 +25,33 @@ interface PaymentMethodOption {
   name: string;
   provider: string;
   is_active: boolean;
+}
+
+// OpenStreetMap Reverse Geocoding Helper
+async function reverseGeocode(lat: number, lon: number) {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'Accept-Language': 'en',
+          'User-Agent': 'Ushanga-Chronicles-App' 
+        }
+      }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      display_name: data.display_name,
+      road: data.address?.road,
+      suburb: data.address?.suburb,
+      city: data.address?.city || data.address?.town || data.address?.village,
+      county: data.address?.county
+    };
+  } catch (error) {
+    console.error('Reverse geocoding failed:', error);
+    return null;
+  }
 }
 
 function CheckoutStepper({ step }: { step: number }) {
@@ -64,6 +91,8 @@ export default function CheckoutPage() {
   const [selectedShipping, setSelectedShipping] = useState<ShippingMethod | null>(null)
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([])
   const [selectedPayment, setSelectedPayment] = useState<string>('mpesa')
+  const [loadingGeo, setLoadingGeo] = useState(false)
+  const [coordinates, setCoordinates] = useState<{ lat: number | null; lon: number | null }>({ lat: null, lon: null })
   const { userId, authChecked, name: accountName, email: accountEmail } = useCheckoutAuth()
 
   useEffect(() => {
@@ -129,6 +158,63 @@ export default function CheckoutPage() {
     }
 
     return baseScopeFiltered
+  }
+
+  const handleDetectLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('GPS sensing is not supported by your current browser browser.')
+      return
+    }
+
+    setLoadingGeo(true)
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        setCoordinates({ lat: latitude, lon: longitude })
+
+        const geoData = await reverseGeocode(latitude, longitude)
+        
+        if (geoData) {
+          const addressParts = [geoData.road, geoData.suburb].filter(Boolean)
+          const fallbackText = addressParts.length > 0 ? addressParts.join(', ') : geoData.display_name
+          
+          setAddress(fallbackText)
+          if (geoData.city) setCity(geoData.city)
+          
+          // Match county name cleanly if returned from API values list
+          if (geoData.county) {
+            const matchedCounty = kenyanCounties.find(c => 
+              geoData.county!.toLowerCase().includes(c.toLowerCase())
+            )
+            if (matchedCounty) setCounty(matchedCounty)
+          }
+          
+          toast.success('Shipping address synchronized with your GPS position!')
+        } else {
+          setAddress(`GPS Pin: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
+          toast.info('Coordinates set. Please adjust landmarks or street names manually.')
+        }
+        setLoadingGeo(false)
+      },
+      (error) => {
+        setLoadingGeo(false)
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            toast.error('Location permissions denied. Please verify settings status access.')
+            break
+          case error.POSITION_UNAVAILABLE:
+            toast.error('GPS signal position is unavailable right now.')
+            break
+          case error.TIMEOUT:
+            toast.error('Network handshake timed out sensing positions.')
+            break
+          default:
+            toast.error('An unexpected tracking error occurred.')
+        }
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    )
   }
 
   const filteredShipping = getFilteredShipping()
@@ -223,6 +309,8 @@ export default function CheckoutPage() {
         items: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
         status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
         user_id: userId,
+        latitude: coordinates.lat,  // Captures structural float parameters
+        longitude: coordinates.lon, // Captures structural float parameters
         shipping_address: {
           address: address,
           city: city,
@@ -251,21 +339,19 @@ export default function CheckoutPage() {
 
       setStatus('pushing')
       
-      // FIX: Use explicit request options to avoid 404 router failure and pass aligned variable names
       const { data: responsePayload, error: stkError } = await supabase.functions.invoke(
         'mpesa-stk-push', 
         { 
           body: { 
             phone: phone, 
             amount: grandTotal, 
-            orderId: order.id // Aligned to edge function camelCase parser rule
+            orderId: order.id 
           } 
         }
       )
 
       if (stkError) throw new Error(stkError.message)
       
-      // Unpack nested execution results safely out of unified delivery schema
       if (!responsePayload?.success) {
         throw new Error(responsePayload?.error || 'Safaricom communication drop-out.')
       }
@@ -311,7 +397,7 @@ export default function CheckoutPage() {
       console.error("Execution failure context details:", err)
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
-  }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, clearCart, navigate, sendOrderEmail])
+  }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, clearCart, navigate, sendOrderEmail])
 
   if (status === 'success') {
     return (
@@ -400,11 +486,33 @@ export default function CheckoutPage() {
 
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
-                <div className="p-4 border-b border-border">
+                <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <h2 className="font-display font-semibold text-foreground flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-primary" /> Shipping Details
                   </h2>
+                  
+                  {/* GPS Sensor Autofill Trigger */}
+                  <button
+                    type="button"
+                    onClick={handleDetectLocation}
+                    disabled={loadingGeo}
+                    className="inline-flex items-center justify-center gap-2 text-xs font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border px-3 py-2 rounded-lg transition-colors"
+                    style={{ minHeight: '38px' }}
+                  >
+                    {loadingGeo ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                        Sensing GPS Pin...
+                      </>
+                    ) : (
+                      <>
+                        <Navigation className="w-3.5 h-3.5 fill-current text-primary" />
+                        Auto-Fill My Address
+                      </>
+                    )}
+                  </button>
                 </div>
+                
                 <div className="p-4 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -437,9 +545,12 @@ export default function CheckoutPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">Street Address</label>
-                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate"
-                      className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Street Address / Shipping Location *</label>
+                    <div className="relative">
+                      <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate / landmark location details"
+                        className="w-full border border-border bg-background text-foreground rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
+                      <MapPin className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     {country === 'Kenya' ? (
