@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useCart } from '@/contexts/CartContext'
-import { X, Plus, Minus, Trash2, ShoppingBag, LogIn } from 'lucide-react'
+import { X, Plus, Minus, Trash2, ShoppingBag, LogIn, ArrowLeft } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
@@ -57,16 +57,24 @@ export function CartDrawer() {
             {/* Items */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {items.length === 0 ? (
-                <div className="text-center py-16">
-                  <ShoppingBag className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <div className="text-center py-16 space-y-4">
+                  <ShoppingBag className="w-12 h-12 text-muted-foreground mx-auto" />
                   <p className="text-muted-foreground">Your cart is empty</p>
-                  <Link
-                    to="/shop"
-                    onClick={() => setIsOpen(false)}
-                    className="inline-block mt-4 bg-primary text-primary-foreground px-6 py-2.5 text-sm font-bold tracking-wider uppercase"
-                  >
-                    Start Shopping
-                  </Link>
+                  <div className="flex flex-col gap-2 max-w-xs mx-auto pt-2">
+                    <Link
+                      to="/shop"
+                      onClick={() => setIsOpen(false)}
+                      className="block w-full bg-primary text-primary-foreground text-center py-2.5 text-sm font-bold tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors"
+                    >
+                      Start Shopping
+                    </Link>
+                    <button
+                      onClick={() => setIsOpen(false)}
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-2"
+                    >
+                      Continue Shopping
+                    </button>
+                  </div>
                 </div>
               ) : (
                 items.map(item => (
@@ -125,7 +133,7 @@ export function CartDrawer() {
                     className="block w-full bg-green-600 hover:bg-green-700 text-white text-center py-3 font-bold text-sm tracking-wider uppercase transition-colors rounded-lg"
                     style={{ minHeight: '44px' }}
                   >
-                    Pay with M-Pesa
+                    Proceed to checkout
                   </Link>
                 ) : (
                   <Link
@@ -150,9 +158,20 @@ export function CartDrawer() {
                 >
                   Order via WhatsApp
                 </a>
+                
+                {/* Brand New Explicit Continue Shopping Trigger */}
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center justify-center gap-2 w-full bg-secondary hover:bg-secondary/80 text-secondary-foreground text-center py-3 font-bold text-sm tracking-wider uppercase transition-colors rounded-lg"
+                  style={{ minHeight: '44px' }}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Continue Shopping
+                </button>
+
                 <button
                   onClick={clearCart}
-                  className="w-full text-center text-sm text-muted-foreground hover:text-destructive transition-colors py-1"
+                  className="w-full text-center text-xs text-muted-foreground hover:text-destructive transition-colors pt-1"
                 >
                   Clear Cart
                 </button>
