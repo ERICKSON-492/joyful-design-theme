@@ -184,7 +184,7 @@ export default function ShopPage() {
                     {/* Badges */}
                     <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
                       {product.is_preorder && (
-                        <span className="bg-blue-600 text-white text-xs px-2 py-1 font-semibold flex items-center gap-1 rounded">
+                        <span className="bg-black text-white text-xs px-2 py-1 font-semibold flex items-center gap-1 rounded">
                           <Clock className="w-3 h-3" /> Pre-Order
                         </span>
                       )}
@@ -219,7 +219,7 @@ export default function ShopPage() {
                     )}
                   </div>
                   {product.is_preorder && product.preorder_label && (
-                    <p className="text-blue-600 text-xs font-medium mb-2 flex items-center gap-1">
+                    <p className="text-black text-xs font-medium mb-2 flex items-center gap-1">
                       <Clock className="w-3 h-3" /> {product.preorder_label}
                     </p>
                   )}
@@ -242,7 +242,7 @@ export default function ShopPage() {
                     onClick={() => handleAdd(product)}
                     className={`w-full py-2.5 text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
                       product.is_preorder
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        ? 'bg-black hover:bg-neutral-800 text-white'
                         : 'bg-primary text-primary-foreground hover:bg-primary/90'
                     }`}
                     style={{ minHeight: '44px' }}
