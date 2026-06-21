@@ -11,11 +11,20 @@ import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
 interface ShippingMethod {
-  id: string; name: string; type: string; provider: string; estimated_days: string | null; price: number; regions: string[]
+  id: string;
+  name: string;
+  type: string;
+  provider: string;
+  estimated_days: string | null;
+  price: number;
+  regions: string[] | string | null;
 }
 
 interface PaymentMethodOption {
-  id: string; name: string; provider: string; is_active: boolean
+  id: string;
+  name: string;
+  provider: string;
+  is_active: boolean;
 }
 
 function CheckoutStepper({ step }: { step: number }) {
@@ -62,7 +71,7 @@ export default function CheckoutPage() {
     if (accountEmail) setEmail(prev => prev || accountEmail)
   }, [accountName, accountEmail])
 
-  // Load shipping & payment methods
+  // Load shipping & payment methods from the public interface
   useEffect(() => {
     const load = async () => {
       try {
@@ -73,45 +82,55 @@ export default function CheckoutPage() {
         setShippingMethods(ship || [])
         setPaymentMethods(pay || [])
         if (pay?.length) setSelectedPayment(pay[0].provider)
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.error("Failed to fetch checkout table assets:", err)
+      }
     }
     load()
   }, [])
 
   const isInternational = country !== 'Kenya'
 
-  // ---- DYNAMIC AND RESILIENT SHIPPING FILTER PIPELINE ----
+  // ---- RESILIENT MULTI-LAYERED SHIPPING FILTER PIPELINE ----
   const getFilteredShipping = () => {
-    // 1. Initial filter by base scope geometry type
-    const scopeFiltered = shippingMethods.filter(m => 
+    // 1. Separate base regional logic types cleanly
+    const baseScopeFiltered = shippingMethods.filter(m => 
       isInternational ? m.type === 'international' : m.type === 'local'
     )
 
-    // 2. If client is in Kenya, filter cleanly against their typed text fields
-    if (!isInternational) {
-      const userLocationInput = (county || city || address || '').trim().toLowerCase()
+    // 2. Local fallback contextual evaluation
+    if (!isInternational && baseScopeFiltered.length > 0) {
+      const userLocationInput = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
       
       if (userLocationInput) {
-        const directMatches = scopeFiltered.filter(m => {
-          const cleanMethodName = String(m.name || '').toLowerCase()
-          const regionsArray = Array.isArray(m.regions) ? m.regions : []
+        const dynamicMatches = baseScopeFiltered.filter(m => {
+          const cleanMethodName = String(m.name || '').toLowerCase().trim()
           
+          let regionsArray: string[] = []
+          if (Array.isArray(m.regions)) {
+            regionsArray = m.regions.map(r => String(r || '').toLowerCase().trim())
+          } else if (typeof m.regions === 'string') {
+            regionsArray = [m.regions.toLowerCase().trim()]
+          }
+
           return (
-            cleanMethodName.includes(userLocationInput) || 
-            userLocationInput.includes(cleanMethodName) ||
-            regionsArray.some(r => String(r || '').toLowerCase().includes(userLocationInput))
-          );
+            cleanMethodName.length > 0 && (
+              userLocationInput.includes(cleanMethodName) || 
+              cleanMethodName.includes(userLocationInput) ||
+              regionsArray.some(region => userLocationInput.includes(region) || region.includes(userLocationInput))
+            )
+          )
         })
 
-        // If specific text matches exist, present those exact options
-        if (directMatches.length > 0) {
-          return directMatches
+        // If explicit granular text patterns map successfully, return only those
+        if (dynamicMatches.length > 0) {
+          return dynamicMatches
         }
       }
     }
 
-    // 3. Fallback: Return standard options if nothing explicit matches yet
-    return scopeFiltered
+    // 3. Absolute Fallback: Return all scope matching rates instead of showing an empty screen
+    return baseScopeFiltered
   }
 
   const filteredShipping = getFilteredShipping()
@@ -147,7 +166,7 @@ export default function CheckoutPage() {
     })
 
     if (!receiptUrl) {
-      console.error('❌ Receipt URL is null - upload failed!')
+      console.error('❌ Receipt URL calculation returned null - cloud storage transaction execution failed!')
     }
 
     const itemsHtml = items.map(item => `
@@ -228,7 +247,7 @@ export default function CheckoutPage() {
       });
       if (error) throw error;
     } catch (err) {
-      console.error("❌ Failed to send email:", err);
+      console.error("❌ Failed to forward transaction email transmission details:", err);
     }
   }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, address, city, county, postalCode, country]);
 
@@ -364,6 +383,7 @@ export default function CheckoutPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
+            {/* Step 0: Cart */}
             {step === 0 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -406,6 +426,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
+            {/* Step 1: Shipping */}
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -474,6 +495,7 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
+                  {/* Shipping Method Selection Option Interface */}
                   <div>
                     <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                       <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
@@ -491,7 +513,7 @@ export default function CheckoutPage() {
                               onChange={() => setSelectedShipping(m)} className="accent-primary" />
                             <div className="flex-1">
                               <p className="font-medium text-foreground text-sm">{m.name}</p>
-                              <p className="text-xs text-muted-foreground">{m.estimated_days} {m.provider ? ` via ${m.provider}` : ''}</p>
+                              <p className="text-xs text-muted-foreground">{m.estimated_days || 'Standard delivery'} {m.provider ? ` via ${m.provider}` : ''}</p>
                             </div>
                             <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
                           </label>
@@ -508,6 +530,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
+            {/* Step 2: Payment */}
             {step === 2 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -555,7 +578,7 @@ export default function CheckoutPage() {
                   <div className="text-sm text-muted-foreground space-y-1 border-t border-border pt-3">
                     <p><strong className="text-foreground">Delivering to:</strong> {name}</p>
                     {address && <p>{address}, {county || city} {postalCode}</p>}
-                    {selectedShipping && <p>Via {selectedShipping.name} ({selectedShipping.estimated_days})</p>}
+                    {selectedShipping && <p>Via {selectedShipping.name} ({selectedShipping.estimated_days || 'Standard delivery'})</p>}
                     <p>Phone: {phone}</p>
                   </div>
 
@@ -578,7 +601,7 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          {/* ---------- Right Column: Sticky Summary Panel ---------- */}
+          {/* Right Column: Sticky Summary Panel */}
           <div className="space-y-4">
             <div className="bg-card border border-border rounded-lg p-4 sticky top-24">
               <h2 className="font-display font-semibold text-foreground mb-4">Summary</h2>
