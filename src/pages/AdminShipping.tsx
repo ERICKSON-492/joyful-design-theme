@@ -9,7 +9,7 @@ interface ShippingMethod {
   id: string
   name: string
   type: string
-  provider: string
+  provider: string | null
   estimated_days: string | null
   price: number
   is_active: boolean
@@ -45,11 +45,23 @@ export default function AdminShipping() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetch_ = async () => {
-    const { data, error } = await supabase.from('shipping_methods').select('*').order('type', { ascending: true })
+    const { data, error } = await supabase.from('shipping_methods').select('*')
     if (error) {
       toast.error('Failed to fetch methods: ' + error.message)
+      return
     }
-    if (data) setMethods(data as ShippingMethod[])
+    if (data) {
+      // Debug logging to isolate row issues in the browser F12 Console
+      console.log("RAW SUPABASE SHIPPING DATA:", data)
+      
+      // Inline normalization mapping to catch trailing spaces or casing bugs from DB
+      const normalized = (data as any[]).map(m => ({
+        ...m,
+        type: String(m.type || 'local').toLowerCase().trim(),
+        is_active: m.is_active ?? true
+      }))
+      setMethods(normalized)
+    }
   }
   
   useEffect(() => { fetch_() }, [])
@@ -62,7 +74,7 @@ export default function AdminShipping() {
     const payload = {
       name: form.name.trim(), 
       type: form.type.trim(), 
-      provider: form.provider.trim(),
+      provider: form.provider.trim() || null,
       estimated_days: form.estimated_days.trim() || null,
       price: parseFloat(form.price) || 0, 
       is_active: form.is_active,
@@ -98,7 +110,7 @@ export default function AdminShipping() {
 
   const splitLine = (line: string) => {
     const delim = line.includes('\t') ? '\t' : ','
-    // Replace carriage returns \r to stop invisible formatting breakages
+    // Replace carriage returns \r to stop hidden formatting breaking strings
     return line.replace(/\r/g, '').split(delim).map(s => s.trim())
   }
 
@@ -119,7 +131,6 @@ export default function AdminShipping() {
       const priceRaw = cols[1] || ''
       const price = parseFloat(priceRaw.replace(/[^0-9.]/g, ''))
       
-      // Force cleanly trimmed fallback strings
       const type = (cols[2] || bulkType).toLowerCase().trim()
       const provider = (cols[3] || bulkProvider).trim()
       const estimated_days = (cols[4] || '').trim()
@@ -174,7 +185,7 @@ export default function AdminShipping() {
         provider: row.provider || null,
         estimated_days: row.estimated_days || null,
         price: row.price,
-        is_active: true, // Explicitly enforce active visibility state
+        is_active: true, 
         regions: [row.location],
       }
       
@@ -191,7 +202,7 @@ export default function AdminShipping() {
     if (successCount) toast.success(`Imported ${successCount} location${successCount === 1 ? '' : 's'}`)
     if (failCount) toast.error(`${failCount} row${failCount === 1 ? '' : 's'} failed`)
     resetBulkImport()
-    fetch_() // Refresh state cleanly
+    fetch_()
   }
 
   const newCount = bulkPreview.filter(r => r.status === 'new').length
@@ -201,7 +212,12 @@ export default function AdminShipping() {
   return (
     <div className="p-4 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Shipping Methods</h1>
+        <div>
+          <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Shipping Methods</h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            Fetched rows in memory: <span className="font-mono font-bold text-primary">{methods.length}</span>
+          </p>
+        </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => { resetBulkImport(); setShowBulkImport(true) }}>
             <Upload className="w-4 h-4 mr-1" /> Bulk Import
@@ -333,6 +349,13 @@ export default function AdminShipping() {
 
       {/* ---------- Main View Grid ---------- */}
       <div className="space-y-6 mt-4">
+        {/* Strict Formatting Mismatch Fallback Alert Block */}
+        {methods.length > 0 && !methods.some(m => m.type === 'local' || m.type === 'international') && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-600 dark:text-amber-400">
+            ⚠️ Rows are successfully loaded into your app state ({methods.length} found), but their database <strong>type</strong> fields do not exactly equal 'local' or 'international'. Look inside your browser console logs to see what string value they contain!
+          </div>
+        )}
+
         {['local', 'international'].map(type => {
           const group = methods.filter(m => m.type === type)
           if (group.length === 0) return null
@@ -343,15 +366,15 @@ export default function AdminShipping() {
               </h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {group.map(m => (
-                  <div key={m.id} className="bg-card border border-border rounded-lg p-4 flex flex-col justify-between shadow-sm">
+                  <div key={m.id} className="bg-card border border-border rounded-lg p-4 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
                     <div className="mb-3">
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <h3 className="font-semibold text-foreground text-sm line-clamp-1">{m.name}</h3>
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${m.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${m.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                           {m.is_active ? 'Active' : 'Off'}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground font-medium text-primary">KSh {m.price.toLocaleString()}</p>
+                      <p className="text-xs font-bold text-primary">KSh {m.price.toLocaleString()}</p>
                       <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
                         {m.provider ? `${m.provider} • ` : ''}{m.estimated_days || 'No timeframe'}
                       </p>
@@ -366,6 +389,12 @@ export default function AdminShipping() {
             </div>
           )
         })}
+
+        {methods.length === 0 && (
+          <div className="p-12 text-center border-2 border-dashed border-muted rounded-xl text-muted-foreground text-sm">
+            No shipping methods found in your database. Use 'Add Method' or 'Bulk Import' to create rows.
+          </div>
+        )}
       </div>
     </div>
   )
