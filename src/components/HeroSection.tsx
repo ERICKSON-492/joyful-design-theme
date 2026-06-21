@@ -87,14 +87,38 @@ export function HeroSection() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  // Slide advancement
-  const nextSlide = useCallback(() => {
-    setCurrent((prev) => {
-      const next = (prev + 1) % localSlides.length
-      console.log('Moving to slide:', next) // Debug
-      return next
+  // Preload every slide image up front using native Image objects, so the
+  // browser has fully decoded bytes in memory before the carousel ever
+  // tries to display them. This prevents the grey background from showing
+  // through a slide whose <img> src hasn't finished downloading yet.
+  useEffect(() => {
+    localSlides.forEach((slide) => {
+      const preloadImg = new Image()
+      preloadImg.src = slide.image_url
+      preloadImg.onload = () => {
+        setImagesLoaded((prev) => ({ ...prev, [slide.id]: true }))
+      }
+      // If a slide image fails outright, mark it loaded anyway so the
+      // carousel doesn't stall forever waiting on a broken file.
+      preloadImg.onerror = () => {
+        setImagesLoaded((prev) => ({ ...prev, [slide.id]: true }))
+      }
     })
   }, [])
+
+  // Slide advancement — skips over any slide whose image hasn't finished
+  // preloading yet, so autoplay never lands on a blank/grey frame.
+  const nextSlide = useCallback(() => {
+    setCurrent((prev) => {
+      for (let step = 1; step <= localSlides.length; step++) {
+        const candidate = (prev + step) % localSlides.length
+        if (imagesLoaded[localSlides[candidate].id]) {
+          return candidate
+        }
+      }
+      return prev
+    })
+  }, [imagesLoaded])
 
   // Auto-play
   useEffect(() => {
@@ -103,13 +127,7 @@ export function HeroSection() {
     return () => window.clearInterval(timer)
   }, [nextSlide])
 
-  const handleImageLoad = (id: string) => {
-    console.log('Image loaded:', id) // Debug
-    setImagesLoaded((prev) => ({ ...prev, [id]: true }))
-  }
-
   const activeSlide = localSlides[current]
-  console.log('Current slide index:', current, 'Slide data:', activeSlide) // Debug
 
   return (
     <section
@@ -130,6 +148,7 @@ export function HeroSection() {
       {/* ========================================== */}
       {localSlides.map((slide, index) => {
         const isActive = index === current
+        const isLoaded = imagesLoaded[slide.id]
 
         return (
           <img
@@ -139,11 +158,10 @@ export function HeroSection() {
             loading="eager"
             decoding="async"
             fetchPriority={index === 0 ? 'high' : 'auto'}
-            onLoad={() => handleImageLoad(slide.id)}
             className="absolute inset-0 h-full w-full transition-opacity duration-700 ease-out object-cover"
             style={{
               zIndex: isActive ? 1 : 0,
-              opacity: isActive ? 1 : 0, // <-- KEY FIX: Removed conditional for imagesLoaded
+              opacity: isActive && isLoaded ? 1 : 0,
               objectPosition: isMobile ? 'center 25%' : 'center center',
             }}
           />
@@ -187,10 +205,7 @@ export function HeroSection() {
           {localSlides.map((_, index) => (
             <button
               key={index}
-              onClick={() => {
-                console.log('Manual slide change to:', index)
-                setCurrent(index)
-              }}
+              onClick={() => setCurrent(index)}
               className={`h-1.5 rounded-full transition-all duration-500 ${
                 index === current ? 'w-10 bg-primary shadow-md' : 'w-5 bg-white/40 hover:bg-white/60'
               }`}
