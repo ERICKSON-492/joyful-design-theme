@@ -4,12 +4,12 @@ import { Link } from 'react-router-dom'
 // ==========================================
 // 1. STATIC ASSET IMPORTS
 // ==========================================
-import heroTribeImg from '@/assets/hero/1781724309331.jpeg'
-import heroJewelryImg from '@/assets/hero/1781724828046.jpg'
-import heroDecorImg from '@/assets/hero/1781965391751.png'
-import variant3 from '@/assets/hero/1781724604664.jpg'
-import variant4 from '@/assets/hero/1781965440352.png'
-import variant5 from '@/assets/hero/1781965498095.jpg'
+import heroTribeImg from '@/assets/hero/1781724309331.webp'
+import heroJewelryImg from '@/assets/hero/1781724828046.webp'
+import heroDecorImg from '@/assets/hero/1781965391751.webp'
+import variant3 from '@/assets/hero/1781724604664.webp'
+import variant4 from '@/assets/hero/1781965440352.webp'
+import variant5 from '@/assets/hero/1781965498095.webp'
 
 // ==========================================
 // 2. TYPES & DATA CONFIGURATION
