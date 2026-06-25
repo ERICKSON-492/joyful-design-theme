@@ -4,7 +4,11 @@ import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation, Package } from 'lucide-react'
+import { 
+  ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, 
+  MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, 
+  Navigation, Package, AlertCircle 
+} from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 
@@ -18,9 +22,9 @@ interface ShippingMethod {
   estimated_days: string | null;
   price: number;
   regions: string[] | string | null;
-  latitude?: number;
-  longitude?: number;
-  coverage_radius?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  coverage_radius?: number | null;
 }
 
 interface PaymentMethodOption {
@@ -30,18 +34,24 @@ interface PaymentMethodOption {
   is_active: boolean;
 }
 
-// OpenStreetMap Reverse Geocoding Helper
+// OpenStreetMap Reverse Geocoding Helper with timeout
 async function reverseGeocode(lat: number, lon: number) {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
       {
         headers: {
           'Accept-Language': 'en',
-          'User-Agent': 'Ushanga-Chronicles-App' 
-        }
+          'User-Agent': 'Ushanga-Chronicles-App'
+        },
+        signal: controller.signal
       }
     );
+    
+    clearTimeout(timeoutId);
     if (!response.ok) return null;
     const data = await response.json();
     return {
@@ -61,7 +71,7 @@ async function reverseGeocode(lat: number, lon: number) {
 
 // Calculate distance between two points using Haversine formula
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = 
@@ -113,7 +123,7 @@ export default function CheckoutPage() {
   const [coordinates, setCoordinates] = useState<{ lat: number | null; lon: number | null }>({ lat: null, lon: null })
   const [shippingLoading, setShippingLoading] = useState(false)
   const [matchedMethods, setMatchedMethods] = useState<ShippingMethod[]>([])
-  const [isLocatingForShipping, setIsLocatingForShipping] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
   
   const { userId, authChecked, name: accountName, email: accountEmail } = useCheckoutAuth()
 
@@ -126,18 +136,17 @@ export default function CheckoutPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        console.log("🔵 Fetching shipping methods from database...")
         const [ship, pay] = await Promise.all([
           fetchPublicTable<ShippingMethod>('shipping_methods', 'select=*&is_active=eq.true&order=price.asc'),
           fetchPublicTable<PaymentMethodOption>('payment_methods', 'select=*&is_active=eq.true&order=created_at.asc'),
         ])
         
-        console.log("🟢 Retrieved Shipping Rows:", ship)
         setShippingMethods(ship || [])
         setPaymentMethods(pay || [])
         if (pay?.length) setSelectedPayment(pay[0].provider)
       } catch (err) {
-        console.error("❌ Checkout loading breakdown:", err)
+        console.error('Checkout loading error:', err)
+        toast.error('Failed to load checkout options')
       }
     }
     load()
@@ -147,16 +156,19 @@ export default function CheckoutPage() {
 
   // Enhanced shipping filtering with location awareness
   const getFilteredShipping = useCallback(() => {
-    // First filter by type (local/international)
     const baseScopeFiltered = shippingMethods.filter(m => 
       isInternational ? m.type === 'international' : m.type === 'local'
     )
 
-    if (!isInternational && baseScopeFiltered.length > 0) {
+    if (baseScopeFiltered.length === 0) {
+      setMatchedMethods([])
+      return []
+    }
+
+    if (!isInternational) {
       const userLocationInput = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
       
       if (userLocationInput) {
-        // Score each shipping method
         const scored = baseScopeFiltered.map(m => {
           let score = 0
           const cleanMethodName = String(m.name || '').toLowerCase().trim()
@@ -165,19 +177,23 @@ export default function CheckoutPage() {
           if (Array.isArray(m.regions)) {
             regionsArray = m.regions.map(r => String(r || '').toLowerCase().trim())
           } else if (typeof m.regions === 'string') {
-            regionsArray = [m.regions.toLowerCase().trim()]
+            regionsArray = m.regions.toLowerCase().trim().split(',').map(r => r.trim())
           }
 
-          // Text matching
+          // Text matching - give higher weight to exact matches
           if (cleanMethodName.length > 0) {
+            if (userLocationInput === cleanMethodName) score += 50
             if (userLocationInput.includes(cleanMethodName)) score += 30
             if (cleanMethodName.includes(userLocationInput.split(' ')[0])) score += 20
           }
           
           // Region matching
           for (const region of regionsArray) {
-            if (userLocationInput.includes(region)) score += 25
-            if (region.includes(userLocationInput.split(' ')[0])) score += 15
+            if (region.length > 0) {
+              if (userLocationInput === region) score += 45
+              if (userLocationInput.includes(region)) score += 25
+              if (region.includes(userLocationInput.split(' ')[0])) score += 15
+            }
           }
 
           // Distance-based scoring if we have coordinates
@@ -186,14 +202,16 @@ export default function CheckoutPage() {
             const radius = m.coverage_radius || 25
             
             if (distance <= radius) {
-              score += 30
-              if (distance < 5) score += 20
-              else if (distance < 10) score += 15
-              else if (distance < 15) score += 10
+              score += 35
+              if (distance < 5) score += 25
+              else if (distance < 10) score += 20
+              else if (distance < 15) score += 15
+              else if (distance < 20) score += 10
             }
           }
 
-          return { method: m, score }
+          return { method: m, score, distance: m.latitude && m.longitude && coordinates.lat && coordinates.lon ? 
+            calculateDistance(coordinates.lat, coordinates.lon, m.latitude, m.longitude) : null }
         })
 
         // Filter and sort by score
@@ -204,9 +222,19 @@ export default function CheckoutPage() {
 
         if (matched.length > 0) {
           setMatchedMethods(matched)
+          setLocationError(null)
           return matched
         }
       }
+    }
+
+    // Fallback: show all local methods if no matches
+    if (!isInternational && baseScopeFiltered.length > 0) {
+      setMatchedMethods(baseScopeFiltered)
+      if (city || county) {
+        setLocationError('No specific delivery options found for your area. Standard rates apply.')
+      }
+      return baseScopeFiltered
     }
 
     setMatchedMethods(baseScopeFiltered)
@@ -216,20 +244,21 @@ export default function CheckoutPage() {
   // Auto-select best shipping method when filtered methods change
   useEffect(() => {
     const filtered = getFilteredShipping()
-    if (filtered.length > 0 && !selectedShipping) {
-      setSelectedShipping(filtered[0])
-    } else if (filtered.length > 0 && selectedShipping) {
-      // Check if selected is still in filtered list
-      const stillAvailable = filtered.some(m => m.id === selectedShipping.id)
-      if (!stillAvailable) {
+    if (filtered.length > 0) {
+      // Check if current selected is still available
+      if (selectedShipping && !filtered.some(m => m.id === selectedShipping.id)) {
+        setSelectedShipping(filtered[0])
+      } else if (!selectedShipping) {
         setSelectedShipping(filtered[0])
       }
+    } else {
+      setSelectedShipping(null)
     }
   }, [getFilteredShipping, selectedShipping])
 
-  // Update shipping methods when location changes
+  // Debounced shipping lookup when location changes
   useEffect(() => {
-    if (city || county || coordinates.lat) {
+    if (city || county || address || coordinates.lat) {
       setShippingLoading(true)
       const timer = setTimeout(() => {
         getFilteredShipping()
@@ -237,86 +266,89 @@ export default function CheckoutPage() {
       }, 500)
       return () => clearTimeout(timer)
     }
-  }, [city, county, coordinates, getFilteredShipping])
+  }, [city, county, address, coordinates, getFilteredShipping])
 
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
-      toast.error('GPS sensing is not supported by your current browser.')
+      toast.error('GPS is not supported by your browser.')
       return
     }
 
     setLoadingGeo(true)
-    setIsLocatingForShipping(true)
+    setLocationError(null)
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords
         setCoordinates({ lat: latitude, lon: longitude })
 
-        const geoData = await reverseGeocode(latitude, longitude)
-        
-        if (geoData) {
-          const addressParts = [geoData.road, geoData.suburb].filter(Boolean)
-          const fallbackText = addressParts.length > 0 ? addressParts.join(', ') : geoData.display_name
+        try {
+          const geoData = await reverseGeocode(latitude, longitude)
           
-          setAddress(fallbackText)
-          if (geoData.city) setCity(geoData.city)
-          if (geoData.country && geoData.country !== 'Kenya') {
-            setCountry(geoData.country)
-          }
-          
-          // Match county name cleanly if returned from API
-          if (geoData.county) {
-            const matchedCounty = kenyanCounties.find(c => 
-              geoData.county!.toLowerCase().includes(c.toLowerCase())
-            )
-            if (matchedCounty) setCounty(matchedCounty)
-          }
-          
-          // Trigger shipping lookup with location
-          setTimeout(() => {
-            const filtered = getFilteredShipping()
-            if (filtered.length > 0) {
-              toast.success(`📍 Location detected! ${filtered.length} delivery options available`)
-            } else {
-              toast.warning('📍 Location detected but no delivery options found for this area')
+          if (geoData) {
+            const addressParts = [geoData.road, geoData.suburb].filter(Boolean)
+            const fallbackText = addressParts.length > 0 ? addressParts.join(', ') : geoData.display_name
+            
+            setAddress(fallbackText || '')
+            if (geoData.city) setCity(geoData.city)
+            if (geoData.country && geoData.country !== 'Kenya') {
+              setCountry(geoData.country)
             }
-          }, 300)
-          
-          toast.success('Shipping address synchronized with your GPS position!')
-        } else {
-          setAddress(`GPS Pin: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
-          toast.info('Coordinates set. Please adjust landmarks or street names manually.')
+            
+            if (geoData.county) {
+              const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu']
+              const matchedCounty = kenyanCounties.find(c => 
+                geoData.county!.toLowerCase().includes(c.toLowerCase())
+              )
+              if (matchedCounty) setCounty(matchedCounty)
+            }
+            
+            // Wait for state to update then check shipping
+            setTimeout(() => {
+              const filtered = getFilteredShipping()
+              if (filtered.length > 0) {
+                toast.success(`📍 ${filtered.length} delivery option${filtered.length > 1 ? 's' : ''} available near you`)
+              } else {
+                toast.warning('📍 Location detected but no delivery options found')
+              }
+            }, 300)
+            
+            toast.success('Address updated from your location')
+          } else {
+            setAddress(`📍 ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`)
+            toast.info('Coordinates set. Please add your address details.')
+          }
+        } catch (error) {
+          console.error('Geocoding error:', error)
+          toast.error('Could not get address details. Please enter manually.')
         }
+        
         setLoadingGeo(false)
-        setIsLocatingForShipping(false)
       },
       (error) => {
         setLoadingGeo(false)
-        setIsLocatingForShipping(false)
+        setLocationError('Could not get your location. Please enter address manually.')
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            toast.error('Location permissions denied. Please verify settings status access.')
+            toast.error('Please allow location access in your browser settings')
             break
           case error.POSITION_UNAVAILABLE:
-            toast.error('GPS signal position is unavailable right now.')
+            toast.error('GPS signal unavailable. Please enter address manually.')
             break
           case error.TIMEOUT:
-            toast.error('Network handshake timed out sensing positions.')
+            toast.error('Location request timed out. Please try again.')
             break
           default:
-            toast.error('An unexpected tracking error occurred.')
+            toast.error('Could not detect location. Please enter address manually.')
         }
       },
-      { enableHighAccuracy: true, timeout: 12000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     )
   }
 
   const filteredShipping = getFilteredShipping()
   const shippingCost = selectedShipping?.price || 0
   const grandTotal = totalPrice + shippingCost
-
-  const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
 
   // Send invoice email notification
   const sendOrderEmail = useCallback(async (orderId: string) => {
@@ -363,7 +395,7 @@ export default function CheckoutPage() {
         <div style="text-align:center;padding:14px 0;border-bottom:3px solid #D4A017;margin-bottom:18px;">
           <div style="font-size:22px;font-weight:800;color:#1A1A1A;letter-spacing:0.04em;">USHANGA CHRONICLES</div>
         </div>
-        <h2 style="color:#D4A017;text-align:center;">Asante for your order!</h2>
+        <h2 style="color:#D4A017;text-align:center;">Thank you for your order!</h2>
         <p>Hi ${name || 'there'}, your order <strong>#${orderId}</strong> has been received.</p>
         <div style="margin:20px 0;background-color:#fafafa;border-radius:8px;padding:16px;">
           <table style="width:100%;border-collapse:collapse;">
@@ -381,7 +413,7 @@ export default function CheckoutPage() {
         body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
       });
     } catch (err) {
-      console.error("❌ Email transmission error:", err);
+      console.error('Email sending error:', err);
     }
   }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, address, city, county, postalCode, country]);
 
@@ -393,6 +425,7 @@ export default function CheckoutPage() {
     }
     if (!phone || phone.length < 9) { setError('Please enter a valid phone number'); return }
     if (!name.trim()) { setError('Please enter your name'); return }
+    if (!selectedShipping) { setError('Please select a shipping method'); return }
     if (items.length === 0) return
 
     setError('')
@@ -451,7 +484,7 @@ export default function CheckoutPage() {
       if (stkError) throw new Error(stkError.message)
       
       if (!responsePayload?.success) {
-        throw new Error(responsePayload?.error || 'Safaricom communication drop-out.')
+        throw new Error(responsePayload?.error || 'Safaricom communication error.')
       }
 
       const stkData = responsePayload.mpesa_response
@@ -486,13 +519,13 @@ export default function CheckoutPage() {
             await sendOrderEmail(order.id)
             setStatus('success'); clearCart(); toast.success('Payment successful! 🎉') 
           } else { 
-            setStatus('failed'); setError('Payment timed out. Contact us on WhatsApp if deducted.') 
+            setStatus('failed'); setError('Payment timed out. Contact us if amount was deducted.') 
           }
         }
       }
       setTimeout(poll, 4000)
     } catch (err: any) {
-      console.error("Execution failure context details:", err)
+      console.error('Payment error:', err)
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
   }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, clearCart, navigate, sendOrderEmail])
@@ -589,7 +622,6 @@ export default function CheckoutPage() {
                     <MapPin className="w-5 h-5 text-primary" /> Shipping Details
                   </h2>
                   
-                  {/* GPS Sensor Autofill Trigger */}
                   <button
                     type="button"
                     onClick={handleDetectLocation}
@@ -600,12 +632,12 @@ export default function CheckoutPage() {
                     {loadingGeo ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                        Sensing GPS Pin...
+                        Locating...
                       </>
                     ) : (
                       <>
                         <Navigation className="w-3.5 h-3.5 fill-current text-primary" />
-                        Auto-Fill My Address
+                        Use My Location
                       </>
                     )}
                   </button>
@@ -615,12 +647,12 @@ export default function CheckoutPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1.5">Full Name *</label>
-                      <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Linda Amollo"
+                      <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your full name"
                         className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1.5">Phone Number *</label>
-                      <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0748207000"
+                      <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="07XX XXX XXX"
                         className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                     </div>
                   </div>
@@ -643,9 +675,9 @@ export default function CheckoutPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">Street Address / Shipping Location *</label>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Street Address / Location *</label>
                     <div className="relative">
-                      <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate / landmark location details"
+                      <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street, building, estate, or landmark"
                         className="w-full border border-border bg-background text-foreground rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                       <MapPin className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
                     </div>
@@ -657,7 +689,7 @@ export default function CheckoutPage() {
                         <select value={county} onChange={e => setCounty(e.target.value)}
                           className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm">
                           <option value="">Select county</option>
-                          {kenyanCounties.map(c => <option key={c} value={c}>{c}</option>)}
+                          {['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other'].map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                     ) : (
@@ -674,10 +706,10 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  {/* Enhanced Shipping Method Selection with Location Awareness */}
+                  {/* Enhanced Shipping Method Selection */}
                   <div className="pt-2">
                     <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
+                      <Truck className="w-4 h-4 text-primary" /> Delivery Method *
                     </label>
                     
                     {shippingLoading ? (
@@ -695,48 +727,56 @@ export default function CheckoutPage() {
                             disabled={loadingGeo}
                             className="mt-2 text-xs text-primary hover:underline flex items-center gap-1 mx-auto"
                           >
-                            <Navigation className="w-3 h-3" /> Try using my location
+                            <Navigation className="w-3 h-3" /> Use my location to find options
                           </button>
                         )}
                       </div>
                     ) : (
                       <div className="space-y-2">
                         {filteredShipping.map((m, index) => {
-                          // Calculate distance if coordinates available
                           let distance = null;
+                          let isRecommended = false;
+                          
                           if (coordinates.lat && coordinates.lon && m.latitude && m.longitude) {
                             distance = calculateDistance(coordinates.lat, coordinates.lon, m.latitude, m.longitude);
+                            // Recommended if it's the closest and within coverage radius
+                            if (index === 0 && filteredShipping.length > 1) {
+                              isRecommended = true;
+                            }
+                          } else if (index === 0 && filteredShipping.length > 1 && (city || county)) {
+                            // Recommend based on text matching when no coordinates
+                            isRecommended = true;
                           }
                           
                           return (
                             <label key={m.id}
-                              className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                              className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
                                 selectedShipping?.id === m.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                               }`}>
                               <input type="radio" name="shipping" checked={selectedShipping?.id === m.id}
-                                onChange={() => setSelectedShipping(m)} className="accent-primary" />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
+                                onChange={() => setSelectedShipping(m)} className="accent-primary mt-1" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <p className="font-medium text-foreground text-sm">{m.name}</p>
-                                  {index === 0 && filteredShipping.length > 1 && coordinates.lat && (
-                                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                  {isRecommended && (
+                                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full whitespace-nowrap">
                                       Recommended
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {m.estimated_days || 'Standard delivery'} {m.provider ? ` via ${m.provider}` : ''}
-                                  {distance !== null && distance < 50 && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {m.estimated_days || 'Standard delivery'} {m.provider ? `via ${m.provider}` : ''}
+                                  {distance !== null && distance < 100 && (
                                     <span className="ml-1">· {distance.toFixed(1)} km away</span>
                                   )}
                                 </p>
                                 {m.regions && Array.isArray(m.regions) && m.regions.length > 0 && (
-                                  <p className="text-xs text-muted-foreground/60 mt-0.5">
+                                  <p className="text-xs text-muted-foreground/60 mt-0.5 truncate">
                                     Serves: {m.regions.slice(0, 3).join(', ')}{m.regions.length > 3 ? '...' : ''}
                                   </p>
                                 )}
                               </div>
-                              <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
+                              <span className="font-bold text-foreground text-sm whitespace-nowrap">KSh {m.price.toLocaleString()}</span>
                             </label>
                           );
                         })}
@@ -777,8 +817,8 @@ export default function CheckoutPage() {
                             onChange={() => setSelectedPayment(pm.provider)} className="accent-primary" />
                           <div>
                             <p className="font-medium text-foreground text-sm">{pm.name}</p>
-                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay safely via M-Pesa STK Push prompt</p>}
-                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Settle payment upon delivery physical arrival</p>}
+                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay securely via M-Pesa STK Push</p>}
+                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Pay cash upon delivery</p>}
                           </div>
                         </label>
                       ))}
@@ -787,13 +827,13 @@ export default function CheckoutPage() {
 
                   {selectedPayment === 'mpesa' && (
                     <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4 text-sm text-green-800 dark:text-green-200">
-                      <strong>How it works:</strong> An STK pin prompt will automatically fire directly to your handset <strong>{phone}</strong> instantly upon triggering validation processing.
+                      <strong>How it works:</strong> An STK push prompt will be sent to your phone <strong>{phone || '07XX XXX XXX'}</strong> for approval.
                     </div>
                   )}
 
                   {selectedPayment === 'cod' && (
                     <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-200">
-                      <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} directly to the dispatch agent when your items arrive.
+                      <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} to the delivery agent when your items arrive.
                     </div>
                   )}
 
@@ -806,9 +846,9 @@ export default function CheckoutPage() {
                   <button onClick={handleMpesaPayment} disabled={isProcessing}
                     className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2" style={{ minHeight: '48px' }}>
                     {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {status === 'creating' && 'Processing Invoice...'}
-                    {status === 'pushing' && 'Dispatching Secure Handshake...'}
-                    {status === 'polling' && 'Awaiting Handset PIN Approval...'}
+                    {status === 'creating' && 'Processing...'}
+                    {status === 'pushing' && 'Initiating Payment...'}
+                    {status === 'polling' && 'Awaiting PIN Approval...'}
                     {status === 'idle' && (selectedPayment === 'cod' ? 'Place Order' : 'Complete Checkout')}
                   </button>
                 </div>
@@ -818,12 +858,12 @@ export default function CheckoutPage() {
 
           <div className="space-y-4">
             <div className="bg-card border border-border rounded-lg p-4 sticky top-24">
-              <h2 className="font-display font-semibold text-foreground mb-4">Summary</h2>
+              <h2 className="font-display font-semibold text-foreground mb-4">Order Summary</h2>
               <div className="space-y-2 text-sm border-b border-border pb-3 mb-3">
                 <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="font-medium text-foreground">KSh {totalPrice.toLocaleString()}</span></div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
-                  <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : 'Calculated next'}</span>
+                  <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : 'Select method'}</span>
                 </div>
                 {selectedShipping && (
                   <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
@@ -838,7 +878,7 @@ export default function CheckoutPage() {
               </div>
               <div className="bg-muted/50 rounded-lg p-3 flex gap-2 items-start text-xs text-muted-foreground">
                 <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <span>Protected encryption keeps checkout actions and transaction transfers heavily isolated.</span>
+                <span>Your payment is secure and encrypted.</span>
               </div>
             </div>
           </div>
