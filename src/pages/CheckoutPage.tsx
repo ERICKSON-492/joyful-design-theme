@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
@@ -95,6 +95,8 @@ export default function CheckoutPage() {
   const [coordinates, setCoordinates] = useState<{ lat: number | null; lon: number | null }>({ lat: null, lon: null })
   const { userId, authChecked, name: accountName, email: accountEmail } = useCheckoutAuth()
 
+  const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
+
   useEffect(() => {
     if (accountName) setName(prev => prev || accountName)
     if (accountEmail) setEmail(prev => prev || accountEmail)
@@ -123,8 +125,8 @@ export default function CheckoutPage() {
 
   const isInternational = country !== 'Kenya'
 
-  // ---- FAILSAFE SHIPPING FILTERING PIPELINE ----
-  const getFilteredShipping = () => {
+  // ---- Dynamic Memoized Shipping Filter Pipeline ----
+  const filteredShipping = useMemo(() => {
     const baseScopeFiltered = shippingMethods.filter(m => 
       isInternational ? m.type === 'international' : m.type === 'local'
     )
@@ -158,7 +160,21 @@ export default function CheckoutPage() {
     }
 
     return baseScopeFiltered
-  }
+  }, [shippingMethods, isInternational, county, city, address])
+
+  // ---- Automated Shipping Selection Suggester ----
+  useEffect(() => {
+    if (filteredShipping.length > 0) {
+      const isCurrentSelectionStillValid = selectedShipping && filteredShipping.some(m => m.id === selectedShipping.id);
+      
+      if (!isCurrentSelectionStillValid) {
+        // Automatically selects the first option (which is the most economical one from our database query sort)
+        setSelectedShipping(filteredShipping[0]);
+      }
+    } else {
+      setSelectedShipping(null);
+    }
+  }, [filteredShipping, selectedShipping])
 
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
@@ -217,11 +233,8 @@ export default function CheckoutPage() {
     )
   }
 
-  const filteredShipping = getFilteredShipping()
   const shippingCost = selectedShipping?.price || 0
   const grandTotal = totalPrice + shippingCost
-
-  const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
 
   // Send invoice email notification
   const sendOrderEmail = useCallback(async (orderId: string) => {
@@ -259,7 +272,9 @@ export default function CheckoutPage() {
     const receiptBlock = receiptUrl ? `
       <div style="margin:18px 0;text-align:center;">
         <a href="${receiptUrl}" style="display:inline-block;background-color:#D4A017;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;">
-          </div>` : ''
+          View Invoice Receipt
+        </a>
+      </div>` : ''
 
     const emailHtml = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;background-color:#ffffff;">
@@ -309,8 +324,8 @@ export default function CheckoutPage() {
         items: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
         status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
         user_id: userId,
-        latitude: coordinates.lat,  // Captures structural float parameters
-        longitude: coordinates.lon, // Captures structural float parameters
+        latitude: coordinates.lat,
+        longitude: coordinates.lon,
         shipping_address: {
           address: address,
           city: city,
@@ -491,7 +506,6 @@ export default function CheckoutPage() {
                     <MapPin className="w-5 h-5 text-primary" /> Shipping Details
                   </h2>
                   
-                  {/* GPS Sensor Autofill Trigger */}
                   <button
                     type="button"
                     onClick={handleDetectLocation}
@@ -695,4 +709,4 @@ export default function CheckoutPage() {
       </div>
     </div>
   )
-} 
+}
