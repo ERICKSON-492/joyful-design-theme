@@ -83,25 +83,26 @@ export default function ProductDetailPage() {
     setSelectedVariant(match || null)
   }, [selectedSize, selectedColor, variants])
 
+  // Reset quantity to 1 when variant changes to avoid carrying over an invalid quantity
+  useEffect(() => {
+    setQuantity(1)
+  }, [selectedVariant])
+
   const gallery: string[] = (product?.image_urls && product.image_urls.length > 0)
     ? product.image_urls
     : (product?.image_url ? [product.image_url] : [])
-    
+
   const safeIdx = Math.min(imgIdx, Math.max(0, gallery.length - 1))
 
-  // Optimization: Dynamically inject a high-priority preload link for the active main display image
+  // Dynamically inject a high-priority preload link for the active main display image
   useEffect(() => {
     if (gallery.length === 0 || !gallery[safeIdx]) return
-
     const link = document.createElement('link')
     link.rel = 'preload'
     link.as = 'image'
     link.href = gallery[safeIdx]
     document.head.appendChild(link)
-
-    return () => {
-      document.head.removeChild(link)
-    }
+    return () => { document.head.removeChild(link) }
   }, [gallery, safeIdx])
 
   if (loading) {
@@ -151,7 +152,8 @@ export default function ProductDetailPage() {
       id: selectedVariant ? `${product.id}_${selectedVariant.id}` : product.id,
       name: variantLabel ? `${product.name} (${variantLabel})` : product.name,
       price: currentPrice,
-      image_url: product.image_url
+      image_url: product.image_url,
+      stock: currentStock, // ✅ pass stock so CartContext enforces the limit
     }, quantity)
   }
 
@@ -174,9 +176,9 @@ export default function ProductDetailPage() {
           <div>
             <div className="relative rounded-lg overflow-hidden bg-card border border-border aspect-square">
               {gallery.length > 0 ? (
-                <img 
-                  src={gallery[safeIdx]} 
-                  alt={product.name} 
+                <img
+                  src={gallery[safeIdx]}
+                  alt={product.name}
                   className="w-full h-full object-cover transition-opacity"
                   width={800}
                   height={800}
@@ -196,7 +198,7 @@ export default function ProductDetailPage() {
                   </button>
                   <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
                     {gallery.map((_, i) => (
-                      <button key={i} onClick={() => setImgIdx(i)} aria-label={`Image ${i+1}`}
+                      <button key={i} onClick={() => setImgIdx(i)} aria-label={`Image ${i + 1}`}
                         className={`w-2 h-2 rounded-full transition-all ${i === safeIdx ? 'bg-primary w-6' : 'bg-background/80'}`} />
                     ))}
                   </div>
@@ -208,14 +210,7 @@ export default function ProductDetailPage() {
                 {gallery.map((url, i) => (
                   <button key={url + i} onClick={() => setImgIdx(i)}
                     className={`aspect-square rounded overflow-hidden border-2 transition-colors ${i === safeIdx ? 'border-primary' : 'border-border hover:border-primary/40'}`}>
-                    <img 
-                      src={url} 
-                      alt="" 
-                      className="w-full h-full object-cover" 
-                      width={150}
-                      height={150}
-                      loading="lazy"
-                    />
+                    <img src={url} alt="" className="w-full h-full object-cover" width={150} height={150} loading="lazy" />
                   </button>
                 ))}
               </div>
@@ -277,9 +272,7 @@ export default function ProductDetailPage() {
                   {sizes.map(size => (
                     <button key={size} onClick={() => setSelectedSize(prev => prev === size ? null : size)}
                       className={`px-4 py-2 border text-sm font-medium rounded-lg transition-colors ${
-                        selectedSize === size
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'border-border hover:border-primary'
+                        selectedSize === size ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:border-primary'
                       }`} style={{ minHeight: '40px' }}>
                       {size}
                       {selectedSize === size && <Check className="w-3 h-3 inline ml-1" />}
@@ -297,9 +290,7 @@ export default function ProductDetailPage() {
                   {colors.map(color => (
                     <button key={color} onClick={() => setSelectedColor(prev => prev === color ? null : color)}
                       className={`px-4 py-2 border text-sm font-medium rounded-lg transition-colors ${
-                        selectedColor === color
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'border-border hover:border-primary'
+                        selectedColor === color ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:border-primary'
                       }`} style={{ minHeight: '40px' }}>
                       {color}
                       {selectedColor === color && <Check className="w-3 h-3 inline ml-1" />}
@@ -315,20 +306,38 @@ export default function ProductDetailPage() {
             )}
 
             {/* Quantity */}
-            <div>
-              <label className="text-sm font-semibold text-foreground block mb-2">Quantity</label>
-              <div className="flex items-center border border-border rounded-lg w-fit">
-                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="p-3 hover:bg-accent transition-colors rounded-l-lg">
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className="px-6 text-sm font-medium min-w-[3rem] text-center">{quantity}</span>
-                <button onClick={() => setQuantity(q => q + 1)} className="p-3 hover:bg-accent transition-colors rounded-r-lg">
-                  <Plus className="w-4 h-4" />
-                </button>
+            {!needsVariant && canOrder && (
+              <div>
+                <label className="text-sm font-semibold text-foreground block mb-2">Quantity</label>
+                <div className="flex items-center border border-border rounded-lg w-fit">
+                  {/* ✅ - button disabled at 1 */}
+                  <button
+                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                    disabled={quantity <= 1}
+                    className="p-3 hover:bg-accent transition-colors rounded-l-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="px-6 text-sm font-medium min-w-[3rem] text-center">{quantity}</span>
+                  {/* ✅ + button capped at currentStock */}
+                  <button
+                    onClick={() => setQuantity(q => Math.min(q + 1, currentStock))}
+                    disabled={quantity >= currentStock}
+                    className="p-3 hover:bg-accent transition-colors rounded-r-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                {/* Stock hint shown when stock is low */}
+                {currentStock <= 10 && currentStock > 0 && (
+                  <p className={`text-xs mt-1.5 ${currentStock <= 3 ? 'text-red-500 font-semibold' : 'text-orange-500'}`}>
+                    Only {currentStock} in stock
+                  </p>
+                )}
               </div>
-            </div>
+            )}
 
-            {/* Add to Cart / Pre-Order Action Button (Desktop) */}
+            {/* Add to Cart / Pre-Order Button */}
             <button
               onClick={handleAddToCart}
               disabled={!canOrder || needsVariant}
