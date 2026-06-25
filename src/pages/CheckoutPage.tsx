@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation } from 'lucide-react'
+import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation, Package } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 
@@ -18,6 +18,9 @@ interface ShippingMethod {
   estimated_days: string | null;
   price: number;
   regions: string[] | string | null;
+  latitude?: number;
+  longitude?: number;
+  coverage_radius?: number;
 }
 
 interface PaymentMethodOption {
@@ -46,12 +49,27 @@ async function reverseGeocode(lat: number, lon: number) {
       road: data.address?.road,
       suburb: data.address?.suburb,
       city: data.address?.city || data.address?.town || data.address?.village,
-      county: data.address?.county
+      county: data.address?.county,
+      state: data.address?.state,
+      country: data.address?.country
     };
   } catch (error) {
     console.error('Reverse geocoding failed:', error);
     return null;
   }
+}
+
+// Calculate distance between two points using Haversine formula
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }
 
 function CheckoutStepper({ step }: { step: number }) {
@@ -93,6 +111,10 @@ export default function CheckoutPage() {
   const [selectedPayment, setSelectedPayment] = useState<string>('mpesa')
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [coordinates, setCoordinates] = useState<{ lat: number | null; lon: number | null }>({ lat: null, lon: null })
+  const [shippingLoading, setShippingLoading] = useState(false)
+  const [matchedMethods, setMatchedMethods] = useState<ShippingMethod[]>([])
+  const [isLocatingForShipping, setIsLocatingForShipping] = useState(false)
+  
   const { userId, authChecked, name: accountName, email: accountEmail } = useCheckoutAuth()
 
   useEffect(() => {
@@ -110,7 +132,7 @@ export default function CheckoutPage() {
           fetchPublicTable<PaymentMethodOption>('payment_methods', 'select=*&is_active=eq.true&order=created_at.asc'),
         ])
         
-        console.log("🟢 Retreived Shipping Rows:", ship)
+        console.log("🟢 Retrieved Shipping Rows:", ship)
         setShippingMethods(ship || [])
         setPaymentMethods(pay || [])
         if (pay?.length) setSelectedPayment(pay[0].provider)
@@ -123,8 +145,9 @@ export default function CheckoutPage() {
 
   const isInternational = country !== 'Kenya'
 
-  // ---- FAILSAFE SHIPPING FILTERING PIPELINE ----
-  const getFilteredShipping = () => {
+  // Enhanced shipping filtering with location awareness
+  const getFilteredShipping = useCallback(() => {
+    // First filter by type (local/international)
     const baseScopeFiltered = shippingMethods.filter(m => 
       isInternational ? m.type === 'international' : m.type === 'local'
     )
@@ -133,7 +156,9 @@ export default function CheckoutPage() {
       const userLocationInput = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
       
       if (userLocationInput) {
-        const structuralMatches = baseScopeFiltered.filter(m => {
+        // Score each shipping method
+        const scored = baseScopeFiltered.map(m => {
+          let score = 0
           const cleanMethodName = String(m.name || '').toLowerCase().trim()
           
           let regionsArray: string[] = []
@@ -143,30 +168,85 @@ export default function CheckoutPage() {
             regionsArray = [m.regions.toLowerCase().trim()]
           }
 
-          return (
-            cleanMethodName.length > 0 && (
-              userLocationInput.includes(cleanMethodName) || 
-              regionsArray.some(region => userLocationInput.includes(region) || region.includes(userLocationInput))
-            )
-          )
+          // Text matching
+          if (cleanMethodName.length > 0) {
+            if (userLocationInput.includes(cleanMethodName)) score += 30
+            if (cleanMethodName.includes(userLocationInput.split(' ')[0])) score += 20
+          }
+          
+          // Region matching
+          for (const region of regionsArray) {
+            if (userLocationInput.includes(region)) score += 25
+            if (region.includes(userLocationInput.split(' ')[0])) score += 15
+          }
+
+          // Distance-based scoring if we have coordinates
+          if (coordinates.lat && coordinates.lon && m.latitude && m.longitude) {
+            const distance = calculateDistance(coordinates.lat, coordinates.lon, m.latitude, m.longitude)
+            const radius = m.coverage_radius || 25
+            
+            if (distance <= radius) {
+              score += 30
+              if (distance < 5) score += 20
+              else if (distance < 10) score += 15
+              else if (distance < 15) score += 10
+            }
+          }
+
+          return { method: m, score }
         })
 
-        if (structuralMatches.length > 0) {
-          return structuralMatches
+        // Filter and sort by score
+        const matched = scored
+          .filter(s => s.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .map(s => s.method)
+
+        if (matched.length > 0) {
+          setMatchedMethods(matched)
+          return matched
         }
       }
     }
 
+    setMatchedMethods(baseScopeFiltered)
     return baseScopeFiltered
-  }
+  }, [shippingMethods, isInternational, county, city, address, coordinates])
+
+  // Auto-select best shipping method when filtered methods change
+  useEffect(() => {
+    const filtered = getFilteredShipping()
+    if (filtered.length > 0 && !selectedShipping) {
+      setSelectedShipping(filtered[0])
+    } else if (filtered.length > 0 && selectedShipping) {
+      // Check if selected is still in filtered list
+      const stillAvailable = filtered.some(m => m.id === selectedShipping.id)
+      if (!stillAvailable) {
+        setSelectedShipping(filtered[0])
+      }
+    }
+  }, [getFilteredShipping, selectedShipping])
+
+  // Update shipping methods when location changes
+  useEffect(() => {
+    if (city || county || coordinates.lat) {
+      setShippingLoading(true)
+      const timer = setTimeout(() => {
+        getFilteredShipping()
+        setShippingLoading(false)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [city, county, coordinates, getFilteredShipping])
 
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
-      toast.error('GPS sensing is not supported by your current browser browser.')
+      toast.error('GPS sensing is not supported by your current browser.')
       return
     }
 
     setLoadingGeo(true)
+    setIsLocatingForShipping(true)
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -181,8 +261,11 @@ export default function CheckoutPage() {
           
           setAddress(fallbackText)
           if (geoData.city) setCity(geoData.city)
+          if (geoData.country && geoData.country !== 'Kenya') {
+            setCountry(geoData.country)
+          }
           
-          // Match county name cleanly if returned from API values list
+          // Match county name cleanly if returned from API
           if (geoData.county) {
             const matchedCounty = kenyanCounties.find(c => 
               geoData.county!.toLowerCase().includes(c.toLowerCase())
@@ -190,15 +273,27 @@ export default function CheckoutPage() {
             if (matchedCounty) setCounty(matchedCounty)
           }
           
+          // Trigger shipping lookup with location
+          setTimeout(() => {
+            const filtered = getFilteredShipping()
+            if (filtered.length > 0) {
+              toast.success(`📍 Location detected! ${filtered.length} delivery options available`)
+            } else {
+              toast.warning('📍 Location detected but no delivery options found for this area')
+            }
+          }, 300)
+          
           toast.success('Shipping address synchronized with your GPS position!')
         } else {
           setAddress(`GPS Pin: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
           toast.info('Coordinates set. Please adjust landmarks or street names manually.')
         }
         setLoadingGeo(false)
+        setIsLocatingForShipping(false)
       },
       (error) => {
         setLoadingGeo(false)
+        setIsLocatingForShipping(false)
         switch (error.code) {
           case error.PERMISSION_DENIED:
             toast.error('Location permissions denied. Please verify settings status access.')
@@ -259,7 +354,9 @@ export default function CheckoutPage() {
     const receiptBlock = receiptUrl ? `
       <div style="margin:18px 0;text-align:center;">
         <a href="${receiptUrl}" style="display:inline-block;background-color:#D4A017;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;">
-          </div>` : ''
+          📄 Download Receipt
+        </a>
+      </div>` : ''
 
     const emailHtml = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;background-color:#ffffff;">
@@ -309,8 +406,8 @@ export default function CheckoutPage() {
         items: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
         status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
         user_id: userId,
-        latitude: coordinates.lat,  // Captures structural float parameters
-        longitude: coordinates.lon, // Captures structural float parameters
+        latitude: coordinates.lat,
+        longitude: coordinates.lon,
         shipping_address: {
           address: address,
           city: city,
@@ -319,7 +416,8 @@ export default function CheckoutPage() {
           country: country,
           email: email,
           shipping_method: selectedShipping?.name,
-          shipping_cost: shippingCost
+          shipping_cost: shippingCost,
+          shipping_method_id: selectedShipping?.id
         }
       }
 
@@ -576,31 +674,78 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
+                  {/* Enhanced Shipping Method Selection with Location Awareness */}
                   <div className="pt-2">
                     <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                       <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
                     </label>
-                    {filteredShipping.length === 0 ? (
+                    
+                    {shippingLoading ? (
                       <div className="p-4 rounded-lg bg-muted text-center border border-dashed border-border">
                         <Loader2 className="w-5 h-5 animate-spin mx-auto text-muted-foreground mb-1" />
-                        <p className="text-xs text-muted-foreground">Loading available rates...</p>
+                        <p className="text-xs text-muted-foreground">Finding delivery options near you...</p>
+                      </div>
+                    ) : filteredShipping.length === 0 ? (
+                      <div className="p-4 rounded-lg bg-muted text-center border border-dashed border-border">
+                        <Package className="w-5 h-5 mx-auto text-muted-foreground mb-1" />
+                        <p className="text-xs text-muted-foreground">No delivery options available for your location</p>
+                        {!coordinates.lat && (
+                          <button
+                            onClick={handleDetectLocation}
+                            disabled={loadingGeo}
+                            className="mt-2 text-xs text-primary hover:underline flex items-center gap-1 mx-auto"
+                          >
+                            <Navigation className="w-3 h-3" /> Try using my location
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {filteredShipping.map(m => (
-                          <label key={m.id}
-                            className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                              selectedShipping?.id === m.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                            }`}>
-                            <input type="radio" name="shipping" checked={selectedShipping?.id === m.id}
-                              onChange={() => setSelectedShipping(m)} className="accent-primary" />
-                            <div className="flex-1">
-                              <p className="font-medium text-foreground text-sm">{m.name}</p>
-                              <p className="text-xs text-muted-foreground">{m.estimated_days || 'Standard delivery'} {m.provider ? ` via ${m.provider}` : ''}</p>
-                            </div>
-                            <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
-                          </label>
-                        ))}
+                        {filteredShipping.map((m, index) => {
+                          // Calculate distance if coordinates available
+                          let distance = null;
+                          if (coordinates.lat && coordinates.lon && m.latitude && m.longitude) {
+                            distance = calculateDistance(coordinates.lat, coordinates.lon, m.latitude, m.longitude);
+                          }
+                          
+                          return (
+                            <label key={m.id}
+                              className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                                selectedShipping?.id === m.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                              }`}>
+                              <input type="radio" name="shipping" checked={selectedShipping?.id === m.id}
+                                onChange={() => setSelectedShipping(m)} className="accent-primary" />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-foreground text-sm">{m.name}</p>
+                                  {index === 0 && filteredShipping.length > 1 && coordinates.lat && (
+                                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                                      Recommended
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {m.estimated_days || 'Standard delivery'} {m.provider ? ` via ${m.provider}` : ''}
+                                  {distance !== null && distance < 50 && (
+                                    <span className="ml-1">· {distance.toFixed(1)} km away</span>
+                                  )}
+                                </p>
+                                {m.regions && Array.isArray(m.regions) && m.regions.length > 0 && (
+                                  <p className="text-xs text-muted-foreground/60 mt-0.5">
+                                    Serves: {m.regions.slice(0, 3).join(', ')}{m.regions.length > 3 ? '...' : ''}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
+                            </label>
+                          );
+                        })}
+                        
+                        {coordinates.lat && filteredShipping.length > 1 && (
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                            <Navigation className="w-3 h-3" /> Sorted by proximity to your location
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -680,6 +825,12 @@ export default function CheckoutPage() {
                   <span>Shipping</span>
                   <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : 'Calculated next'}</span>
                 </div>
+                {selectedShipping && (
+                  <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                    <span>{selectedShipping.name}</span>
+                    <span>{selectedShipping.estimated_days || 'Standard'}</span>
+                  </div>
+                )}
               </div>
               <div className="flex justify-between items-baseline mb-4">
                 <span className="font-semibold text-base text-foreground">Total</span>
