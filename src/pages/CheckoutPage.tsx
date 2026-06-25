@@ -125,54 +125,61 @@ export default function CheckoutPage() {
 
   const isInternational = country !== 'Kenya'
 
-  // ---- Dynamic Memoized Shipping Filter Pipeline ----
+  // ---- DYNAMIC LOCATION MATCHING PIPELINE ----
   const filteredShipping = useMemo(() => {
     const baseScopeFiltered = shippingMethods.filter(m => 
       isInternational ? m.type === 'international' : m.type === 'local'
     )
 
-    if (!isInternational && baseScopeFiltered.length > 0) {
-      const userLocationInput = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
-      
-      if (userLocationInput) {
-        const structuralMatches = baseScopeFiltered.filter(m => {
-          const cleanMethodName = String(m.name || '').toLowerCase().trim()
-          
-          let regionsArray: string[] = []
-          if (Array.isArray(m.regions)) {
-            regionsArray = m.regions.map(r => String(r || '').toLowerCase().trim())
-          } else if (typeof m.regions === 'string') {
-            regionsArray = [m.regions.toLowerCase().trim()]
-          }
+    if (isInternational || baseScopeFiltered.length === 0) {
+      return baseScopeFiltered
+    }
 
-          return (
-            cleanMethodName.length > 0 && (
-              userLocationInput.includes(cleanMethodName) || 
-              regionsArray.some(region => userLocationInput.includes(region) || region.includes(userLocationInput))
-            )
-          )
-        })
-
-        if (structuralMatches.length > 0) {
-          return structuralMatches
+    const userLocationInput = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
+    
+    if (userLocationInput) {
+      const structuralMatches = baseScopeFiltered.filter(m => {
+        const cleanMethodName = String(m.name || '').toLowerCase().trim()
+        
+        let regionsArray: string[] = []
+        if (Array.isArray(m.regions)) {
+          regionsArray = m.regions.map(r => String(r || '').toLowerCase().trim())
+        } else if (typeof m.regions === 'string') {
+          regionsArray = m.regions.split(',').map(r => r.toLowerCase().trim())
         }
+
+        return (
+          cleanMethodName.length > 0 && (
+            userLocationInput.includes(cleanMethodName) || 
+            cleanMethodName.includes(userLocationInput) ||
+            regionsArray.some(region => userLocationInput.includes(region) || region.includes(userLocationInput))
+          )
+        )
+      })
+
+      if (structuralMatches.length > 0) {
+        return structuralMatches
       }
     }
 
     return baseScopeFiltered
   }, [shippingMethods, isInternational, county, city, address])
 
-  // ---- Automated Shipping Selection Suggester ----
+  // ---- AUTOMATED SHIPPING SUGGESTION SUGGESTER ----
   useEffect(() => {
     if (filteredShipping.length > 0) {
       const isCurrentSelectionStillValid = selectedShipping && filteredShipping.some(m => m.id === selectedShipping.id);
       
       if (!isCurrentSelectionStillValid) {
-        // Automatically selects the first option (which is the most economical one from our database query sort)
+        // Automatically chooses the first method (cheapest first from database query sorting setup)
         setSelectedShipping(filteredShipping[0]);
+        toast.info(`Suggested shipping auto-selected: ${filteredShipping[0].name}`, {
+          description: `KSh ${filteredShipping[0].price.toLocaleString()} option adjusted according to location markers.`,
+          id: 'shipping-suggest-toast'
+        });
       }
     } else {
-      setSelectedShipping(null);
+      setSelectedShipping(null)
     }
   }, [filteredShipping, selectedShipping])
 
