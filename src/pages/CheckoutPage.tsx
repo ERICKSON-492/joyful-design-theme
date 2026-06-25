@@ -188,6 +188,26 @@ export default function CheckoutPage() {
           email
         }
       }
+      // pages/Checkout.tsx or app/checkout/page.tsx
+
+const handlePlaceOrder = async () => {
+  // First validate stock
+  const validateResponse = await fetch('/api/checkout/validate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items })
+  });
+
+  const validation = await validateResponse.json();
+
+  if (!validation.success) {
+    toast.error(validation.error);
+    return;
+  }
+
+  // If validation passes, proceed with order
+  // ... rest of your order placement logic
+};
 
       const { data: order, error: orderError } = await supabase
         .from('orders')
