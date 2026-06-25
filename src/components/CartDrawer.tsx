@@ -1,27 +1,45 @@
-import { useState, useEffect } from 'react'
-import { useCart } from '@/contexts/CartContext'
-import { X, Plus, Minus, Trash2, ShoppingBag, LogIn, ArrowLeft } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
-import { useCurrency } from '@/contexts/CurrencyContext'
+import { useState, useEffect } from 'react';
+import { useCart } from '@/contexts/CartContext';
+import { X, Plus, Minus, Trash2, ShoppingBag, LogIn, ArrowLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useCurrency } from '@/contexts/CurrencyContext';
+import { toast } from 'sonner';
 
 export function CartDrawer() {
-  const { items, isOpen, setIsOpen, removeFromCart, updateQuantity, totalItems, totalPrice, clearCart } = useCart()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const { format, currency } = useCurrency()
+  const { 
+    items, 
+    isOpen, 
+    setIsOpen, 
+    removeFromCart, 
+    updateQuantity, 
+    totalItems, 
+    totalPrice, 
+    clearCart,
+    addToCart 
+  } = useCart();
+  
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { format, currency } = useCurrency();
 
   useEffect(() => {
     const check = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setIsLoggedIn(!!session)
-    }
-    check()
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsLoggedIn(!!session);
+    };
+    check();
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setIsLoggedIn(!!session)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
+      setIsLoggedIn(!!session);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleUpdateQuantity = async (id: string, newQuantity: number) => {
+    await updateQuantity(id, newQuantity);
+  };
 
   return (
     <AnimatePresence>
@@ -35,6 +53,7 @@ export function CartDrawer() {
             className="fixed inset-0 bg-black/50 z-[60]"
             onClick={() => setIsOpen(false)}
           />
+          
           {/* Drawer */}
           <motion.div
             initial={{ x: '100%' }}
@@ -44,12 +63,15 @@ export function CartDrawer() {
             className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-background z-[61] flex flex-col shadow-2xl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-primary" />
                 <h2 className="font-display text-lg font-bold text-foreground">Your Cart ({totalItems})</h2>
               </div>
-              <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-accent rounded-full transition-colors">
+              <button 
+                onClick={() => setIsOpen(false)} 
+                className="p-2 hover:bg-accent rounded-full transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -77,55 +99,105 @@ export function CartDrawer() {
                   </div>
                 </div>
               ) : (
-                items.map(item => (
-                  <div key={item.id} className="flex gap-3 bg-card border border-border rounded-lg p-3">
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="w-20 h-20 object-cover rounded" />
-                    ) : (
-                      <div className="w-20 h-20 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">No img</div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-sm text-foreground truncate">{item.name}</h3>
-                      <p className="text-primary font-bold text-sm mt-0.5">{format(item.price)}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="w-7 h-7 flex items-center justify-center border border-border rounded hover:bg-accent transition-colors"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-7 h-7 flex items-center justify-center border border-border rounded hover:bg-accent transition-colors"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="ml-auto p-1.5 text-destructive hover:bg-destructive/10 rounded transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                items.map(item => {
+                  const isAtMaxStock = item.quantity >= item.stock;
+                  const isAtMinStock = item.quantity <= 1;
+
+                  return (
+                    <div key={item.id} className="flex gap-3 bg-card border border-border rounded-lg p-3">
+                      {item.image_url ? (
+                        <img 
+                          src={item.image_url} 
+                          alt={item.name} 
+                          className="w-20 h-20 object-cover rounded" 
+                        />
+                      ) : (
+                        <div className="w-20 h-20 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                          No img
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm text-foreground truncate">{item.name}</h3>
+                        <p className="text-primary font-bold text-sm mt-0.5">{format(item.price)}</p>
+                        
+                        {/* Stock indicator */}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-xs ${
+                            item.stock <= 5 
+                              ? 'text-red-500 font-semibold' 
+                              : item.stock <= 10 
+                                ? 'text-orange-500' 
+                                : 'text-muted-foreground'
+                          }`}>
+                            {item.stock} available
+                          </span>
+                          {item.stock <= 5 && (
+                            <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
+                              Low Stock!
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                            className={`w-7 h-7 flex items-center justify-center border border-border rounded hover:bg-accent transition-colors ${
+                              isAtMinStock ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                            disabled={isAtMinStock}
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          
+                          <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
+                          
+                          <button
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                            className={`w-7 h-7 flex items-center justify-center border border-border rounded hover:bg-accent transition-colors ${
+                              isAtMaxStock ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                            disabled={isAtMaxStock}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                          
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="ml-auto p-1.5 text-destructive hover:bg-destructive/10 rounded transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        
+                        {/* Max stock warning */}
+                        {isAtMaxStock && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Maximum stock reached
+                          </p>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
             {/* Footer */}
             {items.length > 0 && (
-              <div className="border-t border-border p-4 space-y-3">
+              <div className="border-t border-border p-4 space-y-3 flex-shrink-0">
                 <div className="flex justify-between items-center">
                   <span className="font-display font-semibold text-foreground">Total</span>
                   <span className="font-bold text-lg text-primary">{format(totalPrice)}</span>
                 </div>
+                
                 {currency !== 'KES' && (
                   <p className="text-[11px] text-muted-foreground text-center">
-                    Approx. shown in {currency}. You will be charged <span className="font-semibold">KSh {totalPrice.toLocaleString()}</span> at checkout.
+                    Approx. shown in {currency}. You will be charged{' '}
+                    <span className="font-semibold">KSh {totalPrice.toLocaleString()}</span> at checkout.
                   </p>
                 )}
+                
                 {isLoggedIn ? (
                   <Link
                     to="/checkout"
@@ -147,6 +219,7 @@ export function CartDrawer() {
                     Log In to Checkout
                   </Link>
                 )}
+                
                 <a
                   href={`https://wa.me/254748207000?text=${encodeURIComponent(
                     `Hi! I'd like to order:\n${items.map(i => `• ${i.name} x${i.quantity} - KSh ${(i.price * i.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KSh ${totalPrice.toLocaleString()}`
@@ -159,7 +232,6 @@ export function CartDrawer() {
                   Order via WhatsApp
                 </a>
                 
-                {/* Brand New Explicit Continue Shopping Trigger */}
                 <button
                   onClick={() => setIsOpen(false)}
                   className="flex items-center justify-center gap-2 w-full bg-secondary hover:bg-secondary/80 text-secondary-foreground text-center py-3 font-bold text-sm tracking-wider uppercase transition-colors rounded-lg"
@@ -181,5 +253,5 @@ export function CartDrawer() {
         </>
       )}
     </AnimatePresence>
-  )
+  );
 }
