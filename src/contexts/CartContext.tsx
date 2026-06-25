@@ -7,11 +7,18 @@ export interface CartItem {
   price: number
   image_url: string | null
   quantity: number
+  stock: number        // ✅ added
 }
 
 interface CartContextType {
   items: CartItem[]
-  addToCart: (product: { id: string; name: string; price: number; image_url: string | null }, qty?: number) => void
+  addToCart: (product: {
+    id: string
+    name: string
+    price: number
+    image_url: string | null
+    stock: number      // ✅ added
+  }, qty?: number) => void
   removeFromCart: (id: string) => void
   updateQuantity: (id: string, quantity: number) => void
   clearCart: () => void
@@ -32,25 +39,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
   })
   const [isOpen, setIsOpen] = useState(false)
 
-  const persist = (newItems: CartItem[]) => {
-    setItems(newItems)
-    localStorage.setItem('ushanga-cart', JSON.stringify(newItems))
-  }
-
-  const addToCart = useCallback((product: { id: string; name: string; price: number; image_url: string | null }, qty = 1) => {
+  const addToCart = useCallback((
+    product: { id: string; name: string; price: number; image_url: string | null; stock: number },
+    qty = 1
+  ) => {
     setItems(prev => {
       const existing = prev.find(i => i.id === product.id)
       let newItems: CartItem[]
+
       if (existing) {
-        newItems = prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + qty } : i)
+        const newQty = existing.quantity + qty
+        if (newQty > product.stock) {           // ✅ stock check
+          toast.error(`Only ${product.stock} in stock`)
+          return prev
+        }
+        newItems = prev.map(i =>
+          i.id === product.id ? { ...i, quantity: newQty } : i
+        )
       } else {
+        if (qty > product.stock) {              // ✅ stock check on first add
+          toast.error(`Only ${product.stock} in stock`)
+          return prev
+        }
         newItems = [...prev, { ...product, quantity: qty }]
       }
+
       localStorage.setItem('ushanga-cart', JSON.stringify(newItems))
+      toast.success(`${product.name} added to cart`)
       return newItems
     })
     setIsOpen(true)
-    toast.success(`${product.name} added to cart`)
   }, [])
 
   const removeFromCart = useCallback((id: string) => {
@@ -64,6 +82,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const updateQuantity = useCallback((id: string, quantity: number) => {
     if (quantity <= 0) return removeFromCart(id)
     setItems(prev => {
+      const item = prev.find(i => i.id === id)
+      if (item && quantity > item.stock) {      // ✅ stock check
+        toast.error(`Only ${item.stock} in stock`)
+        return prev
+      }
       const newItems = prev.map(i => i.id === id ? { ...i, quantity } : i)
       localStorage.setItem('ushanga-cart', JSON.stringify(newItems))
       return newItems
@@ -71,14 +94,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [removeFromCart])
 
   const clearCart = useCallback(() => {
-    persist([])
+    setItems([])
+    localStorage.setItem('ushanga-cart', JSON.stringify([]))
   }, [])
 
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0)
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, isOpen, setIsOpen }}>
+    <CartContext.Provider value={{
+      items, addToCart, removeFromCart, updateQuantity,
+      clearCart, totalItems, totalPrice, isOpen, setIsOpen
+    }}>
       {children}
     </CartContext.Provider>
   )
