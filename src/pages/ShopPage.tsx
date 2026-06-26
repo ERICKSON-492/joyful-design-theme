@@ -122,7 +122,7 @@ export default function ShopPage() {
     const finalPrice = state?.price ?? product.price
     const finalName = state?.label ? `${product.name} (${state.label})` : product.name
     const finalId = state?.label ? `${product.id}::${state.label}` : product.id
-    addToCart({ id: finalId, name: finalName, price: finalPrice, image_url: product.image_url })
+    addToCart({ id: finalId, name: finalName, price: finalPrice, image_url: product.image_url, stock: product.stock })
   }
 
   return (
