@@ -96,7 +96,7 @@ export function FeaturedProducts() {
   if (products.length === 0) return null
 
   const handleAdd = (product: Product) => {
-    addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url })
+    addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url, stock: product.stock })
   }
 
   return (
