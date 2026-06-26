@@ -345,7 +345,7 @@ export default function SearchPage() {
                       )}
                     </div>
                     <button
-                      onClick={() => addToCart({ id: p.id, name: p.name, price: p.price, image_url: p.image_url })}
+                      onClick={() => addToCart({ id: p.id, name: p.name, price: p.price, image_url: p.image_url, stock: p.stock })}
                       className={`w-full py-2.5 text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
                         p.is_preorder
                           ? 'bg-blue-600 hover:bg-blue-700 text-white'
