@@ -4,9 +4,8 @@ import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Phone, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation } from 'lucide-react'
-import { fetchPublicTable } from '@/lib/publicContent'
-import { generateAndUploadReceipt } from '@/lib/orderReceipt'
+import { Link } from 'react-router-dom'
+import { Loader2, CheckCircle, XCircle, Minus, Plus, Trash2, ShieldCheck, Truck } from 'lucide-react'
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
