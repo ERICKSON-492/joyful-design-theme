@@ -4,26 +4,27 @@ import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { Link } from 'react-router-dom'
-import { Loader2, CheckCircle, XCircle, Minus, Plus, Trash2, ShieldCheck, Truck } from 'lucide-react'
+import { ShoppingBag, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation } from 'lucide-react'
+import { fetchPublicTable } from '@/lib/publicContent'
+import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
 interface ShippingMethod {
-  id: string;
-  name: string;
-  type: string;
-  provider: string;
-  estimated_days: string | null;
-  price: number;
-  regions: string[] | string | null;
+  id: string
+  name: string
+  type: string
+  provider: string
+  estimated_days: string | null
+  price: number
+  regions: string[] | string | null
 }
 
 interface PaymentMethodOption {
-  id: string;
-  name: string;
-  provider: string;
-  is_active: boolean;
+  id: string
+  name: string
+  provider: string
+  is_active: boolean
 }
 
 // OpenStreetMap Reverse Geocoding Helper
@@ -34,22 +35,22 @@ async function reverseGeocode(lat: number, lon: number) {
       {
         headers: {
           'Accept-Language': 'en',
-          'User-Agent': 'Ushanga-Chronicles-App' 
+          'User-Agent': 'Ushanga-Chronicles-App'
         }
       }
-    );
-    if (!response.ok) return null;
-    const data = await response.json();
+    )
+    if (!response.ok) return null
+    const data = await response.json()
     return {
       display_name: data.display_name,
       road: data.address?.road,
       suburb: data.address?.suburb,
       city: data.address?.city || data.address?.town || data.address?.village,
-      county: data.address?.county
-    };
+      county: data.address?.county,
+    }
   } catch (error) {
-    console.error('Reverse geocoding failed:', error);
-    return null;
+    console.error('Reverse geocoding failed:', error)
+    return null
   }
 }
 
@@ -101,22 +102,18 @@ export default function CheckoutPage() {
     if (accountEmail) setEmail(prev => prev || accountEmail)
   }, [accountName, accountEmail])
 
-  // Fetch shipping & payment data from Supabase
   useEffect(() => {
     const load = async () => {
       try {
-        console.log("🔵 Fetching shipping methods from database...")
         const [ship, pay] = await Promise.all([
           fetchPublicTable<ShippingMethod>('shipping_methods', 'select=*&is_active=eq.true&order=price.asc'),
           fetchPublicTable<PaymentMethodOption>('payment_methods', 'select=*&is_active=eq.true&order=created_at.asc'),
         ])
-        
-        console.log("🟢 Retreived Shipping Rows:", ship)
         setShippingMethods(ship || [])
         setPaymentMethods(pay || [])
         if (pay?.length) setSelectedPayment(pay[0].provider)
       } catch (err) {
-        console.error("❌ Checkout loading breakdown:", err)
+        console.error('Checkout loading error:', err)
       }
     }
     load()
@@ -124,116 +121,85 @@ export default function CheckoutPage() {
 
   const isInternational = country !== 'Kenya'
 
-  // ---- DYNAMIC LOCATION MATCHING PIPELINE ----
   const filteredShipping = useMemo(() => {
-    const baseScopeFiltered = shippingMethods.filter(m => 
+    const baseScopeFiltered = shippingMethods.filter(m =>
       isInternational ? m.type === 'international' : m.type === 'local'
     )
 
-    if (isInternational || baseScopeFiltered.length === 0) {
-      return baseScopeFiltered
-    }
+    if (isInternational || baseScopeFiltered.length === 0) return baseScopeFiltered
 
     const userLocationInput = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
-    
+
     if (userLocationInput) {
       const structuralMatches = baseScopeFiltered.filter(m => {
         const cleanMethodName = String(m.name || '').toLowerCase().trim()
-        
         let regionsArray: string[] = []
         if (Array.isArray(m.regions)) {
           regionsArray = m.regions.map(r => String(r || '').toLowerCase().trim())
         } else if (typeof m.regions === 'string') {
           regionsArray = m.regions.split(',').map(r => r.toLowerCase().trim())
         }
-
         return (
           cleanMethodName.length > 0 && (
-            userLocationInput.includes(cleanMethodName) || 
+            userLocationInput.includes(cleanMethodName) ||
             cleanMethodName.includes(userLocationInput) ||
             regionsArray.some(region => userLocationInput.includes(region) || region.includes(userLocationInput))
           )
         )
       })
-
-      if (structuralMatches.length > 0) {
-        return structuralMatches
-      }
+      if (structuralMatches.length > 0) return structuralMatches
     }
 
     return baseScopeFiltered
   }, [shippingMethods, isInternational, county, city, address])
 
-  // ---- AUTOMATED SHIPPING SUGGESTION SUGGESTER ----
+  // Auto-select cheapest valid shipping method when filtered list changes
   useEffect(() => {
     if (filteredShipping.length > 0) {
-      const isCurrentSelectionStillValid = selectedShipping && filteredShipping.some(m => m.id === selectedShipping.id);
-      
+      const isCurrentSelectionStillValid = selectedShipping && filteredShipping.some(m => m.id === selectedShipping.id)
       if (!isCurrentSelectionStillValid) {
-        // Automatically chooses the first method (cheapest first from database query sorting setup)
-        setSelectedShipping(filteredShipping[0]);
-        toast.info(`Suggested shipping auto-selected: ${filteredShipping[0].name}`, {
-          description: `KSh ${filteredShipping[0].price.toLocaleString()} option adjusted according to location markers.`,
-          id: 'shipping-suggest-toast'
-        });
+        setSelectedShipping(filteredShipping[0])
+        toast.info(`Shipping updated: ${filteredShipping[0].name}`, { id: 'shipping-suggest-toast' })
       }
     } else {
       setSelectedShipping(null)
     }
-  }, [filteredShipping, selectedShipping])
+  }, [filteredShipping]) // ✅ removed selectedShipping from deps — it caused an infinite loop
 
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
-      toast.error('GPS sensing is not supported by your current browser browser.')
+      toast.error('Geolocation is not supported by your browser.')
       return
     }
-
     setLoadingGeo(true)
-
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords
         setCoordinates({ lat: latitude, lon: longitude })
-
         const geoData = await reverseGeocode(latitude, longitude)
-        
         if (geoData) {
           const addressParts = [geoData.road, geoData.suburb].filter(Boolean)
-          const fallbackText = addressParts.length > 0 ? addressParts.join(', ') : geoData.display_name
-          
-          setAddress(fallbackText)
+          setAddress(addressParts.length > 0 ? addressParts.join(', ') : geoData.display_name)
           if (geoData.city) setCity(geoData.city)
-          
-          // Match county name cleanly if returned from API values list
           if (geoData.county) {
-            const matchedCounty = kenyanCounties.find(c => 
+            const matchedCounty = kenyanCounties.find(c =>
               geoData.county!.toLowerCase().includes(c.toLowerCase())
             )
             if (matchedCounty) setCounty(matchedCounty)
           }
-          
-          toast.success('Shipping address synchronized with your GPS position!')
+          toast.success('Address filled from your location!')
         } else {
-          setAddress(`GPS Pin: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
-          toast.info('Coordinates set. Please adjust landmarks or street names manually.')
+          setAddress(`GPS: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
+          toast.info('Coordinates set. Please adjust address manually.')
         }
         setLoadingGeo(false)
       },
       (error) => {
         setLoadingGeo(false)
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            toast.error('Location permissions denied. Please verify settings status access.')
-            break
-          case error.POSITION_UNAVAILABLE:
-            toast.error('GPS signal position is unavailable right now.')
-            break
-          case error.TIMEOUT:
-            toast.error('Network handshake timed out sensing positions.')
-            break
-          default:
-            toast.error('An unexpected tracking error occurred.')
-        }
+        if (error.code === error.PERMISSION_DENIED) toast.error('Location permission denied.')
+        else if (error.code === error.POSITION_UNAVAILABLE) toast.error('Location unavailable.')
+        else if (error.code === error.TIMEOUT) toast.error('Location request timed out.')
+        else toast.error('Could not detect location.')
       },
       { enableHighAccuracy: true, timeout: 12000 }
     )
@@ -242,14 +208,13 @@ export default function CheckoutPage() {
   const shippingCost = selectedShipping?.price || 0
   const grandTotal = totalPrice + shippingCost
 
-  // Send invoice email notification
   const sendOrderEmail = useCallback(async (orderId: string) => {
-    const targetEmail = email || accountEmail;
-    if (!targetEmail) return;
+    const targetEmail = email || accountEmail
+    if (!targetEmail) return
 
-    const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+    const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
     const shippingAddressLine = [address, county || city, postalCode, country].filter(Boolean).join(', ')
-    
+
     const receiptUrl = await generateAndUploadReceipt({
       orderId,
       customerName: name,
@@ -273,7 +238,7 @@ export default function CheckoutPage() {
           KSh ${(item.price * item.quantity).toLocaleString()}
         </td>
       </tr>
-    `).join('');
+    `).join('')
 
     const receiptBlock = receiptUrl ? `
       <div style="margin:18px 0;text-align:center;">
@@ -287,7 +252,7 @@ export default function CheckoutPage() {
         <div style="text-align:center;padding:14px 0;border-bottom:3px solid #D4A017;margin-bottom:18px;">
           <div style="font-size:22px;font-weight:800;color:#1A1A1A;letter-spacing:0.04em;">USHANGA CHRONICLES</div>
         </div>
-        <h2 style="color:#D4A017;text-align:center;">Asante for your order!</h2>
+        <h2 style="color:#D4A017;text-align:center;">Thank you for your order!</h2>
         <p>Hi ${name || 'there'}, your order <strong>#${orderId}</strong> has been received.</p>
         <div style="margin:20px 0;background-color:#fafafa;border-radius:8px;padding:16px;">
           <table style="width:100%;border-collapse:collapse;">
@@ -298,16 +263,16 @@ export default function CheckoutPage() {
         </div>
         ${receiptBlock}
       </div>
-    `;
+    `
 
     try {
       await supabase.functions.invoke('send-email', {
         body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
-      });
+      })
     } catch (err) {
-      console.error("❌ Email transmission error:", err);
+      console.error('Email send error:', err)
     }
-  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, address, city, county, postalCode, country]);
+  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, address, city, county, postalCode, country])
 
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) {
@@ -319,12 +284,20 @@ export default function CheckoutPage() {
     if (!name.trim()) { setError('Please enter your name'); return }
     if (items.length === 0) return
 
+    // ✅ Added: block checkout if any cart item exceeds its stock
+    const overStockItem = items.find(i => i.stock && i.quantity > i.stock)
+    if (overStockItem) {
+      setError(`"${overStockItem.name}" only has ${overStockItem.stock} in stock. Update your cart before continuing.`)
+      setStep(0)
+      return
+    }
+
     setError('')
     setStatus('creating')
 
     try {
       const orderData = {
-        phone: phone,
+        phone,
         customer_name: name,
         total_amount: grandTotal,
         items: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
@@ -333,12 +306,12 @@ export default function CheckoutPage() {
         latitude: coordinates.lat,
         longitude: coordinates.lon,
         shipping_address: {
-          address: address,
-          city: city,
-          county: county,
+          address,
+          city,
+          county,
           postal_code: postalCode,
-          country: country,
-          email: email,
+          country,
+          email,
           shipping_method: selectedShipping?.name,
           shipping_cost: shippingCost
         }
@@ -354,68 +327,55 @@ export default function CheckoutPage() {
 
       if (selectedPayment === 'cod') {
         await sendOrderEmail(order.id)
-        setStatus('success'); clearCart(); toast.success('Order placed! Pay on delivery 🎉')
+        setStatus('success')
+        clearCart()
+        toast.success('Order placed! Pay on delivery 🎉')
         return
       }
 
       setStatus('pushing')
-      
+
       const { data: responsePayload, error: stkError } = await supabase.functions.invoke(
-        'mpesa-stk-push', 
-        { 
-          body: { 
-            phone: phone, 
-            amount: grandTotal, 
-            orderId: order.id 
-          } 
-        }
+        'mpesa-stk-push',
+        { body: { phone, amount: grandTotal, orderId: order.id } }
       )
 
       if (stkError) throw new Error(stkError.message)
-      
-      if (!responsePayload?.success) {
-        throw new Error(responsePayload?.error || 'Safaricom communication drop-out.')
-      }
+      if (!responsePayload?.success) throw new Error(responsePayload?.error || 'M-Pesa request failed.')
 
-      const stkData = responsePayload.mpesa_response
-
+      const checkoutRequestId = responsePayload.mpesa_response?.CheckoutRequestID || responsePayload?.checkoutRequestId
       setStatus('polling')
-      const checkoutRequestId = stkData?.CheckoutRequestID || responsePayload?.checkoutRequestId
       let attempts = 0
 
       const poll = async () => {
         attempts++
         try {
           const { data: queryData } = await supabase.functions.invoke(
-            'mpesa-stk-push', 
-            { 
-              body: { 
-                action: 'query',
-                checkout_request_id: checkoutRequestId 
-              } 
-            }
+            'mpesa-stk-push',
+            { body: { action: 'query', checkout_request_id: checkoutRequestId } }
           )
           if (queryData?.ResultCode === '0' || queryData?.ResultCode === 0) {
             await sendOrderEmail(order.id)
-            setStatus('success'); clearCart(); toast.success('Payment successful! 🎉'); return
+            setStatus('success'); clearCart(); toast.success('Payment successful! 🎉')
+            return
           }
-        } catch { /* ignore */ }
+        } catch { /* ignore polling errors */ }
 
         if (attempts < 15) {
           setTimeout(poll, 4000)
         } else {
           const { data: orderCheck } = await supabase.from('orders').select('status').eq('id', order.id).single()
-          if (orderCheck?.status === 'paid') { 
+          if (orderCheck?.status === 'paid') {
             await sendOrderEmail(order.id)
-            setStatus('success'); clearCart(); toast.success('Payment successful! 🎉') 
-          } else { 
-            setStatus('failed'); setError('Payment timed out. Contact us on WhatsApp if deducted.') 
+            setStatus('success'); clearCart(); toast.success('Payment confirmed! 🎉')
+          } else {
+            setStatus('failed'); setError('Payment timed out. Contact us on WhatsApp if amount was deducted.')
           }
         }
       }
       setTimeout(poll, 4000)
     } catch (err: any) {
-      console.error("Execution failure context details:", err)
+      console.error('Checkout error:', err)
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
   }, [phone, name, items, grandTotal, userId, address, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, clearCart, navigate, sendOrderEmail])
@@ -427,7 +387,7 @@ export default function CheckoutPage() {
           <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6" />
           <h1 className="font-display text-3xl font-bold text-foreground mb-3">Order Confirmed!</h1>
           <p className="text-muted-foreground mb-8">
-            {selectedPayment === 'cod' ? "Your order has been placed. Pay on delivery." : "Payment successful! We'll reach out via WhatsApp for delivery details."}
+            {selectedPayment === 'cod' ? 'Your order has been placed. Pay on delivery.' : "Payment successful! We'll reach out via WhatsApp for delivery details."}
           </p>
           <Link to="/shop" className="inline-block bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase rounded-lg">Continue Shopping</Link>
         </div>
@@ -463,6 +423,8 @@ export default function CheckoutPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
+
+            {/* Step 0 — Cart Review */}
             {step === 0 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -481,11 +443,24 @@ export default function CheckoutPage() {
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-foreground text-sm truncate">{item.name}</h3>
                         <p className="text-primary font-bold text-sm mt-1">KSh {item.price.toLocaleString()}</p>
+                        {/* ✅ Stock warning in cart review */}
+                        {item.stock && item.quantity > item.stock && (
+                          <p className="text-xs text-red-500 font-semibold mt-0.5">
+                            Only {item.stock} in stock — please reduce quantity
+                          </p>
+                        )}
                         <div className="flex items-center gap-3 mt-2">
                           <div className="flex items-center border border-border rounded-lg">
                             <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1.5 hover:bg-accent transition-colors rounded-l-lg"><Minus className="w-3.5 h-3.5" /></button>
                             <span className="px-3 text-sm font-medium min-w-[2rem] text-center">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1.5 hover:bg-accent transition-colors rounded-r-lg"><Plus className="w-3.5 h-3.5" /></button>
+                            {/* ✅ + button capped at item.stock */}
+                            <button
+                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              disabled={!!item.stock && item.quantity >= item.stock}
+                              className="p-1.5 hover:bg-accent transition-colors rounded-r-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                           <button onClick={() => removeFromCart(item.id)} className="text-destructive hover:text-destructive/80 transition-colors"><Trash2 className="w-4 h-4" /></button>
                         </div>
@@ -497,21 +472,25 @@ export default function CheckoutPage() {
                   ))}
                 </div>
                 <div className="p-4 border-t border-border">
-                  <button onClick={() => setStep(1)} disabled={!canGoToShipping}
-                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors" style={{ minHeight: '48px' }}>
+                  <button
+                    onClick={() => setStep(1)}
+                    disabled={!canGoToShipping || items.some(i => i.stock && i.quantity > i.stock)}
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    style={{ minHeight: '48px' }}
+                  >
                     Proceed to Shipping
                   </button>
                 </div>
               </div>
             )}
 
+            {/* Step 1 — Shipping */}
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <h2 className="font-display font-semibold text-foreground flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-primary" /> Shipping Details
                   </h2>
-                  
                   <button
                     type="button"
                     onClick={handleDetectLocation}
@@ -520,19 +499,13 @@ export default function CheckoutPage() {
                     style={{ minHeight: '38px' }}
                   >
                     {loadingGeo ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                        Sensing GPS Pin...
-                      </>
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> Detecting location...</>
                     ) : (
-                      <>
-                        <Navigation className="w-3.5 h-3.5 fill-current text-primary" />
-                        Auto-Fill My Address
-                      </>
+                      <><Navigation className="w-3.5 h-3.5 fill-current text-primary" /> Auto-Fill My Address</>
                     )}
                   </button>
                 </div>
-                
+
                 <div className="p-4 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -551,7 +524,6 @@ export default function CheckoutPage() {
                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com"
                       className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">Country</label>
                     <select value={country} onChange={e => { setCountry(e.target.value); setSelectedShipping(null) }}
@@ -563,11 +535,10 @@ export default function CheckoutPage() {
                       <option value="Other">🌍 Other (International)</option>
                     </select>
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">Street Address / Shipping Location *</label>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Street Address *</label>
                     <div className="relative">
-                      <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate / landmark location details"
+                      <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate / landmark"
                         className="w-full border border-border bg-background text-foreground rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
                       <MapPin className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
                     </div>
@@ -616,7 +587,7 @@ export default function CheckoutPage() {
                               onChange={() => setSelectedShipping(m)} className="accent-primary" />
                             <div className="flex-1">
                               <p className="font-medium text-foreground text-sm">{m.name}</p>
-                              <p className="text-xs text-muted-foreground">{m.estimated_days || 'Standard delivery'} {m.provider ? ` via ${m.provider}` : ''}</p>
+                              <p className="text-xs text-muted-foreground">{m.estimated_days || 'Standard delivery'}{m.provider ? ` via ${m.provider}` : ''}</p>
                             </div>
                             <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
                           </label>
@@ -626,13 +597,15 @@ export default function CheckoutPage() {
                   </div>
 
                   <button onClick={() => setStep(2)} disabled={!canGoToPayment}
-                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 mt-2" style={{ minHeight: '48px' }}>
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 mt-2"
+                    style={{ minHeight: '48px' }}>
                     Proceed to Payment
                   </button>
                 </div>
               </div>
             )}
 
+            {/* Step 2 — Payment */}
             {step === 2 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -652,8 +625,8 @@ export default function CheckoutPage() {
                             onChange={() => setSelectedPayment(pm.provider)} className="accent-primary" />
                           <div>
                             <p className="font-medium text-foreground text-sm">{pm.name}</p>
-                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay safely via M-Pesa STK Push prompt</p>}
-                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Settle payment upon delivery physical arrival</p>}
+                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay via M-Pesa STK Push</p>}
+                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Pay cash when your order arrives</p>}
                           </div>
                         </label>
                       ))}
@@ -662,13 +635,13 @@ export default function CheckoutPage() {
 
                   {selectedPayment === 'mpesa' && (
                     <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4 text-sm text-green-800 dark:text-green-200">
-                      <strong>How it works:</strong> An STK pin prompt will automatically fire directly to your handset <strong>{phone}</strong> instantly upon triggering validation processing.
+                      <strong>How it works:</strong> An M-Pesa prompt will be sent to <strong>{phone}</strong>. Enter your PIN to complete payment.
                     </div>
                   )}
 
                   {selectedPayment === 'cod' && (
                     <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-200">
-                      <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} directly to the dispatch agent when your items arrive.
+                      <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} to the delivery agent on arrival.
                     </div>
                   )}
 
@@ -679,11 +652,12 @@ export default function CheckoutPage() {
                   )}
 
                   <button onClick={handleMpesaPayment} disabled={isProcessing}
-                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2" style={{ minHeight: '48px' }}>
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{ minHeight: '48px' }}>
                     {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {status === 'creating' && 'Processing Invoice...'}
-                    {status === 'pushing' && 'Dispatching Secure Handshake...'}
-                    {status === 'polling' && 'Awaiting Handset PIN Approval...'}
+                    {status === 'creating' && 'Creating order...'}
+                    {status === 'pushing' && 'Sending M-Pesa prompt...'}
+                    {status === 'polling' && 'Waiting for payment confirmation...'}
                     {status === 'idle' && (selectedPayment === 'cod' ? 'Place Order' : 'Complete Checkout')}
                   </button>
                 </div>
@@ -691,14 +665,18 @@ export default function CheckoutPage() {
             )}
           </div>
 
+          {/* Order Summary Sidebar */}
           <div className="space-y-4">
             <div className="bg-card border border-border rounded-lg p-4 sticky top-24">
               <h2 className="font-display font-semibold text-foreground mb-4">Summary</h2>
               <div className="space-y-2 text-sm border-b border-border pb-3 mb-3">
-                <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="font-medium text-foreground">KSh {totalPrice.toLocaleString()}</span></div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span className="font-medium text-foreground">KSh {totalPrice.toLocaleString()}</span>
+                </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
-                  <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : 'Calculated next'}</span>
+                  <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : 'Select shipping'}</span>
                 </div>
               </div>
               <div className="flex justify-between items-baseline mb-4">
@@ -707,7 +685,7 @@ export default function CheckoutPage() {
               </div>
               <div className="bg-muted/50 rounded-lg p-3 flex gap-2 items-start text-xs text-muted-foreground">
                 <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <span>Protected encryption keeps checkout actions and transaction transfers heavily isolated.</span>
+                <span>Your payment and personal details are kept secure throughout checkout.</span>
               </div>
             </div>
           </div>
