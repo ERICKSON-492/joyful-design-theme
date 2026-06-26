@@ -3,10 +3,10 @@ import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
-import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Loader2, CheckCircle, XCircle, Minus, Plus, Trash2, ShieldCheck, Truck } from 'lucide-react
 import { fetchPublicTable } from '@/lib/publicContent'
-import { generateAndUploadReceipt } from '@/lib/orderReceipt'
+
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
@@ -29,8 +29,7 @@ interface PaymentMethodOption {
 }
 
 export default function CheckoutPage() {
-  const { items, totalPrice, clearCart, totalItems, updateQuantity, removeFromCart } = useCart()
-  const navigate = useNavigate()
+ const { items, totalPrice, clearCart, updateQuantity, removeFromCart } = useCart()
   
   // Account & Form State
   const [phone, setPhone] = useState('')
@@ -117,6 +116,41 @@ export default function CheckoutPage() {
 
   const shippingCost = selectedShipping?.price || 0
   const grandTotal = totalPrice + shippingCost
+  const isProcessing = status === 'creating' || status === 'pushing' || status === 'polling'
+
+  const validateCartStock = useCallback(async () => {
+    for (const item of items) {
+      const variantId = item.id.includes('_') ? item.id.split('_').pop() : null
+
+      if (variantId && variantId !== item.id) {
+        const { data: variant, error: variantError } = await supabase
+          .from('product_variants')
+          .select('stock')
+          .eq('id', variantId)
+          .maybeSingle()
+
+        if (variantError) throw new Error(`Could not check stock for ${item.name}. Please try again.`)
+        if (!variant) throw new Error(`${item.name} is no longer available.`)
+        if (item.quantity > variant.stock) {
+          throw new Error(`Only ${variant.stock} of ${item.name} is available. You requested ${item.quantity}.`)
+        }
+        continue
+      }
+
+      const productId = item.id.split('::')[0]
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('stock, name, is_preorder')
+        .eq('id', productId)
+        .maybeSingle()
+
+      if (productError) throw new Error(`Could not check stock for ${item.name}. Please try again.`)
+      if (!product) throw new Error(`${item.name} is no longer available.`)
+      if (!product.is_preorder && item.quantity > product.stock) {
+        throw new Error(`Only ${product.stock} of ${product.name} is available. You requested ${item.quantity}.`)
+      }
+    }
+  }, [items])
   const validateCartStock = useCallback(async () => {
     for (const item of items) {
       const variantId = item.id.includes('_') ? item.id.split('_').pop() : null
@@ -195,8 +229,9 @@ export default function CheckoutPage() {
       toast.error('Please login to complete your checkout')
       return
     }
-    if (!name || phone.length < 9 || !address) {
-      setError('Please fill out all required shipping fields.')
+    const deliveryError = validateDeliveryDetails()
+    if (deliveryError) {
+      setError(deliveryError)
       return
     }
 
@@ -269,7 +304,8 @@ export default function CheckoutPage() {
       setStatus('failed')
       setError(err.message || 'An error occurred during transaction processing.')
     }
-  }, [phone, name, items, grandTotal, userId, address, postalCode, shippingTier, selectedCounty, selectedShipping, shippingCost, selectedPayment, email, clearCart, sendOrderEmail, validateCartStock])
+  }, [phone, name, items, grandTotal, userId, address, postalCode, shippingTier, selectedCounty, selectedShipping, shippingCost, selectedPayment, email, clearCart, sendOrderEmail, validateCartStock, validateDeliveryDetails])
+
 
   if (status === 'success') {
     return (
@@ -296,8 +332,8 @@ export default function CheckoutPage() {
               {/* Stepper Tabs */}
               <div className="flex gap-4 border-b border-border pb-4 mb-6 text-sm">
                 <button onClick={() => setStep(0)} className={`font-semibold pb-2 ${step === 0 ? 'text-black border-b-2 border-black' : 'text-muted-foreground'}`}>1. Bag Summary</button>
-                <button onClick={() => setStep(1)} className={`font-semibold pb-2 ${step === 1 ? 'text-black border-b-2 border-black' : 'text-muted-foreground'}`}>2. Delivery Method</button>
-                <button onClick={() => setStep(2)} className={`font-semibold pb-2 ${step === 2 ? 'text-black border-b-2 border-black' : 'text-muted-foreground'}`}>3. Settle Payment</button>
+                <button onClick={goToDelivery} className={`font-semibold pb-2 ${step === 1 ? 'text-black border-b-2 border-black' : 'text-muted-foreground'}`}>2. Delivery Method</button>
+                <button onClick={goToPayment} className={`font-semibold pb-2 ${step === 2 ? 'text-black border-b-2 border-black' : 'text-muted-foreground'}`}>3. Settle Payment</button>
               </div>
 
               {step === 0 && (
@@ -316,7 +352,7 @@ export default function CheckoutPage() {
                           <span className="px-2 text-xs font-semibold">{item.quantity}</span>
                           <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1"><Plus className="w-3 h-3" /></button>
                         </div>
-                        <button onClick={() => removeFromCart(item.id)} className="text-destructive"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={goToDelivery} disabled={!items.length} className="w-full bg-black text-white text-xs font-bold py-3 rounded-lg uppercase tracking-wider mt-4 disabled:opacity-50 disabled:cursor-not-allowed">Proceed to Delivery</button>
                       </div>
                     ))}
                   </div>
@@ -391,8 +427,9 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  <button onClick={() => setStep(2)} className="w-full bg-black text-white text-xs font-bold py-3 rounded-lg uppercase tracking-wider mt-2">Continue To Payment</button>
-                </div>
+                  {error && <div className="p-3 bg-destructive/10 text-destructive text-xs rounded-lg flex items-center gap-2"><XCircle className="w-4 h-4" /> {error}</div>}
+
+                  <button onClick={goToPayment} className="w-full bg-black text-white text-xs font-bold py-3 rounded-lg uppercase tracking-wider mt-2">Continue To Payment</button>
               )}
 
               {step === 2 && (
@@ -413,7 +450,9 @@ export default function CheckoutPage() {
 
                   {error && <div className="p-3 bg-destructive/10 text-destructive text-xs rounded-lg flex items-center gap-2"><XCircle className="w-4 h-4" /> {error}</div>}
 
-                  <button onClick={handleCheckoutSubmission} disabled={status !== 'idle'} className="w-full bg-black text-white text-xs font-bold py-3 rounded-lg uppercase tracking-wider flex items-center justify-center gap-2">
+                 <button onClick={handleCheckoutSubmission} disabled={isProcessing} className="w-full bg-black text-white text-xs font-bold py-3 rounded-lg uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {(status === 'idle' || status === 'failed') && (selectedPayment === 'cod' ? 'Place Order' : 'Complete Checkout')}
                     {status !== 'idle' && <Loader2 className="w-4 h-4 animate-spin" />}
                     {status === 'idle' && (selectedPayment === 'cod' ? 'Place Order' : 'Complete Checkout')}
                     {status === 'creating' && 'Processing Invoice...'}
