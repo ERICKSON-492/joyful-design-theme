@@ -117,6 +117,39 @@ export default function CheckoutPage() {
 
   const shippingCost = selectedShipping?.price || 0
   const grandTotal = totalPrice + shippingCost
+  const validateCartStock = useCallback(async () => {
+    for (const item of items) {
+      const variantId = item.id.includes('_') ? item.id.split('_').pop() : null
+
+      if (variantId && variantId !== item.id) {
+        const { data: variant, error: variantError } = await supabase
+          .from('product_variants')
+          .select('stock, variant_label')
+          .eq('id', variantId)
+          .maybeSingle()
+
+        if (variantError) throw new Error(`Could not check stock for ${item.name}. Please try again.`)
+        if (!variant) throw new Error(`${item.name} is no longer available.`)
+        if (item.quantity > variant.stock) {
+          throw new Error(`Only ${variant.stock} of ${item.name} is available. You requested ${item.quantity}.`)
+        }
+        continue
+      }
+
+      const productId = item.id.split('::')[0]
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('stock, name, is_preorder')
+        .eq('id', productId)
+        .maybeSingle()
+
+      if (productError) throw new Error(`Could not check stock for ${item.name}. Please try again.`)
+      if (!product) throw new Error(`${item.name} is no longer available.`)
+      if (!product.is_preorder && item.quantity > product.stock) {
+        throw new Error(`Only ${product.stock} of ${product.name} is available. You requested ${item.quantity}.`)
+      }
+    }
+  }, [items])
 
   // Email Notification Execution Block
   const sendOrderEmail = useCallback(async (orderId: string) => {
@@ -188,27 +221,9 @@ export default function CheckoutPage() {
           email
         }
       }
-      // pages/Checkout.tsx or app/checkout/page.tsx
+ 
 
-const handlePlaceOrder = async () => {
-  // First validate stock
-  const validateResponse = await fetch('/api/checkout/validate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items })
-  });
-
-  const validation = await validateResponse.json();
-
-  if (!validation.success) {
-    toast.error(validation.error);
-    return;
-  }
-
-  // If validation passes, proceed with order
-  // ... rest of your order placement logic
-};
-
+      await validateCartStock()
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert(orderData)
@@ -254,7 +269,7 @@ const handlePlaceOrder = async () => {
       setStatus('failed')
       setError(err.message || 'An error occurred during transaction processing.')
     }
-  }, [phone, name, items, grandTotal, userId, address, postalCode, shippingTier, selectedCounty, selectedShipping, shippingCost, selectedPayment, email, clearCart, sendOrderEmail])
+  }, [phone, name, items, grandTotal, userId, address, postalCode, shippingTier, selectedCounty, selectedShipping, shippingCost, selectedPayment, email, clearCart, sendOrderEmail, validateCartStock])
 
   if (status === 'success') {
     return (
