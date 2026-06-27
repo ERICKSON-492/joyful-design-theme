@@ -83,8 +83,15 @@ const NAIROBI_AREAS: { name: string; price: number }[] = [
   { name: 'Ngara', price: 300 }, { name: 'Ojijo Road', price: 300 },
 ]
 
-// Nairobi areas that Super Metro serves
-const SUPER_METRO_AREAS = ['Thika', 'Thika Town', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
+// Super Metro specific area mapping — exact match only
+const SUPER_METRO_AREAS: { area: string; route: string }[] = [
+  { area: 'Thika Town', route: 'Super Metro - Thika' },
+  { area: 'Thika', route: 'Super Metro - Thika' },
+  { area: 'Juja', route: 'Super Metro - Thika' },
+  { area: 'Ngong', route: 'Super Metro - Ngong' },
+  { area: 'Rongai', route: 'Super Metro - Rongai' },
+  { area: 'Kitengela', route: 'Super Metro - Kitengela' },
+]
 
 async function reverseGeocode(lat: number, lon: number) {
   try {
@@ -207,23 +214,27 @@ export default function CheckoutPage() {
     const isNairobiArea = NAIROBI_AREAS.some(a => a.name === loc.name)
 
     if (isNairobiArea && loc.price !== undefined) {
-      const doorstepPrice = loc.price
       const options: ShippingMethod[] = []
 
       // Always add Pickup Mtaani
       const mtaani = shippingMethods.find(m => m.name.toLowerCase().includes('pickup mtaani'))
       if (mtaani) options.push(mtaani)
 
-      // Add Super Metro if area is served
-      const superMetroServed = SUPER_METRO_AREAS.some(a => loc.name.toLowerCase().includes(a.toLowerCase()))
-      if (superMetroServed) {
-        const sm = shippingMethods.find(m => m.name.toLowerCase().includes('super metro'))
+      // Add only the specific Super Metro route for this area (exact match)
+      const superMetroMatch = SUPER_METRO_AREAS.find(s =>
+        s.area.toLowerCase() === loc.name.toLowerCase()
+      )
+      if (superMetroMatch) {
+        const sm = shippingMethods.find(m => m.name === superMetroMatch.route)
         if (sm) options.push(sm)
       }
 
-      // Add Doorstep with area-specific price
+      // Add Doorstep with area-specific price (only if doorstep price is defined and not a Super Metro-only area)
+      const isSuperMetroOnly = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela'].includes(loc.name)
       const doorstep = shippingMethods.find(m => m.name.toLowerCase().includes('doorstep'))
-      if (doorstep) options.push({ ...doorstep, price: doorstepPrice })
+      if (doorstep && !isSuperMetroOnly) {
+        options.push({ ...doorstep, price: loc.price })
+      }
 
       setAvailableOptions(options)
     } else {
