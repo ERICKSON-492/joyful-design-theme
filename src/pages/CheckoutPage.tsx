@@ -17,7 +17,7 @@ interface ShippingMethod {
   provider: string
   estimated_days: string | null
   price: number
-  regions: string[] | string | null
+  regions: string[] | null
 }
 
 interface PaymentMethodOption {
@@ -27,90 +27,64 @@ interface PaymentMethodOption {
   is_active: boolean
 }
 
-// Nairobi areas with their delivery prices from the PDF
-const NAIROBI_AREAS: { area: string; price: number }[] = [
-  { area: 'CBD', price: 150 },
-  { area: 'Upperhill', price: 300 },
-  { area: 'Valley Road', price: 300 },
-  { area: 'Community', price: 300 },
-  { area: 'Hurlingham', price: 300 },
-  { area: 'KNH', price: 300 },
-  { area: 'Nairobi Hospital', price: 300 },
-  { area: 'Pangani', price: 300 },
-  { area: 'Ngara', price: 300 },
-  { area: 'Ojijo Road', price: 300 },
-  { area: 'South B', price: 350 },
-  { area: 'South C', price: 350 },
-  { area: 'Next Gen Mall', price: 350 },
-  { area: 'Imara Daima', price: 350 },
-  { area: 'Industrial Area', price: 400 },
-  { area: 'Bellevue', price: 350 },
-  { area: 'Panari', price: 350 },
-  { area: 'Madaraka', price: 350 },
-  { area: 'Mbagathi', price: 350 },
-  { area: 'Nairobi West', price: 350 },
-  { area: 'Langata', price: 350 },
-  { area: 'Carnivore', price: 350 },
-  { area: 'Kilimani', price: 350 },
-  { area: 'Kileleshwa', price: 350 },
-  { area: 'Junction Mall', price: 400 },
-  { area: 'Lavington', price: 400 },
-  { area: 'Kibra', price: 400 },
-  { area: 'Dagoretti Corner', price: 400 },
-  { area: 'Kawangware', price: 400 },
-  { area: 'Wanyee Road', price: 400 },
-  { area: 'ABC', price: 350 },
-  { area: 'Kangemi', price: 400 },
-  { area: 'Mountain View', price: 400 },
-  { area: 'Westlands', price: 350 },
-  { area: 'Riverside', price: 350 },
-  { area: 'Parklands', price: 350 },
-  { area: 'General Mathenge', price: 350 },
-  { area: 'Aga Khan', price: 350 },
-  { area: 'MP Shah', price: 350 },
-  { area: 'Oshwal', price: 350 },
-  { area: 'Spring Valley', price: 400 },
-  { area: 'Ruaka', price: 450 },
-  { area: 'Gigiri', price: 450 },
-  { area: 'Runda', price: 450 },
-  { area: 'Nyari', price: 450 },
-  { area: 'Loresho', price: 400 },
-  { area: 'Lower Kabete', price: 400 },
-  { area: 'Kitusuru', price: 600 },
-  { area: 'Mwimuto', price: 600 },
-  { area: 'Kiambu Road', price: 450 },
-  { area: 'Thindigua', price: 450 },
-  { area: 'Kiambu Town', price: 800 },
-  { area: 'Tatu City', price: 800 },
-  { area: 'Buruburu', price: 400 },
-  { area: 'Donholm', price: 400 },
-  { area: 'Fedha', price: 400 },
-  { area: 'Tassia', price: 400 },
-  { area: 'Pipeline', price: 400 },
-  { area: 'Komarock', price: 400 },
-  { area: 'Savannah', price: 400 },
-  { area: 'Uhuru Estate', price: 400 },
-  { area: 'Utawala', price: 650 },
-  { area: 'Lucky Summer', price: 400 },
-  { area: 'Mirema', price: 450 },
-  { area: 'Zimmerman', price: 450 },
-  { area: 'Githurai', price: 450 },
-  { area: 'Kahawa West', price: 450 },
-  { area: 'Kahawa Wendani', price: 450 },
-  { area: 'Clayworks', price: 450 },
-  { area: 'Ruiru Bypass', price: 600 },
-  { area: 'Ruiru Town', price: 650 },
-  { area: 'Thika Town', price: 900 },
-  { area: 'Syokimau', price: 600 },
-  { area: 'Gateway Mall', price: 600 },
-  { area: 'Athi River', price: 900 },
-  { area: 'Kitengela', price: 900 },
-  { area: 'Karen', price: 650 },
-  { area: 'Rongai', price: 800 },
-  { area: 'Kikuyu', price: 800 },
-  { area: 'Kinoo', price: 600 },
-  { area: 'Kamulu', price: 900 },
+// All Nairobi areas with doorstep prices
+const NAIROBI_AREAS: { name: string; price: number }[] = [
+  { name: 'CBD', price: 150 },
+  { name: 'South B', price: 350 }, { name: 'South C', price: 350 },
+  { name: 'Next Gen Mall', price: 350 }, { name: 'Imara Daima', price: 350 },
+  { name: 'Syokimau', price: 600 }, { name: 'Gateway Mall', price: 600 },
+  { name: 'Athi River', price: 900 }, { name: 'Kitengela', price: 900 },
+  { name: 'Industrial Area', price: 400 }, { name: 'Bellevue', price: 350 }, { name: 'Panari', price: 350 },
+  { name: 'Greatwall Gardens', price: 300 },
+  { name: 'Madaraka', price: 350 }, { name: 'Mbagathi', price: 350 },
+  { name: 'Nairobi West', price: 350 }, { name: "Lang'ata", price: 350 },
+  { name: 'Carnivore', price: 350 }, { name: 'Rongai', price: 800 }, { name: 'Kiserian', price: 300 },
+  { name: 'Upperhill', price: 300 }, { name: 'Valley Road', price: 300 },
+  { name: 'Community', price: 300 }, { name: 'Hurlingham', price: 300 },
+  { name: 'KNH', price: 300 }, { name: 'Nairobi Hospital', price: 300 },
+  { name: 'Kilimani', price: 350 }, { name: 'Kileleshwa', price: 350 },
+  { name: 'Junction Mall', price: 400 }, { name: 'Lavington', price: 400 },
+  { name: 'Kibra', price: 400 }, { name: 'Dagoretti Corner', price: 400 },
+  { name: 'Kawangware', price: 400 }, { name: 'Wanyee Road', price: 400 },
+  { name: 'Karen', price: 650 }, { name: 'Galleria', price: 300 },
+  { name: 'Jamuhuri', price: 300 }, { name: 'Riruta', price: 300 },
+  { name: 'Satellite', price: 300 }, { name: 'Ngong', price: 300 },
+  { name: 'ABC', price: 350 }, { name: 'Kangemi', price: 400 },
+  { name: 'Mountain View', price: 400 }, { name: 'Uthiru', price: 300 },
+  { name: 'Kinoo', price: 600 }, { name: 'Kikuyu', price: 800 },
+  { name: 'Westlands', price: 350 }, { name: 'Riverside', price: 350 },
+  { name: 'Parklands', price: 350 }, { name: 'General Mathenge', price: 350 },
+  { name: 'Aga Khan', price: 350 }, { name: 'MP Shah', price: 350 },
+  { name: 'Oshwal', price: 350 }, { name: 'Spring Valley', price: 400 },
+  { name: 'Ruaka', price: 450 }, { name: 'Gigiri', price: 450 },
+  { name: 'Runda', price: 450 }, { name: 'Nyari', price: 450 },
+  { name: 'Loresho', price: 400 }, { name: 'Lower Kabete', price: 400 },
+  { name: 'Kitusuru', price: 600 }, { name: 'Village Market', price: 300 },
+  { name: 'Two Rivers Mall', price: 300 }, { name: 'Mwimuto', price: 600 },
+  { name: 'Kiambu Road', price: 450 }, { name: 'Thindigua', price: 450 },
+  { name: 'Kiambu Town', price: 800 }, { name: 'Kirigiti', price: 300 },
+  { name: 'Tatu City', price: 800 },
+  { name: 'Buruburu', price: 400 }, { name: 'Donholm', price: 400 },
+  { name: 'Fedha', price: 400 }, { name: 'Tassia', price: 400 },
+  { name: 'Pipeline', price: 400 }, { name: 'Komarock', price: 400 },
+  { name: 'Savannah', price: 400 }, { name: 'Uhuru Estate', price: 400 },
+  { name: 'Nyayo Embakasi', price: 300 }, { name: 'Utawala', price: 650 },
+  { name: 'Chokaa', price: 300 }, { name: 'Ruai', price: 300 }, { name: 'Kamulu', price: 900 },
+  { name: 'Pangani', price: 300 }, { name: 'Ruaraka', price: 300 },
+  { name: 'Lucky Summer', price: 400 }, { name: 'Mirema', price: 450 },
+  { name: 'Zimmerman', price: 450 }, { name: 'Roysambu', price: 300 },
+  { name: 'Kasarani', price: 300 }, { name: 'Githurai', price: 450 },
+  { name: 'Kahawa West', price: 450 }, { name: 'Kahawa Wendani', price: 450 },
+  { name: 'Kahawa Sukari', price: 300 }, { name: 'Clayworks', price: 450 },
+  { name: 'Roasters', price: 300 }, { name: 'Marurui', price: 300 },
+  { name: 'USIU', price: 300 }, { name: 'Kenyatta University', price: 300 },
+  { name: 'Ruiru Bypass', price: 600 }, { name: 'Ruiru Town', price: 650 },
+  { name: 'Juja', price: 300 }, { name: 'Thika Town', price: 900 },
+  { name: 'Ngara', price: 300 }, { name: 'Ojijo Road', price: 300 },
 ]
+
+// Nairobi areas that Super Metro serves
+const SUPER_METRO_AREAS = ['Thika', 'Thika Town', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
 
 async function reverseGeocode(lat: number, lon: number) {
   try {
@@ -127,10 +101,7 @@ async function reverseGeocode(lat: number, lon: number) {
       city: data.address?.city || data.address?.town || data.address?.village,
       county: data.address?.county,
     }
-  } catch (error) {
-    console.error('Reverse geocoding failed:', error)
-    return null
-  }
+  } catch { return null }
 }
 
 function CheckoutStepper({ step }: { step: number }) {
@@ -152,67 +123,6 @@ function CheckoutStepper({ step }: { step: number }) {
   )
 }
 
-// Nairobi area searchable dropdown component
-function NairobiAreaPicker({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (area: string, price: number) => void
-}) {
-  const [search, setSearch] = useState(value)
-  const [open, setOpen] = useState(false)
-
-  const filtered = useMemo(() => {
-    if (!search) return NAIROBI_AREAS
-    return NAIROBI_AREAS.filter(a =>
-      a.area.toLowerCase().includes(search.toLowerCase())
-    )
-  }, [search])
-
-  const handleSelect = (a: { area: string; price: number }) => {
-    setSearch(a.area)
-    setOpen(false)
-    onChange(a.area, a.price)
-  }
-
-  return (
-    <div className="relative">
-      <div className="relative">
-        <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          value={search}
-          onChange={e => { setSearch(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
-          placeholder="Search your area e.g. Karen, Westlands..."
-          className="w-full border border-border bg-background text-foreground rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary"
-        />
-      </div>
-      {open && filtered.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto">
-          {filtered.map(a => (
-            <button
-              key={a.area}
-              type="button"
-              onClick={() => handleSelect(a)}
-              className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-accent transition-colors text-left"
-            >
-              <span className="text-foreground">{a.area}</span>
-              <span className="text-primary font-bold ml-2 shrink-0">KSh {a.price}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {open && filtered.length === 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg px-4 py-3 text-sm text-muted-foreground">
-          No matching area found. Try Pickup Mtaani instead.
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart, totalItems, updateQuantity, removeFromCart } = useCart()
   const navigate = useNavigate()
@@ -220,27 +130,22 @@ export default function CheckoutPage() {
   const [name, setName] = useState('')
   const [status, setStatus] = useState<PaymentStatus>('idle')
   const [error, setError] = useState('')
-  const [address, setAddress] = useState('')
-  const [city, setCity] = useState('')
+  const [locationSearch, setLocationSearch] = useState('')
+  const [locationSuggestions, setLocationSuggestions] = useState<{ name: string; price?: number }[]>([])
+  const [selectedLocation, setSelectedLocation] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const [postalCode, setPostalCode] = useState('')
-  const [county, setCounty] = useState('')
   const [country, setCountry] = useState('Kenya')
   const [email, setEmail] = useState('')
   const [step, setStep] = useState(0)
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([])
   const [selectedShipping, setSelectedShipping] = useState<ShippingMethod | null>(null)
+  const [availableOptions, setAvailableOptions] = useState<ShippingMethod[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([])
   const [selectedPayment, setSelectedPayment] = useState<string>('mpesa')
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [coordinates, setCoordinates] = useState<{ lat: number | null; lon: number | null }>({ lat: null, lon: null })
-
-  // Nairobi-specific area + doorstep price
-  const [nairobiArea, setNairobiArea] = useState('')
-  const [doorstepPrice, setDoorstepPrice] = useState<number | null>(null)
-
-  const { userId, authChecked, name: accountName, email: accountEmail } = useCheckoutAuth()
-
-  const kenyanCounties = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Nyeri', 'Machakos', 'Meru', 'Lamu', 'Nanyuki', 'Kajiado', 'Kiambu', 'Other']
+  const { userId, name: accountName, email: accountEmail } = useCheckoutAuth()
 
   useEffect(() => {
     if (accountName) setName(prev => prev || accountName)
@@ -257,82 +162,78 @@ export default function CheckoutPage() {
         setShippingMethods(ship || [])
         setPaymentMethods(pay || [])
         if (pay?.length) setSelectedPayment(pay[0].provider)
-      } catch (err) {
-        console.error('Checkout loading error:', err)
-      }
+      } catch (err) { console.error('Checkout loading error:', err) }
     }
     load()
   }, [])
 
-  const isInternational = country !== 'Kenya'
-  const isNairobi = county === 'Nairobi' && !isInternational
+  // Build location suggestions as user types
+  useEffect(() => {
+    if (!locationSearch.trim() || locationSearch.length < 2) {
+      setLocationSuggestions([])
+      return
+    }
+    const q = locationSearch.toLowerCase()
 
-  // Build the shipping options list
-  const filteredShipping = useMemo(() => {
-    const base = shippingMethods.filter(m =>
-      isInternational ? m.type === 'international' : m.type === 'local'
-    )
-    if (isInternational || base.length === 0) return base
-
-    // For Nairobi: show Pickup Mtaani, Super Metro, and a dynamic Doorstep option
-    if (isNairobi) {
-      const nairobiMethods = base.filter(m =>
-        m.name.toLowerCase().includes('mtaani') ||
-        m.name.toLowerCase().includes('super metro')
-      )
-      // Add dynamic doorstep option based on selected area
-      if (doorstepPrice !== null && nairobiArea) {
-        const doorstep: ShippingMethod = {
-          id: 'doorstep-dynamic',
-          name: `Doorstep Delivery (${nairobiArea})`,
-          type: 'local',
-          provider: 'Doorstep',
-          estimated_days: '1 Day',
-          price: doorstepPrice,
-          regions: ['Nairobi'],
-        }
-        return [doorstep, ...nairobiMethods].sort((a, b) => a.price - b.price)
-      }
-      return nairobiMethods
+    // Check Nairobi areas first
+    const nairobiMatches = NAIROBI_AREAS.filter(a => a.name.toLowerCase().includes(q))
+    if (nairobiMatches.length > 0) {
+      setLocationSuggestions(nairobiMatches.slice(0, 8))
+      return
     }
 
-    // For upcountry: match by county/city against regions
-    const userLocation = `${county || ''} ${city || ''} ${address || ''}`.trim().toLowerCase()
-    if (userLocation) {
-      const matches = base.filter(m => {
-        let regionsArray: string[] = []
-        if (Array.isArray(m.regions)) {
-          regionsArray = m.regions.map(r => String(r || '').toLowerCase().trim())
-        } else if (typeof m.regions === 'string') {
-          regionsArray = m.regions.split(',').map(r => r.toLowerCase().trim())
+    // Check upcountry regions from DB
+    const regionMatches: { name: string }[] = []
+    const seen = new Set<string>()
+    shippingMethods.forEach(m => {
+      if (!m.regions) return
+      m.regions.forEach(r => {
+        if (r.toLowerCase().includes(q) && !seen.has(r)) {
+          seen.add(r)
+          regionMatches.push({ name: r })
         }
-        return regionsArray.some(r => userLocation.includes(r) || r.includes(userLocation))
       })
-      if (matches.length > 0) return matches
-    }
+    })
+    setLocationSuggestions(regionMatches.slice(0, 8))
+  }, [locationSearch, shippingMethods])
 
-    return base
-  }, [shippingMethods, isInternational, isNairobi, county, city, address, doorstepPrice, nairobiArea])
+  // When a location is selected, compute available delivery options
+  const handleSelectLocation = (loc: { name: string; price?: number }) => {
+    setSelectedLocation(loc.name)
+    setLocationSearch(loc.name)
+    setShowSuggestions(false)
+    setSelectedShipping(null)
 
-  // Auto-select cheapest shipping when list changes
-  useEffect(() => {
-    if (filteredShipping.length > 0) {
-      const stillValid = selectedShipping && filteredShipping.some(m => m.id === selectedShipping.id)
-      if (!stillValid) {
-        setSelectedShipping(filteredShipping[0])
+    const isNairobiArea = NAIROBI_AREAS.some(a => a.name === loc.name)
+
+    if (isNairobiArea && loc.price !== undefined) {
+      const doorstepPrice = loc.price
+      const options: ShippingMethod[] = []
+
+      // Always add Pickup Mtaani
+      const mtaani = shippingMethods.find(m => m.name.toLowerCase().includes('pickup mtaani'))
+      if (mtaani) options.push(mtaani)
+
+      // Add Super Metro if area is served
+      const superMetroServed = SUPER_METRO_AREAS.some(a => loc.name.toLowerCase().includes(a.toLowerCase()))
+      if (superMetroServed) {
+        const sm = shippingMethods.find(m => m.name.toLowerCase().includes('super metro'))
+        if (sm) options.push(sm)
       }
-    } else {
-      setSelectedShipping(null)
-    }
-  }, [filteredShipping])
 
-  // Reset Nairobi area when county changes away from Nairobi
-  useEffect(() => {
-    if (county !== 'Nairobi') {
-      setNairobiArea('')
-      setDoorstepPrice(null)
+      // Add Doorstep with area-specific price
+      const doorstep = shippingMethods.find(m => m.name.toLowerCase().includes('doorstep'))
+      if (doorstep) options.push({ ...doorstep, price: doorstepPrice })
+
+      setAvailableOptions(options)
+    } else {
+      // Upcountry: find all methods whose regions include this location
+      const matches = shippingMethods.filter(m =>
+        m.regions?.some(r => r.toLowerCase() === loc.name.toLowerCase())
+      )
+      setAvailableOptions(matches)
     }
-  }, [county])
+  }
 
   const handleDetectLocation = () => {
     if (!navigator.geolocation) { toast.error('Geolocation not supported.'); return }
@@ -343,36 +244,29 @@ export default function CheckoutPage() {
         setCoordinates({ lat: latitude, lon: longitude })
         const geoData = await reverseGeocode(latitude, longitude)
         if (geoData) {
-          const addressParts = [geoData.road, geoData.suburb].filter(Boolean)
-          setAddress(addressParts.length > 0 ? addressParts.join(', ') : geoData.display_name)
-          if (geoData.city) setCity(geoData.city)
-          if (geoData.county) {
-            const matched = kenyanCounties.find(c => geoData.county!.toLowerCase().includes(c.toLowerCase()))
-            if (matched) setCounty(matched)
+          const suburb = geoData.suburb || geoData.city || ''
+          // Try to match to a Nairobi area
+          const matchedArea = NAIROBI_AREAS.find(a =>
+            suburb.toLowerCase().includes(a.name.toLowerCase()) ||
+            a.name.toLowerCase().includes(suburb.toLowerCase())
+          )
+          if (matchedArea) {
+            setLocationSearch(matchedArea.name)
+            handleSelectLocation(matchedArea)
+            toast.success(`Location detected: ${matchedArea.name}`)
+          } else {
+            setLocationSearch(suburb)
+            toast.info('Location detected. Please confirm your area from the suggestions.')
+            setShowSuggestions(true)
           }
-          // Try to auto-match Nairobi area from suburb
-          if (geoData.suburb) {
-            const matchedArea = NAIROBI_AREAS.find(a =>
-              geoData.suburb!.toLowerCase().includes(a.area.toLowerCase()) ||
-              a.area.toLowerCase().includes(geoData.suburb!.toLowerCase())
-            )
-            if (matchedArea) {
-              setNairobiArea(matchedArea.area)
-              setDoorstepPrice(matchedArea.price)
-            }
-          }
-          toast.success('Address filled from your location!')
         } else {
-          setAddress(`GPS: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
-          toast.info('Coordinates set. Please adjust address manually.')
+          toast.error('Could not detect location. Please type your area.')
         }
         setLoadingGeo(false)
       },
-      (error) => {
+      (err) => {
         setLoadingGeo(false)
-        if (error.code === error.PERMISSION_DENIED) toast.error('Location permission denied.')
-        else if (error.code === error.POSITION_UNAVAILABLE) toast.error('Location unavailable.')
-        else if (error.code === error.TIMEOUT) toast.error('Location request timed out.')
+        if (err.code === err.PERMISSION_DENIED) toast.error('Location permission denied.')
         else toast.error('Could not detect location.')
       },
       { enableHighAccuracy: true, timeout: 12000 }
@@ -386,43 +280,38 @@ export default function CheckoutPage() {
     const targetEmail = email || accountEmail
     if (!targetEmail) return
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0)
-    const shippingAddressLine = [address, nairobiArea || county || city, postalCode, country].filter(Boolean).join(', ')
     const receiptUrl = await generateAndUploadReceipt({
       orderId, customerName: name, email: targetEmail, phone,
       items: items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
-      subtotal, shippingLabel: selectedShipping?.name, shippingCost, grandTotal, shippingAddress: shippingAddressLine,
+      subtotal, shippingLabel: selectedShipping?.name, shippingCost, grandTotal,
+      shippingAddress: [selectedLocation, postalCode, country].filter(Boolean).join(', '),
     })
     const itemsHtml = items.map(item => `
       <tr>
         <td style="padding:10px 8px;border-bottom:1px solid #eee;font-size:14px;">
-          <div style="font-weight:600;color:#111827;">${item.name}</div>
+          <div style="font-weight:600;">${item.name}</div>
           <div style="font-size:12px;color:#6b7280;">Qty ${item.quantity} × KSh ${item.price.toLocaleString()}</div>
         </td>
-        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-weight:700;text-align:right;">
-          KSh ${(item.price * item.quantity).toLocaleString()}
-        </td>
+        <td style="padding:10px 8px;border-bottom:1px solid #eee;font-weight:700;text-align:right;">KSh ${(item.price * item.quantity).toLocaleString()}</td>
       </tr>`).join('')
-    const receiptBlock = receiptUrl ? `<div style="margin:18px 0;text-align:center;"><a href="${receiptUrl}" style="display:inline-block;background-color:#D4A017;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;">View Invoice Receipt</a></div>` : ''
     const emailHtml = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
         <div style="text-align:center;padding:14px 0;border-bottom:3px solid #D4A017;margin-bottom:18px;">
-          <div style="font-size:22px;font-weight:800;color:#1A1A1A;">USHANGA CHRONICLES</div>
+          <div style="font-size:22px;font-weight:800;letter-spacing:0.04em;">USHANGA CHRONICLES</div>
         </div>
         <h2 style="color:#D4A017;text-align:center;">Thank you for your order!</h2>
         <p>Hi ${name || 'there'}, your order <strong>#${orderId}</strong> has been received.</p>
-        <div style="margin:20px 0;background:#fafafa;border-radius:8px;padding:16px;">
-          <table style="width:100%;border-collapse:collapse;"><tbody>${itemsHtml}</tbody></table>
-          <hr style="border:0;border-top:1px solid #e5e7eb;margin:12px 0;" />
-          <p style="text-align:right;font-size:16px;font-weight:bold;">Grand Total: KSh ${grandTotal.toLocaleString()}</p>
-        </div>
-        ${receiptBlock}
+        <table style="width:100%;border-collapse:collapse;"><tbody>${itemsHtml}</tbody></table>
+        <hr style="margin:12px 0;" />
+        <p style="text-align:right;font-weight:bold;">Grand Total: KSh ${grandTotal.toLocaleString()}</p>
+        ${receiptUrl ? `<div style="text-align:center;margin:18px 0;"><a href="${receiptUrl}" style="background:#D4A017;color:#fff;padding:12px 22px;border-radius:8px;font-weight:700;text-decoration:none;">View Invoice Receipt</a></div>` : ''}
       </div>`
     try {
       await supabase.functions.invoke('send-email', {
         body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
       })
     } catch (err) { console.error('Email send error:', err) }
-  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, address, nairobiArea, city, county, postalCode, country])
+  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, selectedLocation, postalCode, country])
 
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) { toast.error('Please log in first'); navigate('/auth', { state: { returnTo: '/checkout' } }); return }
@@ -430,10 +319,8 @@ export default function CheckoutPage() {
     if (!name.trim()) { setError('Please enter your name'); return }
     if (items.length === 0) return
     const overStockItem = items.find(i => i.stock && i.quantity > i.stock)
-    if (overStockItem) {
-      setError(`"${overStockItem.name}" only has ${overStockItem.stock} in stock.`)
-      setStep(0); return
-    }
+    if (overStockItem) { setError(`"${overStockItem.name}" only has ${overStockItem.stock} in stock.`); setStep(0); return }
+
     setError(''); setStatus('creating')
     try {
       const orderData = {
@@ -442,21 +329,28 @@ export default function CheckoutPage() {
         status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
         user_id: userId, latitude: coordinates.lat, longitude: coordinates.lon,
         shipping_address: {
-          address, area: nairobiArea || '', city, county, postal_code: postalCode, country, email,
-          shipping_method: selectedShipping?.name, shipping_cost: shippingCost
+          location: selectedLocation, postal_code: postalCode, country,
+          email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost
         }
       }
       const { data: order, error: orderError } = await supabase.from('orders').insert(orderData).select('id').single()
       if (orderError) throw new Error(orderError.message)
+
       if (selectedPayment === 'cod') {
-        await sendOrderEmail(order.id); setStatus('success'); clearCart(); toast.success('Order placed! Pay on delivery 🎉'); return
+        await sendOrderEmail(order.id); setStatus('success'); clearCart()
+        toast.success('Order placed! Pay on delivery 🎉'); return
       }
+
       setStatus('pushing')
-      const { data: responsePayload, error: stkError } = await supabase.functions.invoke('mpesa-stk-push', { body: { phone, amount: grandTotal, orderId: order.id } })
+      const { data: responsePayload, error: stkError } = await supabase.functions.invoke(
+        'mpesa-stk-push', { body: { phone, amount: grandTotal, orderId: order.id } }
+      )
       if (stkError) throw new Error(stkError.message)
       if (!responsePayload?.success) throw new Error(responsePayload?.error || 'M-Pesa request failed.')
+
       const checkoutRequestId = responsePayload.mpesa_response?.CheckoutRequestID || responsePayload?.checkoutRequestId
       setStatus('polling'); let attempts = 0
+
       const poll = async () => {
         attempts++
         try {
@@ -473,9 +367,9 @@ export default function CheckoutPage() {
       }
       setTimeout(poll, 4000)
     } catch (err: any) {
-      console.error('Checkout error:', err); setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
+      setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
-  }, [phone, name, items, grandTotal, userId, address, nairobiArea, city, county, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, clearCart, navigate, sendOrderEmail])
+  }, [phone, name, items, grandTotal, userId, selectedLocation, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, clearCart, navigate, sendOrderEmail])
 
   if (status === 'success') {
     return (
@@ -505,8 +399,7 @@ export default function CheckoutPage() {
   }
 
   const isProcessing = status === 'creating' || status === 'pushing' || status === 'polling'
-  const canGoToShipping = items.length > 0
-  const canGoToPayment = name.trim() && phone.length >= 9 && selectedShipping
+  const canGoToPayment = name.trim() && phone.length >= 9 && selectedShipping && selectedLocation
 
   return (
     <div className="bg-muted/30 min-h-screen pt-24 pb-16">
@@ -520,7 +413,7 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
 
-            {/* Step 0 — Cart */}
+            {/* STEP 0 — Cart */}
             {step === 0 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -533,19 +426,21 @@ export default function CheckoutPage() {
                     <div key={item.id} className="p-4 flex gap-4">
                       {item.image_url
                         ? <img src={item.image_url} alt={item.name} className="w-20 h-20 object-cover rounded-lg border border-border flex-shrink-0" />
-                        : <div className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-xs flex-shrink-0">No img</div>
-                      }
+                        : <div className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-xs flex-shrink-0">No img</div>}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-foreground text-sm truncate">{item.name}</h3>
                         <p className="text-primary font-bold text-sm mt-1">KSh {item.price.toLocaleString()}</p>
                         {item.stock && item.quantity > item.stock && (
-                          <p className="text-xs text-red-500 font-semibold mt-0.5">Only {item.stock} in stock — please reduce quantity</p>
+                          <p className="text-xs text-red-500 font-semibold mt-0.5">Only {item.stock} in stock</p>
                         )}
                         <div className="flex items-center gap-3 mt-2">
                           <div className="flex items-center border border-border rounded-lg">
                             <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1.5 hover:bg-accent transition-colors rounded-l-lg"><Minus className="w-3.5 h-3.5" /></button>
                             <span className="px-3 text-sm font-medium min-w-[2rem] text-center">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={!!item.stock && item.quantity >= item.stock} className="p-1.5 hover:bg-accent transition-colors rounded-r-lg disabled:opacity-50 disabled:cursor-not-allowed"><Plus className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={!!item.stock && item.quantity >= item.stock}
+                              className="p-1.5 hover:bg-accent transition-colors rounded-r-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                           <button onClick={() => removeFromCart(item.id)} className="text-destructive hover:text-destructive/80 transition-colors"><Trash2 className="w-4 h-4" /></button>
                         </div>
@@ -557,7 +452,7 @@ export default function CheckoutPage() {
                   ))}
                 </div>
                 <div className="p-4 border-t border-border">
-                  <button onClick={() => setStep(1)} disabled={!canGoToShipping || items.some(i => i.stock && i.quantity > i.stock)}
+                  <button onClick={() => setStep(1)} disabled={items.some(i => i.stock && i.quantity > i.stock)}
                     className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50" style={{ minHeight: '48px' }}>
                     Proceed to Shipping
                   </button>
@@ -565,7 +460,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 1 — Shipping */}
+            {/* STEP 1 — Shipping */}
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -576,11 +471,12 @@ export default function CheckoutPage() {
                     className="inline-flex items-center justify-center gap-2 text-xs font-bold bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border px-3 py-2 rounded-lg transition-colors" style={{ minHeight: '38px' }}>
                     {loadingGeo
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> Detecting...</>
-                      : <><Navigation className="w-3.5 h-3.5 fill-current text-primary" /> Auto-Fill My Address</>}
+                      : <><Navigation className="w-3.5 h-3.5 fill-current text-primary" /> Auto-Detect Location</>}
                   </button>
                 </div>
 
                 <div className="p-4 space-y-4">
+                  {/* Name & Phone */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1.5">Full Name *</label>
@@ -602,7 +498,7 @@ export default function CheckoutPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">Country</label>
-                    <select value={country} onChange={e => { setCounty(''); setCountry(e.target.value); setSelectedShipping(null) }}
+                    <select value={country} onChange={e => setCountry(e.target.value)}
                       className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm">
                       <option value="Kenya">🇰🇪 Kenya</option>
                       <option value="Tanzania">🇹🇿 Tanzania</option>
@@ -612,96 +508,77 @@ export default function CheckoutPage() {
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    {country === 'Kenya' ? (
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-1.5">County</label>
-                        <select value={county} onChange={e => setCounty(e.target.value)}
-                          className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm">
-                          <option value="">Select county</option>
-                          {kenyanCounties.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-1.5">City / Town</label>
-                        <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City"
-                          className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm" />
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1.5">Postal Code</label>
-                      <input type="text" value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="00100"
-                        className="w-full border border-border bg-background text-foreground rounded-lg px-4 py-3 text-sm" />
+                  {/* Location Search */}
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">
+                      Your Location * <span className="text-muted-foreground font-normal text-xs">(type your area, estate or town)</span>
+                    </label>
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+                      <input
+                        type="text"
+                        value={locationSearch}
+                        onChange={e => { setLocationSearch(e.target.value); setShowSuggestions(true); setSelectedLocation(''); setSelectedShipping(null); setAvailableOptions([]) }}
+                        onFocus={() => locationSearch.length >= 2 && setShowSuggestions(true)}
+                        placeholder="e.g. Juja, Karen, Ahero, Kisumu..."
+                        className="w-full border border-border bg-background text-foreground rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary"
+                      />
+                      {showSuggestions && locationSuggestions.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                          {locationSuggestions.map(loc => (
+                            <button key={loc.name} type="button"
+                              onClick={() => handleSelectLocation(loc)}
+                              className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-accent transition-colors text-left">
+                              <span className="text-foreground">{loc.name}</span>
+                              {loc.price !== undefined && (
+                                <span className="text-xs text-muted-foreground">Doorstep from KSh {loc.price}</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                    {selectedLocation && (
+                      <p className="text-xs text-green-600 font-semibold mt-1.5 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" /> Delivering to: {selectedLocation}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Nairobi area picker — only shown when county is Nairobi */}
-                  {isNairobi && (
+                  {/* Delivery Options — only shown after location selected */}
+                  {selectedLocation && (
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-1.5">
-                        Your Area in Nairobi <span className="text-muted-foreground">(for doorstep pricing)</span>
+                      <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-primary" /> Available Delivery Options
                       </label>
-                      <NairobiAreaPicker
-                        value={nairobiArea}
-                        onChange={(area, price) => {
-                          setNairobiArea(area)
-                          setDoorstepPrice(price)
-                          setAddress(area)
-                        }}
-                      />
-                      {nairobiArea && doorstepPrice !== null && (
-                        <p className="text-xs text-green-600 font-medium mt-1.5">
-                          Doorstep delivery to {nairobiArea} — KSh {doorstepPrice}
-                        </p>
+
+                      {availableOptions.length === 0 ? (
+                        <div className="p-4 rounded-lg bg-muted text-center border border-dashed border-border">
+                          <p className="text-xs text-muted-foreground">No delivery options found for this location. Contact us on WhatsApp.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {availableOptions.map((m, idx) => (
+                            <label key={`${m.id}-${idx}`}
+                              className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                                selectedShipping?.id === m.id && selectedShipping?.price === m.price
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border hover:border-primary/50'
+                              }`}>
+                              <input type="radio" name="shipping"
+                                checked={selectedShipping?.id === m.id && selectedShipping?.price === m.price}
+                                onChange={() => setSelectedShipping(m)} className="accent-primary" />
+                              <div className="flex-1">
+                                <p className="font-medium text-foreground text-sm">{m.name}</p>
+                                <p className="text-xs text-muted-foreground">{m.estimated_days || 'Standard delivery'}</p>
+                              </div>
+                              <span className="font-bold text-primary text-sm">KSh {m.price.toLocaleString()}</span>
+                            </label>
+                          ))}
+                        </div>
                       )}
                     </div>
                   )}
-
-                  {/* Street address for non-Nairobi or additional detail */}
-                  {!isNairobi && (
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1.5">Street Address *</label>
-                      <div className="relative">
-                        <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Street / building / estate / landmark"
-                          className="w-full border border-border bg-background text-foreground rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary" />
-                        <MapPin className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Delivery method */}
-                  <div className="pt-2">
-                    <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-primary" /> Choose Delivery Method *
-                    </label>
-                    {filteredShipping.length === 0 ? (
-                      <div className="p-4 rounded-lg bg-muted text-center border border-dashed border-border">
-                        {county ? (
-                          <p className="text-xs text-muted-foreground">No delivery options available for this location yet. Please contact us.</p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">Select your county to see delivery options.</p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {filteredShipping.map(m => (
-                          <label key={m.id}
-                            className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                              selectedShipping?.id === m.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                            }`}>
-                            <input type="radio" name="shipping" checked={selectedShipping?.id === m.id}
-                              onChange={() => setSelectedShipping(m)} className="accent-primary" />
-                            <div className="flex-1">
-                              <p className="font-medium text-foreground text-sm">{m.name}</p>
-                              <p className="text-xs text-muted-foreground">{m.estimated_days || 'Standard delivery'}{m.provider ? ` via ${m.provider}` : ''}</p>
-                            </div>
-                            <span className="font-bold text-foreground text-sm">KSh {m.price.toLocaleString()}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
 
                   <button onClick={() => setStep(2)} disabled={!canGoToPayment}
                     className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 mt-2" style={{ minHeight: '48px' }}>
@@ -711,7 +588,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Step 2 — Payment */}
+            {/* STEP 2 — Payment */}
             {step === 2 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -777,21 +654,28 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
-                  <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : 'Select shipping'}</span>
+                  <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : '—'}</span>
                 </div>
+                {selectedLocation && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Location</span>
+                    <span className="font-medium text-foreground text-xs">{selectedLocation}</span>
+                  </div>
+                )}
+                {selectedShipping && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Via</span>
+                    <span className="font-medium text-foreground text-xs">{selectedShipping.name}</span>
+                  </div>
+                )}
               </div>
               <div className="flex justify-between items-baseline mb-4">
                 <span className="font-semibold text-base text-foreground">Total</span>
                 <span className="text-xl font-extrabold text-primary">KSh {grandTotal.toLocaleString()}</span>
               </div>
-              {selectedShipping && (
-                <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-2 mb-3">
-                  📦 {selectedShipping.name} · {selectedShipping.estimated_days || 'Standard delivery'}
-                </div>
-              )}
               <div className="bg-muted/50 rounded-lg p-3 flex gap-2 items-start text-xs text-muted-foreground">
                 <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <span>Your payment and personal details are kept secure throughout checkout.</span>
+                <span>Your payment and personal details are kept secure.</span>
               </div>
             </div>
           </div>
