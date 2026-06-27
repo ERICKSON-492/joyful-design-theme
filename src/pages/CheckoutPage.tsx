@@ -79,11 +79,11 @@ const NAIROBI_AREAS: { name: string; price: number }[] = [
   { name: 'Roasters', price: 300 }, { name: 'Marurui', price: 300 },
   { name: 'USIU', price: 300 }, { name: 'Kenyatta University', price: 300 },
   { name: 'Ruiru Bypass', price: 600 }, { name: 'Ruiru Town', price: 650 },
-  { name: 'Juja', price: 300 }, { name: 'Thika Town', price: 900 },
+  { name: 'Juja', price: 220 }, { name: 'Thika Town', price: 900 },
   { name: 'Ngara', price: 300 }, { name: 'Ojijo Road', price: 300 },
 ]
 
-// Super Metro specific area mapping — exact match only
+// Super Metro specific area mapping
 const SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Thika Town', route: 'Super Metro - Thika' },
   { area: 'Thika', route: 'Super Metro - Thika' },
@@ -92,6 +92,9 @@ const SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Rongai', route: 'Super Metro - Rongai' },
   { area: 'Kitengela', route: 'Super Metro - Kitengela' },
 ]
+
+// These areas are served by Super Metro + Pickup Mtaani only (no doorstep)
+const SUPER_METRO_ONLY_AREAS = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
 
 async function reverseGeocode(lat: number, lon: number) {
   try {
@@ -229,8 +232,8 @@ export default function CheckoutPage() {
         if (sm) options.push(sm)
       }
 
-      // Add Doorstep with area-specific price (only if doorstep price is defined and not a Super Metro-only area)
-      const isSuperMetroOnly = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela'].includes(loc.name)
+      // Add Doorstep with area-specific price (only if not a Super Metro-only area)
+      const isSuperMetroOnly = SUPER_METRO_ONLY_AREAS.includes(loc.name)
       const doorstep = shippingMethods.find(m => m.name.toLowerCase().includes('doorstep'))
       if (doorstep && !isSuperMetroOnly) {
         options.push({ ...doorstep, price: loc.price })
