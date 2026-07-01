@@ -1,2 +1,0 @@
-UPDATE hero_slides SET image_url = 'https://hdzprvaypoylqpmuldfx.supabase.co/storage/v1/object/public/product-images/hero/hero1_optimized.jpg' WHERE id = '4ae9852a-e614-4dff-aca8-e48e25f08587';
-UPDATE hero_slides SET image_url = 'https://hdzprvaypoylqpmuldfx.supabase.co/storage/v1/object/public/product-images/hero/hero2_optimized.jpg' WHERE id = '74ee6b5a-8524-47a3-9644-49275054b872';
