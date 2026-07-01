@@ -261,7 +261,11 @@ export default function ProductDetailPage() {
             )}
 
             {product.description && (
-              <p className="text-muted-foreground text-sm leading-relaxed">{product.description}</p>
+             <ul className="text-muted-foreground text-sm leading-relaxed list-disc pl-5 space-y-1">
+              {product.description.split('\n').filter(Boolean).map((line, i) => (
+                <li key={i}>{line.replace(/^[-•]\s*/, '')}</li>
+              ))}
+             </ul>
             )}
 
             {/* Size Selection */}
