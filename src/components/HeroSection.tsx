@@ -1,5 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+
+const MotionLink = motion(Link)
+
+// Staggered reveal for the text block — each child animates in slightly
+// after the last, and animates out quickly when the slide changes.
+const textContainerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.12, delayChildren: 0.1 } },
+  exit: { transition: { staggerChildren: 0.05 } },
+}
+
+const textItemVariants = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] } },
+  exit: { opacity: 0, y: -14, transition: { duration: 0.3, ease: 'easeIn' } },
+}
 
 // ==========================================
 // 1. STATIC ASSET IMPORTS
@@ -151,7 +168,7 @@ export function HeroSection() {
         const isLoaded = imagesLoaded[slide.id]
 
         return (
-          <img
+          <motion.img
             key={slide.id}
             src={slide.image_url}
             alt={slide.subtitle || slide.title}
@@ -164,6 +181,11 @@ export function HeroSection() {
               opacity: isActive && isLoaded ? 1 : 0,
               objectPosition: isMobile ? 'center 25%' : 'center center',
             }}
+            // Slow, continuous "Ken Burns" breathing zoom. It runs
+            // regardless of active state so there's never a visible jump
+            // the moment a slide fades in — it's always mid-motion.
+            animate={{ scale: [1, 1.08, 1] }}
+            transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
           />
         )
       })}
@@ -179,24 +201,46 @@ export function HeroSection() {
 
       {/* Content */}
       <div className="absolute inset-0 z-[3] flex items-center justify-center px-4 sm:px-6 text-center">
-        <div className="max-w-3xl">
-          <h1 className="font-display text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-3 sm:mb-4 leading-[1.1] tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
-            {activeSlide.title}
-          </h1>
-          <p className="text-[#F0D878] text-lg sm:text-xl md:text-2xl lg:text-3xl font-display italic mb-6 sm:mb-10 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
-            {activeSlide.subtitle}
-          </p>
-          <p className="text-white/90 text-sm sm:text-base md:text-lg max-w-2xl mx-auto mb-6 sm:mb-8 leading-relaxed drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]">
-            Handcrafted, heritage-inspired African jewelry, pet accessories, and home decor made by artisans in Nairobi.
-          </p>
-          <Link
-            to={activeSlide.cta_link}
-            className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-8 sm:px-10 py-3.5 sm:py-4 text-xs sm:text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-            style={{ minHeight: '44px' }}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeSlide.id}
+            className="max-w-3xl"
+            variants={textContainerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
           >
-            {activeSlide.cta_text}
-          </Link>
-        </div>
+            <motion.h1
+              variants={textItemVariants}
+              className="font-display text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-3 sm:mb-4 leading-[1.1] tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
+            >
+              {activeSlide.title}
+            </motion.h1>
+            <motion.p
+              variants={textItemVariants}
+              className="text-[#F0D878] text-lg sm:text-xl md:text-2xl lg:text-3xl font-display italic mb-6 sm:mb-10 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]"
+            >
+              {activeSlide.subtitle}
+            </motion.p>
+            <motion.p
+              variants={textItemVariants}
+              className="text-white/90 text-sm sm:text-base md:text-lg max-w-2xl mx-auto mb-6 sm:mb-8 leading-relaxed drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
+            >
+              Handcrafted, heritage-inspired African jewelry, pet accessories, and home decor made by artisans in Nairobi.
+            </motion.p>
+            <motion.div variants={textItemVariants}>
+              <MotionLink
+                to={activeSlide.cta_link}
+                className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-8 sm:px-10 py-3.5 sm:py-4 text-xs sm:text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl"
+                style={{ minHeight: '44px' }}
+                whileHover={{ y: -3, scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+              >
+                {activeSlide.cta_text}
+              </MotionLink>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Carousel Indicators */}
