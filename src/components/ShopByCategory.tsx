@@ -40,7 +40,7 @@ function shuffle<T>(arr: T[]): T[] {
 // Sizing is driven by aspect-ratio rather than fixed row heights, so tiles
 // keep normal (square) proportions instead of stretching.
 const mobileBento = [
-  'col-span-4 aspect-[2.75/1]', // Wear It - compact wide banner
+  'col-span-4 aspect-[16/9]', // Wear It - full-size wide banner
   'col-span-2 aspect-square', // Live With It
   'col-span-2 aspect-square', // Collectibles
   'col-span-2 aspect-square', // Pet
