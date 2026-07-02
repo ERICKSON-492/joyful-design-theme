@@ -94,14 +94,16 @@ export function ShopByCategory() {
           className="grid grid-cols-4 gap-2.5 md:grid-cols-5 md:gap-4 max-w-4xl mx-auto"
           staggerDelay={0.08}
         >
-          {categoriesData.map((cat, i) => (
+          {categoriesData.map((cat, i) => {
+            const isBanner = mobileBento[i].includes('col-span-4')
+            return (
             <StaggerItem
               key={cat.name}
               className={`${mobileBento[i]} md:col-span-1 md:aspect-square`}
             >
               <MotionLink
                 to={cat.href}
-                className="group relative overflow-hidden block rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-500 h-full md:aspect-square"
+                className={`group relative overflow-hidden block rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-500 h-full md:aspect-square ${isBanner ? 'bg-muted' : ''}`}
                 whileHover={{ y: -6 }}
                 whileTap={{ scale: 0.97 }}
                 transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -110,7 +112,7 @@ export function ShopByCategory() {
                 <motion.img
                   src={dbImages[cat.name] || defaultImages[cat.name]}
                   alt={cat.name}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full ${isBanner ? 'object-contain md:object-cover' : 'object-cover'}`}
                   loading="lazy"
                   width={600}
                   height={600}
@@ -122,6 +124,7 @@ export function ShopByCategory() {
                 )}
                 {/* Gradient overlay for legibility */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent group-hover:from-primary/80 group-hover:via-primary/30 transition-colors duration-500" />
+
 
                 {/* Corner accents */}
                 <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-white/0 group-hover:border-white rounded-tr-md transition-all duration-500" />
@@ -137,7 +140,8 @@ export function ShopByCategory() {
                 </div>
               </MotionLink>
             </StaggerItem>
-          ))}
+            )
+          })}
         </StaggerContainer>
       </div>
     </section>
