@@ -155,6 +155,9 @@ export default function CheckoutPage() {
   const [selectedPayment, setSelectedPayment] = useState<string>('mpesa')
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [coordinates, setCoordinates] = useState<{ lat: number | null; lon: number | null }>({ lat: null, lon: null })
+  const [buildingName, setBuildingName] = useState('')
+  const [floorNumber, setFloorNumber] = useState('')
+  const [houseNumber, setHouseNumber] = useState('')
   const { userId, name: accountName, email: accountEmail } = useCheckoutAuth()
 
   useEffect(() => {
@@ -218,6 +221,17 @@ export default function CheckoutPage() {
 
     if (isNairobiArea && loc.price !== undefined) {
       const options: ShippingMethod[] = []
+
+      // Pickup from Shop is always free and available for any Nairobi-area order
+      options.push({
+        id: 'pickup-shop-free',
+        name: 'Pickup from Shop (Free)',
+        type: 'pickup',
+        provider: 'shop',
+        estimated_days: 'Ready same/next business day',
+        price: 0,
+        regions: null,
+      })
 
       // Always add Pickup Mtaani
       const mtaani = shippingMethods.find(m => m.name.toLowerCase().includes('pickup mtaani'))
@@ -298,7 +312,7 @@ export default function CheckoutPage() {
       orderId, customerName: name, email: targetEmail, phone,
       items: items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
       subtotal, shippingLabel: selectedShipping?.name, shippingCost, grandTotal,
-      shippingAddress: [selectedLocation, postalCode, country].filter(Boolean).join(', '),
+      shippingAddress: [houseNumber, floorNumber, buildingName, selectedLocation, postalCode, country].filter(Boolean).join(', '),
     })
     const itemsHtml = items.map(item => `
       <tr>
@@ -325,7 +339,7 @@ export default function CheckoutPage() {
         body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
       })
     } catch (err) { console.error('Email send error:', err) }
-  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, selectedLocation, postalCode, country])
+  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, selectedLocation, postalCode, country, buildingName, floorNumber, houseNumber])
 
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) { toast.error('Please log in first'); navigate('/auth', { state: { returnTo: '/checkout' } }); return }
@@ -344,7 +358,8 @@ export default function CheckoutPage() {
         user_id: userId, latitude: coordinates.lat, longitude: coordinates.lon,
         shipping_address: {
           location: selectedLocation, postal_code: postalCode, country,
-          email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost
+          email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost,
+          building_name: buildingName || null, floor_number: floorNumber || null, house_number: houseNumber || null,
         }
       }
       const { data: order, error: orderError } = await supabase.from('orders').insert(orderData).select('id').single()
@@ -383,7 +398,7 @@ export default function CheckoutPage() {
     } catch (err: any) {
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
-  }, [phone, name, items, grandTotal, userId, selectedLocation, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, clearCart, navigate, sendOrderEmail])
+  }, [phone, name, items, grandTotal, userId, selectedLocation, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, buildingName, floorNumber, houseNumber, clearCart, navigate, sendOrderEmail])
 
   if (status === 'success') {
     return (
@@ -413,7 +428,9 @@ export default function CheckoutPage() {
   }
 
   const isProcessing = status === 'creating' || status === 'pushing' || status === 'polling'
-  const canGoToPayment = name.trim() && phone.length >= 9 && selectedShipping && selectedLocation
+  const isDoorstepSelected = !!selectedShipping?.name.toLowerCase().includes('doorstep')
+  const canGoToPayment = name.trim() && phone.length >= 9 && selectedShipping && selectedLocation &&
+    (!isDoorstepSelected || (buildingName.trim() && houseNumber.trim()))
 
   return (
     <div className="bg-muted/30 min-h-screen pt-24 pb-16">
@@ -586,11 +603,45 @@ export default function CheckoutPage() {
                                 <p className="font-medium text-foreground text-sm">{m.name}</p>
                                 <p className="text-xs text-muted-foreground">{m.estimated_days || 'Standard delivery'}</p>
                               </div>
-                              <span className="font-bold text-primary text-sm">KSh {m.price.toLocaleString()}</span>
+                              <span className="font-bold text-primary text-sm">{m.price > 0 ? `KSh ${m.price.toLocaleString()}` : 'Free'}</span>
                             </label>
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Building / floor / house number — only needed for door-to-door (Doorstep) delivery */}
+                  {selectedShipping?.name.toLowerCase().includes('doorstep') && (
+                    <div className="space-y-3 p-3 rounded-lg bg-muted/40 border border-border">
+                      <p className="text-xs font-semibold text-foreground flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-primary" /> Door-to-door details — helps our rider find you
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-foreground mb-1">Building / Estate Name *</label>
+                          <input type="text" value={buildingName} onChange={e => setBuildingName(e.target.value)} placeholder="e.g. Jamuhuri Heights"
+                            className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-foreground mb-1">Floor No.</label>
+                          <input type="text" value={floorNumber} onChange={e => setFloorNumber(e.target.value)} placeholder="e.g. 3rd Floor"
+                            className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-foreground mb-1">House / Door No. *</label>
+                          <input type="text" value={houseNumber} onChange={e => setHouseNumber(e.target.value)} placeholder="e.g. B14"
+                            className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Info note for shop pickup */}
+                  {selectedShipping?.id === 'pickup-shop-free' && (
+                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-200 flex gap-2 items-start">
+                      <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>Free — collect your order from our shop. We'll send you the pickup address and let you know when it's ready via WhatsApp/SMS.</span>
                     </div>
                   )}
 
