@@ -46,6 +46,13 @@ export default function AdminOrders() {
     return typeof email === 'string' && email.trim() ? email.trim() : null
   }
 
+  const getShippingAddress = (order: Order) => {
+    if (!order.shipping_address || typeof order.shipping_address !== 'object' || Array.isArray(order.shipping_address)) {
+      return null
+    }
+    return order.shipping_address as Record<string, unknown>
+  }
+
   const generateStatusEmailHtml = (order: Order, newStatus: string) => {
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
@@ -254,6 +261,32 @@ export default function AdminOrders() {
                         <p className="text-foreground text-xs">{order.mpesa_receipt_number || '-'}</p>
                       </div>
                     </div>
+
+                    {/* Delivery / pickup details */}
+                    {(() => {
+                      const addr = getShippingAddress(order)
+                      if (!addr) return null
+                      const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+                      const location = str(addr.location)
+                      const method = str(addr.shipping_method)
+                      const building = str(addr.building_name)
+                      const floor = str(addr.floor_number)
+                      const house = str(addr.house_number)
+                      if (!location && !method && !building && !house) return null
+                      return (
+                        <div className="bg-card border border-border rounded-lg p-3 text-sm space-y-1">
+                          <p className="text-xs text-muted-foreground mb-1 font-medium">Delivery / Pickup</p>
+                          {method && <p className="text-foreground text-xs"><span className="text-muted-foreground">Method:</span> {method}</p>}
+                          {location && <p className="text-foreground text-xs"><span className="text-muted-foreground">Area:</span> {location}</p>}
+                          {(building || floor || house) && (
+                            <p className="text-foreground text-xs">
+                              <span className="text-muted-foreground">Address:</span>{' '}
+                              {[house, floor, building].filter(Boolean).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     {/* Items */}
                     {items.length > 0 && (
