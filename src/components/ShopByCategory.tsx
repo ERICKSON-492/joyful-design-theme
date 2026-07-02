@@ -9,6 +9,8 @@ import { ScrollReveal, StaggerContainer, StaggerItem } from './ScrollReveal'
 import { motion } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
 
+const MotionLink = motion(Link)
+
 const defaultImages: Record<string, string> = {
   'Wear It': catWearIt,
   'Live With It': catLiveWithIt,
@@ -37,11 +39,11 @@ function shuffle<T>(arr: T[]): T[] {
 // Bento positions for mobile (creative, asymmetric arrangement).
 // Grid: 4 cols × 3 rows. Each tile picks a span class.
 const mobileBento = [
-  'col-span-2 row-span-2', // Wear It - hero tile (big square)
-  'col-span-2 row-span-1', // Live With It - wide top
-  'col-span-2 row-span-1', // Collectibles - wide middle
-  'col-span-2 row-span-1', // Pet - bottom left
-  'col-span-2 row-span-1', // Table - bottom right
+  'col-span-4 row-span-1', // Wear It - horizontal hero banner (full width)
+  'col-span-2 row-span-1', // Live With It
+  'col-span-2 row-span-1', // Collectibles
+  'col-span-2 row-span-1', // Pet
+  'col-span-2 row-span-1', // Table
 ]
 
 interface CategoryImage {
@@ -76,7 +78,13 @@ export function ShopByCategory() {
             <h2 className="font-display text-3xl md:text-5xl font-bold text-foreground">
               Find Your Chronicle
             </h2>
-            <div className="w-16 h-1 bg-primary mx-auto rounded-full mt-4" />
+            <motion.div
+              initial={{ width: 0 }}
+              whileInView={{ width: 64 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="h-1 bg-primary mx-auto rounded-full mt-4"
+            />
           </div>
         </ScrollReveal>
 
@@ -90,9 +98,12 @@ export function ShopByCategory() {
               key={cat.name}
               className={`${mobileBento[i]} md:col-span-1 md:row-span-1`}
             >
-              <Link
+              <MotionLink
                 to={cat.href}
                 className="group relative overflow-hidden block rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-500 h-full md:aspect-square"
+                whileHover={{ y: -6 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.35, ease: 'easeOut' }}
               >
                 {imagesLoaded ? (
                 <motion.img
@@ -115,7 +126,7 @@ export function ShopByCategory() {
                 <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-white/0 group-hover:border-white rounded-tr-md transition-all duration-500" />
                 <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-white/0 group-hover:border-white rounded-bl-md transition-all duration-500" />
 
-                <div className="absolute inset-0 flex flex-col justify-end p-3 md:p-4">
+                <div className="absolute inset-0 flex flex-col justify-end p-3 md:p-4 transition-transform duration-500 group-hover:-translate-y-1">
                   <h3 className="text-white font-display text-base md:text-base font-bold leading-tight">
                     {cat.name}
                   </h3>
@@ -123,7 +134,7 @@ export function ShopByCategory() {
                     {cat.tagline}
                   </p>
                 </div>
-              </Link>
+              </MotionLink>
             </StaggerItem>
           ))}
         </StaggerContainer>
