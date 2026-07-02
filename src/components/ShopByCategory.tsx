@@ -37,13 +37,14 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 // Bento positions for mobile (creative, asymmetric arrangement).
-// Grid: 4 cols × 3 rows. Each tile picks a span class.
+// Sizing is driven by aspect-ratio rather than fixed row heights, so tiles
+// keep normal (square) proportions instead of stretching.
 const mobileBento = [
-  'col-span-4 row-span-1', // Wear It - horizontal hero banner (full width)
-  'col-span-2 row-span-1', // Live With It
-  'col-span-2 row-span-1', // Collectibles
-  'col-span-2 row-span-1', // Pet
-  'col-span-2 row-span-1', // Table
+  'col-span-4 aspect-[2.75/1]', // Wear It - compact wide banner
+  'col-span-2 aspect-square', // Live With It
+  'col-span-2 aspect-square', // Collectibles
+  'col-span-2 aspect-square', // Pet
+  'col-span-2 aspect-square', // Table
 ]
 
 interface CategoryImage {
@@ -90,13 +91,13 @@ export function ShopByCategory() {
 
         {/* Mobile: creative bento. Desktop (md+): clean 5-col strip. */}
         <StaggerContainer
-          className="grid grid-cols-4 grid-rows-3 gap-2.5 md:grid-cols-5 md:grid-rows-1 md:gap-4 max-w-4xl mx-auto auto-rows-[110px] md:auto-rows-auto"
+          className="grid grid-cols-4 gap-2.5 md:grid-cols-5 md:gap-4 max-w-4xl mx-auto"
           staggerDelay={0.08}
         >
           {categoriesData.map((cat, i) => (
             <StaggerItem
               key={cat.name}
-              className={`${mobileBento[i]} md:col-span-1 md:row-span-1`}
+              className={`${mobileBento[i]} md:col-span-1 md:aspect-square`}
             >
               <MotionLink
                 to={cat.href}
