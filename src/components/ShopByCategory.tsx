@@ -40,7 +40,7 @@ function shuffle<T>(arr: T[]): T[] {
 // Sizing is driven by aspect-ratio rather than fixed row heights, so tiles
 // keep normal (square) proportions instead of stretching.
 const mobileBento = [
-  'col-span-4 aspect-[16/9]', // Wear It - full-size wide banner
+  'col-span-4', // Wear It - natural size banner, no forced aspect ratio
   'col-span-2 aspect-square', // Live With It
   'col-span-2 aspect-square', // Collectibles
   'col-span-2 aspect-square', // Pet
@@ -103,7 +103,7 @@ export function ShopByCategory() {
             >
               <MotionLink
                 to={cat.href}
-                className={`group relative overflow-hidden block rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-500 h-full md:aspect-square ${isBanner ? 'bg-muted' : ''}`}
+                className={`group relative overflow-hidden block rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-500 md:h-full md:aspect-square ${isBanner ? '' : 'h-full'}`}
                 whileHover={{ y: -6 }}
                 whileTap={{ scale: 0.97 }}
                 transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -112,7 +112,7 @@ export function ShopByCategory() {
                 <motion.img
                   src={dbImages[cat.name] || defaultImages[cat.name]}
                   alt={cat.name}
-                  className={`w-full h-full ${isBanner ? 'object-contain md:object-cover' : 'object-cover'}`}
+                  className={isBanner ? 'w-full h-auto block md:h-full md:object-cover' : 'w-full h-full object-cover'}
                   loading="lazy"
                   width={600}
                   height={600}
@@ -120,7 +120,7 @@ export function ShopByCategory() {
                   transition={{ duration: 0.6, ease: 'easeOut' }}
                 />
                 ) : (
-                  <div className="w-full h-full bg-muted animate-pulse" />
+                  <div className={isBanner ? 'w-full aspect-[16/9] bg-muted animate-pulse' : 'w-full h-full bg-muted animate-pulse'} />
                 )}
                 {/* Gradient overlay for legibility */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent group-hover:from-primary/80 group-hover:via-primary/30 transition-colors duration-500" />
