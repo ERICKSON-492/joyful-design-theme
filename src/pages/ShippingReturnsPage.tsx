@@ -1,11 +1,9 @@
-import { useEffect } from 'react'
 import { Truck, Globe2, Clock, RotateCcw, Mail } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useSEO } from '@/hooks/useSEO'
 
 export default function ShippingReturnsPage() {
-  useEffect(() => {
-    document.title = 'Shipping & Returns – Ushanga Chronicles'
-  }, [])
+  useSEO('Shipping & Returns', 'Delivery options, timelines, and our return policy for Ushanga Chronicles orders.', '/shipping-returns')
 
   return (
     <div className="bg-background">
