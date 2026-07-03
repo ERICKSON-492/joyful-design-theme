@@ -5,6 +5,7 @@ import { ShoppingBag, Clock } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { ProductCardVariants } from '@/components/ProductCardVariants'
 import { useCurrency } from '@/contexts/CurrencyContext'
+import { upsertMeta, upsertCanonical, SITE_URL } from '@/hooks/useSEO'
 
 interface Product {
   id: string
@@ -47,6 +48,13 @@ export default function ShopPage() {
     }
     document.title = (catParam && titleByCat[catParam])
       || 'Handmade Maasai Beaded Jewelry & Home Decor – Ushanga Chronicles'
+
+    upsertMeta('name', 'description', 'Shop handmade Maasai-beaded jewelry, home decor, and pet accessories from Ushanga Chronicles, crafted by artisans in Nairobi, Kenya.')
+    upsertMeta('property', 'og:title', document.title)
+    // Canonical always points to the base /shop URL (not the filtered/query
+    // variant) so Google doesn't treat every category filter as a separate
+    // duplicate page.
+    upsertCanonical(`${SITE_URL}/shop`)
   }, [catParam])
 
   useEffect(() => {
