@@ -1,8 +1,16 @@
 User-agent: Googlebot
 Allow: /
+Disallow: /admin
+Disallow: /checkout
+Disallow: /account
+Disallow: /my-orders
 
 User-agent: Bingbot
 Allow: /
+Disallow: /admin
+Disallow: /checkout
+Disallow: /account
+Disallow: /my-orders
 
 User-agent: Twitterbot
 Allow: /
@@ -12,5 +20,9 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /checkout
+Disallow: /account
+Disallow: /my-orders
 
 Sitemap: https://www.ushangachronicles.com/sitemap.xml
