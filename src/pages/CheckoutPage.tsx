@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ShoppingBag, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation, Search } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { generateAndUploadReceipt } from '@/lib/orderReceipt'
+import { useSEO } from '@/hooks/useSEO'
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
@@ -134,6 +135,7 @@ function CheckoutStepper({ step }: { step: number }) {
 }
 
 export default function CheckoutPage() {
+  useSEO('Checkout', undefined, undefined, true)
   const { items, totalPrice, clearCart, totalItems, updateQuantity, removeFromCart } = useCart()
   const navigate = useNavigate()
   const [phone, setPhone] = useState('')
