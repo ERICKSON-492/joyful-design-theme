@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
+import { useSEO } from '@/hooks/useSEO'
 
 export default function PrivacyPolicyPage() {
+  useSEO('Privacy Policy', 'How Ushanga Chronicles collects, uses, and protects your personal information.', '/privacy-policy')
   return (
     <div className="bg-background min-h-screen pt-24 pb-20">
       <div className="container mx-auto px-4 max-w-3xl">
