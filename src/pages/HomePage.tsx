@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { HeroSection } from '@/components/HeroSection'
+import { useSEO } from '@/hooks/useSEO'
 
 // Lazy-load below-the-fold sections for faster initial paint
 const ShopByCategory = lazy(() => import('@/components/ShopByCategory').then(m => ({ default: m.ShopByCategory })))
@@ -14,6 +15,11 @@ function SectionFallback({ className = "min-h-[400px]" }: { className?: string }
 }
 
 export default function HomePage() {
+  useSEO(
+    'Handcrafted African Jewelry & Home Decor',
+    'Ushanga Chronicles — handcrafted African jewelry, pet accessories, and home decor made by artisans in Nairobi, Kenya. Every piece tells a story.',
+    '/'
+  )
   return (
     <>
       <HeroSection />
