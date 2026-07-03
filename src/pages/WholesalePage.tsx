@@ -1,6 +1,12 @@
 import { Link } from 'react-router-dom'
+import { useSEO } from '@/hooks/useSEO'
 
 export default function WholesalePage() {
+  useSEO(
+    'Wholesale & Corporate Gifting',
+    'Bulk orders, corporate gifting, and event branding — handcrafted African jewelry and decor from Ushanga Chronicles, Nairobi.',
+    '/wholesale-gifting'
+  )
   return (
     <div className="bg-background">
       <section className="py-16 md:py-24 bg-card">
