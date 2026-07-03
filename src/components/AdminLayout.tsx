@@ -3,6 +3,7 @@ import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText, Camera, Truck, CreditCard, Star, Boxes, Mail, BookOpen } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
+import { useSEO } from '@/hooks/useSEO'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -22,6 +23,7 @@ const navItems = [
 ]
 
 export default function AdminLayout() {
+  useSEO('Admin', undefined, undefined, true)
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
