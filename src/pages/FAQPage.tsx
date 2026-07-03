@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown, Truck, Sparkles, Heart, MessageCircle } from 'lucide-react'
+import { useSEO } from '@/hooks/useSEO'
 
 interface FaqItem {
   q: string
@@ -128,6 +129,7 @@ function AccordionItem({ item, open, onToggle }: { item: FaqItem; open: boolean;
 }
 
 export default function FAQPage() {
+  useSEO('Frequently Asked Questions', 'Answers about shipping, returns, custom orders, and care for your Ushanga Chronicles pieces.', '/faq')
   const [openKey, setOpenKey] = useState<string | null>(null)
 
   return (
