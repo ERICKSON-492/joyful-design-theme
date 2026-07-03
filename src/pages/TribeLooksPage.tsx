@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Camera, Upload, Loader2, CheckCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { useSEO } from '@/hooks/useSEO'
 
 // Static fallback looks
 import tribeTess from '@/assets/tribe-tess.jpeg'
@@ -27,6 +28,7 @@ interface TribeLook {
 }
 
 export default function TribeLooksPage() {
+  useSEO('Tribe Looks', 'See how the Ushanga Chronicles community styles their handcrafted pieces — and share your own look.', '/tribe-looks')
   const [looks, setLooks] = useState<TribeLook[]>([])
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
