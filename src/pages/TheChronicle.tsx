@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import lindaPortrait from '@/assets/linda-portrait.jpg'
 import artisanWorking from '@/assets/artisan-working.jpg'
 import { supabase } from '@/integrations/supabase/client'
+import { useSEO } from '@/hooks/useSEO'
 
 interface SectionContent {
   title: string
@@ -22,6 +23,7 @@ const fallbackCraft: SectionContent = {
 }
 
 export default function TheChronicle() {
+  useSEO('Our Story', 'The story behind Ushanga Chronicles — handcrafted African jewelry and decor made by artisans in Nairobi, Kenya.', '/about-us')
   const [origin, setOrigin] = useState(fallbackOrigin)
   const [craft, setCraft] = useState(fallbackCraft)
 
