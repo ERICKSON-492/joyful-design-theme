@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSEO } from '@/hooks/useSEO'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { Package, Truck, CheckCircle, Clock, MapPin, ArrowLeft, Loader2 } from 'lucide-react'
@@ -31,6 +32,7 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function MyOrdersPage() {
+  useSEO('My Orders', undefined, undefined, true)
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
