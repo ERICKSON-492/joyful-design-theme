@@ -3,8 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
 import { Mail, Lock, User, Loader2 } from 'lucide-react'
+import { useSEO } from '@/hooks/useSEO'
 
 export default function AuthPage() {
+  useSEO('Sign In', undefined, undefined, true)
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
