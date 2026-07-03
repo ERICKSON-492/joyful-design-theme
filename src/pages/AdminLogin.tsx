@@ -4,8 +4,10 @@ import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import { useSEO } from '@/hooks/useSEO'
 
 export default function AdminLogin() {
+  useSEO('Admin Login', undefined, undefined, true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
