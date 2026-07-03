@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
+import { useSEO } from '@/hooks/useSEO'
 
 const steps = ['Category', 'Your Vision', 'Colors & Materials', 'Inspiration', 'Your Details']
 
@@ -21,6 +22,7 @@ const colorSwatches = [
 ]
 
 export default function CustomOrderPage() {
+  useSEO('Custom Order', 'Commission a one-of-a-kind handcrafted piece from Ushanga Chronicles — tell us your vision and we\'ll bring it to life.', '/custom-order')
   const [currentStep, setCurrentStep] = useState(0)
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
