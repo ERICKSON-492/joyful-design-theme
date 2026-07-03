@@ -8,6 +8,7 @@ import { RelatedProducts } from '@/components/RelatedProducts'
 import { RecentlyViewed } from '@/components/RecentlyViewed'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 import { useCurrency } from '@/contexts/CurrencyContext'
+import { useSEO } from '@/hooks/useSEO'
 
 interface Product {
   id: string
@@ -47,6 +48,14 @@ export default function ProductDetailPage() {
   const [selectedSize, setSelectedSize] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
   const [imgIdx, setImgIdx] = useState(0)
+
+  useSEO(
+    product ? product.name : 'Shop',
+    product?.description
+      ? product.description.replace(/\s+/g, ' ').trim().slice(0, 155)
+      : 'Handcrafted African jewelry and decor from Ushanga Chronicles, Nairobi.',
+    id ? `/product/${id}` : undefined
+  )
 
   useEffect(() => {
     if (id) trackView(id)
@@ -261,11 +270,7 @@ export default function ProductDetailPage() {
             )}
 
             {product.description && (
-             <ul className="text-muted-foreground text-sm leading-relaxed list-disc pl-5 space-y-1">
-              {product.description.split('\n').filter(Boolean).map((line, i) => (
-                <li key={i}>{line.replace(/^[-•]\s*/, '')}</li>
-              ))}
-             </ul>
+              <p className="text-muted-foreground text-sm leading-relaxed">{product.description}</p>
             )}
 
             {/* Size Selection */}
