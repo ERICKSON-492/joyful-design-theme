@@ -54,7 +54,8 @@ export default function ProductDetailPage() {
     product?.description
       ? product.description.replace(/\s+/g, ' ').trim().slice(0, 155)
       : 'Handcrafted African jewelry and decor from Ushanga Chronicles, Nairobi.',
-    id ? `/product/${id}` : undefined
+    id ? `/product/${id}` : undefined,
+    !loading && !product // unknown/invalid product id (e.g. old/legacy links) should never be indexed
   )
 
   useEffect(() => {
@@ -269,9 +270,18 @@ export default function ProductDetailPage() {
               </p>
             )}
 
-            {product.description && (
-              <p className="text-muted-foreground text-sm leading-relaxed">{product.description}</p>
-            )}
+            {product.description && (() => {
+              const lines = product.description.split('\n').map(l => l.trim()).filter(Boolean)
+              return lines.length > 1 ? (
+                <ul className="text-muted-foreground text-sm leading-relaxed list-disc pl-5 space-y-1">
+                  {lines.map((line, i) => (
+                    <li key={i}>{line.replace(/^[-•*]\s*/, '')}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-sm leading-relaxed">{lines[0]}</p>
+              )
+            })()}
 
             {/* Size Selection */}
             {sizes.length > 0 && (
