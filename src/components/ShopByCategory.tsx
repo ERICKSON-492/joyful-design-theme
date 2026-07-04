@@ -20,11 +20,11 @@ const defaultImages: Record<string, string> = {
 }
 
 const categoriesBase = [
-  { name: 'Wear It', href: '/shop?cat=wear-it', tagline: 'Adorn yourself' },
-  { name: 'Live With It', href: '/shop?cat=live-with-it', tagline: 'Home stories' },
-  { name: 'Collectibles', href: '/shop?cat=collectibles', tagline: 'Keepsakes' },
-  { name: 'For Your Pet', href: '/shop?cat=pet', tagline: 'Furry tribe' },
-  { name: 'For Your Table', href: '/shop?cat=table', tagline: 'Gather round' },
+  { name: 'Wear It', dbKey: 'Wear It', href: '/shop?cat=wear-it', tagline: 'Adorn yourself' },
+  { name: 'Live With It', dbKey: 'Live With It', href: '/shop?cat=live-with-it', tagline: 'Home stories' },
+  { name: 'Collectibles', dbKey: 'Arts & Collectibles', href: '/shop?cat=collectibles', tagline: 'Keepsakes' },
+  { name: 'For Your Pet', dbKey: 'For Your Pet', href: '/shop?cat=pet', tagline: 'Furry tribe' },
+  { name: 'For Your Table', dbKey: 'Kitchen and Dining', href: '/shop?cat=table', tagline: 'Gather round' },
 ]
 
 function shuffle<T>(arr: T[]): T[] {
@@ -110,7 +110,7 @@ export function ShopByCategory() {
               >
                 {imagesLoaded ? (
                 <motion.img
-                  src={dbImages[cat.name] || defaultImages[cat.name]}
+                  src={dbImages[cat.dbKey] || defaultImages[cat.name]}
                   alt={cat.name}
                   className={isBanner ? 'w-full h-auto block md:h-full md:object-cover' : 'w-full h-full object-cover'}
                   loading="lazy"
