@@ -2,7 +2,18 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Check, X, Trash2, Upload, Loader2, Plus } from 'lucide-react'
+import { Check, X, Trash2, Upload, Loader2, Plus, Download } from 'lucide-react'
+import tribeTess from '@/assets/tribe-tess.jpeg'
+import tribeAnne from '@/assets/tribe-anne.jpeg'
+import tribeLuna from '@/assets/tribe-luna.jpeg'
+import tribe1 from '@/assets/tribe-1.jpg'
+
+const defaultLooks = [
+  { image: tribeTess, name: 'Tess', piece_name: 'Beaded Dress' },
+  { image: tribeAnne, name: 'Anne', piece_name: 'Beaded Bracelet' },
+  { image: tribeLuna, name: 'Luna', piece_name: 'Beaded Dog Collar' },
+  { image: tribe1, name: 'Amani K.', piece_name: 'Layered Beaded Necklace' },
+]
 
 interface TribeLook {
   id: string
@@ -22,6 +33,7 @@ export default function AdminTribeLooks() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name: '', piece_name: '', image_url: '' })
   const [editUploading, setEditUploading] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   const fetchLooks = async () => {
     setLoading(true)
@@ -90,6 +102,40 @@ export default function AdminTribeLooks() {
     fetchLooks()
   }
 
+  const importDefaults = async () => {
+    setImporting(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    let importedCount = 0
+    for (const def of defaultLooks) {
+      // Skip ones already imported (matched by name, so re-running is safe)
+      if (looks.some(l => l.name === def.name)) continue
+      try {
+        const blob = await fetch(def.image).then(r => r.blob())
+        const path = `tribe-looks/${Date.now()}-${def.name.replace(/\s+/g, '-').toLowerCase()}.jpg`
+        const { error: uploadError } = await supabase.storage.from('product-images').upload(path, blob)
+        if (uploadError) continue
+        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
+        await supabase.from('tribe_looks').insert({
+          user_id: user?.id,
+          image_url: publicUrl,
+          name: def.name,
+          piece_name: def.piece_name,
+          status: 'approved',
+        })
+        importedCount++
+      } catch {
+        // continue trying the rest even if one fails
+      }
+    }
+    setImporting(false)
+    if (importedCount > 0) {
+      toast.success(`Imported ${importedCount} default look${importedCount > 1 ? 's' : ''} — now editable below`)
+      fetchLooks()
+    } else {
+      toast.info('Default looks are already imported')
+    }
+  }
+
   const startEdit = (look: TribeLook) => {
     setEditingId(look.id)
     setEditForm({ name: look.name, piece_name: look.piece_name, image_url: look.image_url })
@@ -114,17 +160,26 @@ export default function AdminTribeLooks() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Tribe Looks</h1>
-        <Button size="sm" onClick={() => setShowAdd(s => !s)}>
-          <Plus className="w-4 h-4 mr-1" /> Add Featured Look
-        </Button>
+        <div className="flex gap-2">
+          {defaultLooks.some(def => !looks.some(l => l.name === def.name)) && (
+            <Button size="sm" variant="outline" onClick={importDefaults} disabled={importing}>
+              {importing ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Importing...</> : <><Download className="w-4 h-4 mr-1" /> Import Default Photos</>}
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setShowAdd(s => !s)}>
+            <Plus className="w-4 h-4 mr-1" /> Add Featured Look
+          </Button>
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground mb-6 max-w-2xl">
         This controls "The Tribe Wears It" section on the homepage. Approve or reject customer
         submissions below, or add your own curated photos directly — those go live immediately.
-        Click any photo or name to edit its image, name, or piece.
+        Click any photo or name to edit its image, name, or piece. The four original homepage photos
+        (Tess, Anne, Luna, Amani K.) are built into the code by default — click "Import Default Photos"
+        once to bring them in here so you can edit or replace them too.
       </p>
 
       {showAdd && (
