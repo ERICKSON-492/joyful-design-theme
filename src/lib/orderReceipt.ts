@@ -19,6 +19,8 @@ export interface ReceiptInput {
   shippingCost: number
   grandTotal: number
   shippingAddress?: string
+  couponCode?: string
+  discountAmount?: number
 }
 
 const PRIMARY = '#D4A017'
@@ -98,6 +100,11 @@ async function buildPdf(input: ReceiptInput): Promise<Blob> {
   y += 16
   doc.text(`Shipping${input.shippingLabel ? ` (${input.shippingLabel})` : ''}`, totalsX, y)
   doc.text(`KSh ${input.shippingCost.toLocaleString()}`, W - 50, y, { align: 'right' })
+  if (input.discountAmount && input.discountAmount > 0) {
+    y += 16
+    doc.text(`Discount${input.couponCode ? ` (${input.couponCode})` : ''}`, totalsX, y)
+    doc.text(`- KSh ${input.discountAmount.toLocaleString()}`, W - 50, y, { align: 'right' })
+  }
   y += 8
   doc.setDrawColor(PRIMARY); doc.setLineWidth(1.2)
   doc.line(totalsX, y, W - 40, y)
