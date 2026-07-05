@@ -55,7 +55,7 @@ const localSlides: Slide[] = [
     title: 'HERITAGE INSPIRED',
     subtitle: 'Handcrafted African jewelry.',
     cta_text: 'Shop Collection',
-    cta_link: '/jewelry',
+    cta_link: '/wear-it',
   },
   {
     id: 'hero-decor',
@@ -63,7 +63,7 @@ const localSlides: Slide[] = [
     title: 'NAIROBI ARTISANS',
     subtitle: 'Stunning home decor and pet accessories.',
     cta_text: 'View Decor',
-    cta_link: '/decor',
+    cta_link: '/for-your-pet',
   },
   {
     id: 'hero-variant3',
@@ -79,7 +79,7 @@ const localSlides: Slide[] = [
     title: 'TIMELESS TRADITIONS',
     subtitle: 'Where culture meets craft.',
     cta_text: 'Shop the Look',
-    cta_link: '/jewelry',
+    cta_link: '/wear-it',
   },
   {
     id: 'hero-variant5',
@@ -87,7 +87,7 @@ const localSlides: Slide[] = [
     title: 'MADE FOR EVERY HOME',
     subtitle: 'Bring artisan beauty indoors.',
     cta_text: 'See Collection',
-    cta_link: '/decor',
+    cta_link: '/live-with-it',
   },
 ]
 
