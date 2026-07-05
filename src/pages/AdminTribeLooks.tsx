@@ -37,31 +37,72 @@ export default function AdminTribeLooks() {
 
   const fetchLooks = async () => {
     setLoading(true)
-    const { data } = await supabase.from('tribe_looks').select('*').order('created_at', { ascending: false })
-    if (data) setLooks(data)
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('tribe_looks')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      setLooks(data || [])
+    } catch (err: any) {
+      toast.error(err.message || 'Could not fetch tribe looks')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchLooks() }, [])
+  useEffect(() => { 
+    fetchLooks() 
+  }, [])
 
   const updateStatus = async (id: string, status: string) => {
     const { error } = await supabase.from('tribe_looks').update({ status }).eq('id', id)
-    if (error) toast.error(error.message)
-    else { toast.success(`Look ${status}`); fetchLooks() }
+    if (error) {
+      toast.error(error.message)
+    } else { 
+      toast.success(`Look ${status}`)
+      fetchLooks() 
+    }
   }
 
-  const deleteLook = async (id: string) => {
+  // Helper to extract bucket path from a public URL to facilitate storage cleanup
+  const extractPathFromUrl = (url: string): string | null => {
+    try {
+      const parts = url.split('/storage/v1/object/public/product-images/')
+      return parts.length > 1 ? parts[1] : null
+    } catch {
+      return null
+    }
+  }
+
+  const deleteLook = async (look: TribeLook) => {
     if (!confirm('Delete this look?')) return
-    const { error } = await supabase.from('tribe_looks').delete().eq('id', id)
-    if (error) toast.error(error.message)
-    else { toast.success('Look deleted'); fetchLooks() }
+    
+    const { error } = await supabase.from('tribe_looks').delete().eq('id', look.id)
+    if (error) {
+      toast.error(error.message)
+      return
+    }
+
+    // Try cleaning up old storage media safely
+    const storagePath = extractPathFromUrl(look.image_url)
+    if (storagePath) {
+      await supabase.storage.from('product-images').remove([storagePath])
+    }
+
+    toast.success('Look deleted')
+    fetchLooks()
   }
 
   const uploadTribeImage = async (file: File): Promise<string | null> => {
     const ext = file.name.split('.').pop()
     const path = `tribe-looks/${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) { toast.error('Upload failed'); return null }
+    if (error) { 
+      toast.error(`Upload failed: ${error.message}`)
+      return null 
+    }
     const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
     return publicUrl
   }
@@ -80,22 +121,30 @@ export default function AdminTribeLooks() {
     if (!file) return
     setEditUploading(true)
     const url = await uploadTribeImage(file)
-    if (url) setEditForm(f => ({ ...f, image_url: url }))
+    if (url) {
+      // Keep track of the old image to delete later if save is completed
+      setEditForm(f => ({ ...f, image_url: url }))
+    }
     setEditUploading(false)
   }
 
   const addFeaturedLook = async () => {
     if (!newLook.image_url) { toast.error('Please upload an image'); return }
     if (!newLook.name.trim()) { toast.error('Please enter a name'); return }
+    
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('tribe_looks').insert({
       user_id: user?.id,
       image_url: newLook.image_url,
-      name: newLook.name,
-      piece_name: newLook.piece_name,
-      status: 'approved', // curated by admin — goes live immediately
+      name: newLook.name.trim(),
+      piece_name: newLook.piece_name.trim(),
+      status: 'approved',
     })
-    if (error) { toast.error(error.message); return }
+
+    if (error) { 
+      toast.error(error.message)
+      return 
+    }
     toast.success('Featured look added')
     setNewLook({ image_url: '', name: '', piece_name: '' })
     setShowAdd(false)
@@ -104,35 +153,47 @@ export default function AdminTribeLooks() {
 
   const importDefaults = async () => {
     setImporting(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    let importedCount = 0
-    for (const def of defaultLooks) {
-      // Skip ones already imported (matched by name, so re-running is safe)
-      if (looks.some(l => l.name === def.name)) continue
-      try {
-        const blob = await fetch(def.image).then(r => r.blob())
-        const path = `tribe-looks/${Date.now()}-${def.name.replace(/\s+/g, '-').toLowerCase()}.jpg`
-        const { error: uploadError } = await supabase.storage.from('product-images').upload(path, blob)
-        if (uploadError) continue
-        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-        await supabase.from('tribe_looks').insert({
-          user_id: user?.id,
-          image_url: publicUrl,
-          name: def.name,
-          piece_name: def.piece_name,
-          status: 'approved',
-        })
-        importedCount++
-      } catch {
-        // continue trying the rest even if one fails
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      let importedCount = 0
+
+      for (const def of defaultLooks) {
+        if (looks.some(l => l.name.toLowerCase() === def.name.toLowerCase())) continue
+        
+        try {
+          const res = await fetch(def.image)
+          if (!res.ok) throw new Error('Asset unavailable')
+          const blob = await res.blob()
+          
+          const path = `tribe-looks/${Date.now()}-${def.name.replace(/\s+/g, '-').toLowerCase()}.jpg`
+          const { error: uploadError } = await supabase.storage.from('product-images').upload(path, blob)
+          if (uploadError) continue
+
+          const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
+          
+          await supabase.from('tribe_looks').insert({
+            user_id: user?.id,
+            image_url: publicUrl,
+            name: def.name,
+            piece_name: def.piece_name,
+            status: 'approved',
+          })
+          importedCount++
+        } catch (singleItemError) {
+          console.error(`Failed to import ${def.name}:`, singleItemError)
+        }
       }
-    }
-    setImporting(false)
-    if (importedCount > 0) {
-      toast.success(`Imported ${importedCount} default look${importedCount > 1 ? 's' : ''} — now editable below`)
-      fetchLooks()
-    } else {
-      toast.info('Default looks are already imported')
+
+      if (importedCount > 0) {
+        toast.success(`Imported ${importedCount} default look${importedCount > 1 ? 's' : ''}`)
+        fetchLooks()
+      } else {
+        toast.info('Default looks are already imported or unavailable')
+      }
+    } catch (globalError: any) {
+      toast.error('Import action encountered an error')
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -141,12 +202,30 @@ export default function AdminTribeLooks() {
     setEditForm({ name: look.name, piece_name: look.piece_name, image_url: look.image_url })
   }
 
-  const saveEdit = async (id: string) => {
+  const saveEdit = async (currentLook: TribeLook) => {
     if (!editForm.name.trim()) { toast.error('Name cannot be empty'); return }
+    
     const { error } = await supabase.from('tribe_looks')
-      .update({ name: editForm.name, piece_name: editForm.piece_name, image_url: editForm.image_url })
-      .eq('id', id)
-    if (error) { toast.error(error.message); return }
+      .update({ 
+        name: editForm.name.trim(), 
+        piece_name: editForm.piece_name.trim(), 
+        image_url: editForm.image_url 
+      })
+      .eq('id', currentLook.id)
+
+    if (error) { 
+      toast.error(error.message)
+      return 
+    }
+
+    // Clean up older image file from bucket if updated
+    if (currentLook.image_url !== editForm.image_url) {
+      const oldStoragePath = extractPathFromUrl(currentLook.image_url)
+      if (oldStoragePath) {
+        await supabase.storage.from('product-images').remove([oldStoragePath])
+      }
+    }
+
     toast.success('Updated')
     setEditingId(null)
     fetchLooks()
@@ -163,7 +242,7 @@ export default function AdminTribeLooks() {
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Tribe Looks</h1>
         <div className="flex gap-2">
-          {defaultLooks.some(def => !looks.some(l => l.name === def.name)) && (
+          {defaultLooks.some(def => !looks.some(l => l.name.toLowerCase() === def.name.toLowerCase())) && (
             <Button size="sm" variant="outline" onClick={importDefaults} disabled={importing}>
               {importing ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Importing...</> : <><Download className="w-4 h-4 mr-1" /> Import Default Photos</>}
             </Button>
@@ -177,18 +256,16 @@ export default function AdminTribeLooks() {
       <p className="text-xs text-muted-foreground mb-6 max-w-2xl">
         This controls "The Tribe Wears It" section on the homepage. Approve or reject customer
         submissions below, or add your own curated photos directly — those go live immediately.
-        Click any photo or name to edit its image, name, or piece. The four original homepage photos
-        (Tess, Anne, Luna, Amani K.) are built into the code by default — click "Import Default Photos"
-        once to bring them in here so you can edit or replace them too.
+        Click any photo or name to edit its image, name, or piece.
       </p>
 
       {showAdd && (
         <div className="bg-card border border-border rounded-lg p-4 mb-6 max-w-md space-y-3">
           <h3 className="font-semibold text-sm text-foreground">New Featured Look</h3>
           <div>
-            {newLook.image_url ? (
+            {newLook.image_url && (
               <img src={newLook.image_url} alt="" className="w-full h-40 object-cover rounded-lg mb-2" />
-            ) : null}
+            )}
             <label className="flex items-center justify-center gap-2 border border-dashed border-border rounded-lg py-2.5 text-sm cursor-pointer hover:border-primary transition-colors">
               {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Photo</>}
               <input type="file" accept="image/*" onChange={handleUpload} className="hidden" disabled={uploading} />
@@ -252,7 +329,7 @@ export default function AdminTribeLooks() {
                       placeholder="Piece"
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => saveEdit(look.id)} disabled={editUploading} className="flex-1">Save</Button>
+                      <Button size="sm" onClick={() => saveEdit(look)} disabled={editUploading} className="flex-1">Save</Button>
                       <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
                     </div>
                   </div>
@@ -275,7 +352,7 @@ export default function AdminTribeLooks() {
                       <X className="w-3 h-3 mr-1" /> Reject
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => deleteLook(look.id)} className="text-destructive hover:text-destructive">
+                  <Button size="sm" variant="outline" onClick={() => deleteLook(look)} className="text-destructive hover:text-destructive">
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
