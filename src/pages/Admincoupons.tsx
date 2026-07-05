@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { Plus, Trash2, Copy, Tag } from 'lucide-react'
+import { Plus, Trash2, Copy, Tag, Loader2 } from 'lucide-react'
 
 interface Coupon {
   id: string
@@ -35,13 +35,25 @@ export default function AdminCoupons() {
   const [saving, setSaving] = useState(false)
 
   const fetchCoupons = async () => {
-    setLoading(true)
-    const { data } = await supabase.from('coupons').select('*').order('created_at', { ascending: false })
-    if (data) setCoupons(data as Coupon[])
-    setLoading(false)
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      if (data) setCoupons(data as Coupon[])
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to fetch coupons')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchCoupons() }, [])
+  useEffect(() => {
+    fetchCoupons()
+  }, [])
 
   const generateCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -52,43 +64,82 @@ export default function AdminCoupons() {
 
   const createCoupon = async () => {
     if (!form.code.trim()) { toast.error('Enter a coupon code'); return }
-    if (!form.discount_value || parseFloat(form.discount_value) <= 0) { toast.error('Enter a discount value'); return }
+    if (!form.discount_value || parseFloat(form.discount_value) <= 0) { toast.error('Enter a valid discount value'); return }
     if (form.discount_type === 'percentage' && parseFloat(form.discount_value) > 100) {
-      toast.error('Percentage discount can\'t exceed 100')
+      toast.error("Percentage discount can't exceed 100")
       return
     }
+
     setSaving(true)
-    const { error } = await supabase.from('coupons').insert({
-      code: form.code.trim().toUpperCase(),
-      discount_type: form.discount_type,
-      discount_value: parseFloat(form.discount_value),
-      min_order_amount: form.min_order_amount ? parseFloat(form.min_order_amount) : null,
-      usage_limit: form.usage_limit ? parseInt(form.usage_limit, 10) : null,
-      expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
-    })
+    
+    // Set expiry to the end of the chosen day in local time to avoid timezone cutting it short prematurely
+    let expiryISO: string | null = null
+    if (form.expires_at) {
+      const expiryDate = new Date(form.expires_at)
+      expiryDate.setHours(23, 59, 59, 999)
+      expiryISO = expiryDate.toISOString()
+    }
+
+    const { data, error } = await supabase
+      .from('coupons')
+      .insert({
+        code: form.code.trim().toUpperCase(),
+        discount_type: form.discount_type,
+        discount_value: parseFloat(form.discount_value),
+        min_order_amount: form.min_order_amount ? parseFloat(form.min_order_amount) : null,
+        usage_limit: form.usage_limit ? parseInt(form.usage_limit, 10) : null,
+        expires_at: expiryISO,
+      })
+      .select()
+
     setSaving(false)
+
     if (error) {
       toast.error(error.code === '23505' ? 'That code already exists' : error.message)
       return
     }
+
     toast.success('Coupon created')
+    if (data) setCoupons(prev => [data[0] as Coupon, ...prev])
     setForm(emptyForm)
     setShowForm(false)
-    fetchCoupons()
   }
 
   const toggleActive = async (coupon: Coupon) => {
-    const { error } = await supabase.from('coupons').update({ is_active: !coupon.is_active }).eq('id', coupon.id)
-    if (error) { toast.error(error.message); return }
-    fetchCoupons()
+    const nextState = !coupon.is_active
+    
+    // Optimistic Update
+    setCoupons(prev => prev.map(c => c.id === coupon.id ? { ...c, is_active: nextState } : c))
+
+    const { error } = await supabase
+      .from('coupons')
+      .update({ is_active: nextState })
+      .eq('id', coupon.id)
+
+    if (error) {
+      toast.error(error.message)
+      // Rollback on error
+      setCoupons(prev => prev.map(c => c.id === coupon.id ? { ...c, is_active: coupon.is_active } : c))
+    }
   }
 
   const deleteCoupon = async (id: string) => {
     if (!confirm('Delete this coupon? This cannot be undone.')) return
+    
+    const originalCoupons = [...coupons]
+    // Optimistic Update
+    setCoupons(prev => prev.filter(c => c.id !== id))
+
     const { error } = await supabase.from('coupons').delete().eq('id', id)
-    if (error) { toast.error(error.message); return }
+    
+    if (error) {
+      toast.error(error.message)
+      // Rollback on error
+      setCoupons(originalCoupons)
+      return
+    }
+    
     toast.success('Coupon deleted')
-    fetchCoupons()
   }
 
   const copyCode = (code: string) => {
@@ -100,20 +151,19 @@ export default function AdminCoupons() {
   const isMaxedOut = (c: Coupon) => c.usage_limit !== null && c.times_used >= c.usage_limit
 
   const statusOf = (c: Coupon) => {
-    if (!c.is_active) return { label: 'Disabled', color: 'bg-gray-100 text-gray-700' }
-    if (isExpired(c)) return { label: 'Expired', color: 'bg-red-100 text-red-700' }
-    if (isMaxedOut(c)) return { label: 'Limit reached', color: 'bg-yellow-100 text-yellow-700' }
-    return { label: 'Active', color: 'bg-green-100 text-green-700' }
+    if (!c.is_active) return { label: 'Disabled', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' }
+    if (isExpired(c)) return { label: 'Expired', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
+    if (isMaxedOut(c)) return { label: 'Limit reached', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' }
+    return { label: 'Active', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' }
   }
 
   return (
-    <div>
+    <div className="container mx-auto p-4 max-w-7xl">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Coupons</h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Codes customers can enter at checkout for a discount. Product sale prices (set per-product
-            in Products) are separate and apply automatically without a code.
+            Codes customers can enter at checkout for a discount. Product sale prices are separate and apply automatically.
           </p>
         </div>
         <Button size="sm" onClick={() => setShowForm(s => !s)}>
@@ -122,7 +172,7 @@ export default function AdminCoupons() {
       </div>
 
       {showForm && (
-        <div className="bg-card border border-border rounded-lg p-4 mb-6 max-w-lg space-y-3">
+        <div className="bg-card border border-border rounded-lg p-4 mb-6 max-w-lg space-y-3 shadow-sm animate-in fade-in-50 duration-200">
           <h3 className="font-semibold text-sm text-foreground">New Coupon</h3>
 
           <div>
@@ -144,7 +194,7 @@ export default function AdminCoupons() {
               <select
                 value={form.discount_type}
                 onChange={e => setForm(f => ({ ...f, discount_type: e.target.value as 'percentage' | 'fixed' }))}
-                className="w-full border border-input bg-background rounded-md px-3 py-2 text-sm h-10"
+                className="w-full border border-input bg-background rounded-md px-3 py-2 text-sm h-10 focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="percentage">Percentage (%)</option>
                 <option value="fixed">Fixed Amount (KSh)</option>
@@ -195,7 +245,7 @@ export default function AdminCoupons() {
 
           <div className="flex gap-2 pt-1">
             <Button size="sm" onClick={createCoupon} disabled={saving} className="flex-1">
-              {saving ? 'Creating...' : 'Create Coupon'}
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating...</> : 'Create Coupon'}
             </Button>
             <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setForm(emptyForm) }}>Cancel</Button>
           </div>
@@ -203,9 +253,12 @@ export default function AdminCoupons() {
       )}
 
       {loading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <p>Loading coupons...</p>
+        </div>
       ) : coupons.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
+        <div className="text-center py-16 border border-dashed rounded-lg text-muted-foreground">
           <Tag className="w-10 h-10 mx-auto mb-3 opacity-40" />
           <p>No coupons yet. Create one to offer customers a discount code at checkout.</p>
         </div>
@@ -214,33 +267,38 @@ export default function AdminCoupons() {
           {coupons.map(c => {
             const status = statusOf(c)
             return (
-              <div key={c.id} className="bg-card border border-border rounded-lg p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <button
-                    onClick={() => copyCode(c.code)}
-                    className="font-mono font-bold text-foreground text-base tracking-wider hover:text-primary transition-colors flex items-center gap-1.5"
-                    title="Click to copy"
-                  >
-                    {c.code} <Copy className="w-3.5 h-3.5 opacity-50" />
-                  </button>
-                  <span className={`text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap ${status.color}`}>{status.label}</span>
+              <div key={c.id} className="bg-card border border-border rounded-lg p-4 flex flex-col justify-between shadow-sm transition-all hover:shadow-md">
+                <div>
+                  <div className="flex items-start justify-between mb-2">
+                    <button
+                      onClick={() => copyCode(c.code)}
+                      className="font-mono font-bold text-foreground text-base tracking-wider hover:text-primary transition-colors flex items-center gap-1.5 group"
+                      title="Click to copy"
+                    >
+                      {c.code} 
+                      <Copy className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
+                    </button>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap ${status.color}`}>
+                      {status.label}
+                    </span>
+                  </div>
+
+                  <p className="text-lg font-bold text-primary mb-2">
+                    {c.discount_type === 'percentage' ? `${c.discount_value}% off` : `KSh ${c.discount_value.toLocaleString()} off`}
+                  </p>
+
+                  <div className="text-xs text-muted-foreground space-y-1 mb-4">
+                    {c.min_order_amount && <p>Min. order: KSh {c.min_order_amount.toLocaleString()}</p>}
+                    <p>Used: {c.times_used}{c.usage_limit ? ` / ${c.usage_limit}` : ' times'}</p>
+                    {c.expires_at && <p>Expires: {new Date(c.expires_at).toLocaleDateString()}</p>}
+                  </div>
                 </div>
 
-                <p className="text-lg font-bold text-primary mb-2">
-                  {c.discount_type === 'percentage' ? `${c.discount_value}% off` : `KSh ${c.discount_value.toLocaleString()} off`}
-                </p>
-
-                <div className="text-xs text-muted-foreground space-y-1 mb-3">
-                  {c.min_order_amount && <p>Min. order: KSh {c.min_order_amount.toLocaleString()}</p>}
-                  <p>Used: {c.times_used}{c.usage_limit ? ` / ${c.usage_limit}` : ' times'}</p>
-                  {c.expires_at && <p>Expires: {new Date(c.expires_at).toLocaleDateString()}</p>}
-                </div>
-
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-auto">
                   <Button size="sm" variant="outline" onClick={() => toggleActive(c)} className="flex-1">
                     {c.is_active ? 'Disable' : 'Enable'}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => deleteCoupon(c.id)} className="text-destructive hover:text-destructive">
+                  <Button size="sm" variant="outline" onClick={() => deleteCoupon(c.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
