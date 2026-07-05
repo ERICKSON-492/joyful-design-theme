@@ -63,7 +63,7 @@ const localSlides: Slide[] = [
     title: 'NAIROBI ARTISANS',
     subtitle: 'Stunning home decor and pet accessories.',
     cta_text: 'View Decor',
-    cta_link: '/shop?cat=for-your-pet', // FIXED: Points to pet category (verify if it matches your db tag)
+    cta_link: '/shop?cat=live-with-it', // FIXED: Points to pet category (verify if it matches your db tag)
   },
   {
     id: 'hero-variant3',
