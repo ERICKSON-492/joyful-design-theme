@@ -47,7 +47,7 @@ const localSlides: Slide[] = [
     title: 'USHANGA CHRONICLES',
     subtitle: 'One bead. A thousand stories.',
     cta_text: 'Explore the Tribe',
-    cta_link: '/shop',
+    cta_link: '/shop', // Links to the full shop catalog
   },
   {
     id: 'hero-jewelry',
@@ -55,7 +55,7 @@ const localSlides: Slide[] = [
     title: 'HERITAGE INSPIRED',
     subtitle: 'Handcrafted African jewelry.',
     cta_text: 'Shop Collection',
-    cta_link: '/wear-it',
+    cta_link: '/shop?cat=wear-it', // FIXED: Points to jewelry category
   },
   {
     id: 'hero-decor',
@@ -63,7 +63,7 @@ const localSlides: Slide[] = [
     title: 'NAIROBI ARTISANS',
     subtitle: 'Stunning home decor and pet accessories.',
     cta_text: 'View Decor',
-    cta_link: '/for-your-pet',
+    cta_link: '/shop?cat=for-your-pet', // FIXED: Points to pet category (verify if it matches your db tag)
   },
   {
     id: 'hero-variant3',
@@ -79,7 +79,7 @@ const localSlides: Slide[] = [
     title: 'TIMELESS TRADITIONS',
     subtitle: 'Where culture meets craft.',
     cta_text: 'Shop the Look',
-    cta_link: '/wear-it',
+    cta_link: '/shop?cat=wear-it', // FIXED: Points to jewelry category
   },
   {
     id: 'hero-variant5',
@@ -87,10 +87,9 @@ const localSlides: Slide[] = [
     title: 'MADE FOR EVERY HOME',
     subtitle: 'Bring artisan beauty indoors.',
     cta_text: 'See Collection',
-    cta_link: '/live-with-it',
+    cta_link: '/shop?cat=live-with-it', // FIXED: Points to home decor category (verify query value)
   },
 ]
-
 export function HeroSection() {
   const [current, setCurrent] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
