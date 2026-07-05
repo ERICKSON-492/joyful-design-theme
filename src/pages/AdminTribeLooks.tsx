@@ -20,7 +20,8 @@ export default function AdminTribeLooks() {
   const [uploading, setUploading] = useState(false)
   const [newLook, setNewLook] = useState({ image_url: '', name: '', piece_name: '' })
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', piece_name: '' })
+  const [editForm, setEditForm] = useState({ name: '', piece_name: '', image_url: '' })
+  const [editUploading, setEditUploading] = useState(false)
 
   const fetchLooks = async () => {
     setLoading(true)
@@ -44,17 +45,31 @@ export default function AdminTribeLooks() {
     else { toast.success('Look deleted'); fetchLooks() }
   }
 
+  const uploadTribeImage = async (file: File): Promise<string | null> => {
+    const ext = file.name.split('.').pop()
+    const path = `tribe-looks/${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('product-images').upload(path, file)
+    if (error) { toast.error('Upload failed'); return null }
+    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
+    return publicUrl
+  }
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `tribe-looks/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) { toast.error('Upload failed'); setUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-    setNewLook(f => ({ ...f, image_url: publicUrl }))
+    const url = await uploadTribeImage(file)
+    if (url) setNewLook(f => ({ ...f, image_url: url }))
     setUploading(false)
+  }
+
+  const handleEditPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setEditUploading(true)
+    const url = await uploadTribeImage(file)
+    if (url) setEditForm(f => ({ ...f, image_url: url }))
+    setEditUploading(false)
   }
 
   const addFeaturedLook = async () => {
@@ -77,11 +92,14 @@ export default function AdminTribeLooks() {
 
   const startEdit = (look: TribeLook) => {
     setEditingId(look.id)
-    setEditForm({ name: look.name, piece_name: look.piece_name })
+    setEditForm({ name: look.name, piece_name: look.piece_name, image_url: look.image_url })
   }
 
   const saveEdit = async (id: string) => {
-    const { error } = await supabase.from('tribe_looks').update({ name: editForm.name, piece_name: editForm.piece_name }).eq('id', id)
+    if (!editForm.name.trim()) { toast.error('Name cannot be empty'); return }
+    const { error } = await supabase.from('tribe_looks')
+      .update({ name: editForm.name, piece_name: editForm.piece_name, image_url: editForm.image_url })
+      .eq('id', id)
     if (error) { toast.error(error.message); return }
     toast.success('Updated')
     setEditingId(null)
@@ -106,6 +124,7 @@ export default function AdminTribeLooks() {
       <p className="text-xs text-muted-foreground mb-6 max-w-2xl">
         This controls "The Tribe Wears It" section on the homepage. Approve or reject customer
         submissions below, or add your own curated photos directly — those go live immediately.
+        Click any photo or name to edit its image, name, or piece.
       </p>
 
       {showAdd && (
@@ -145,7 +164,23 @@ export default function AdminTribeLooks() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {looks.map(look => (
             <div key={look.id} className="bg-card border border-border rounded-lg overflow-hidden">
-              <img src={look.image_url} alt={look.name} className="w-full h-48 object-cover" />
+              {editingId === look.id ? (
+                <div className="relative group">
+                  <img src={editForm.image_url} alt={look.name} className="w-full h-48 object-cover" />
+                  <label className="absolute inset-0 bg-black/0 group-hover:bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer">
+                    {editUploading ? (
+                      <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    ) : (
+                      <span className="flex items-center gap-2 text-white text-xs font-semibold bg-black/60 px-3 py-1.5 rounded-full">
+                        <Upload className="w-3.5 h-3.5" /> Replace Photo
+                      </span>
+                    )}
+                    <input type="file" accept="image/*" onChange={handleEditPhotoChange} className="hidden" disabled={editUploading} />
+                  </label>
+                </div>
+              ) : (
+                <img src={look.image_url} alt={look.name} className="w-full h-48 object-cover cursor-pointer" onClick={() => startEdit(look)} />
+              )}
               <div className="p-4">
                 {editingId === look.id ? (
                   <div className="space-y-2 mb-3">
@@ -162,7 +197,7 @@ export default function AdminTribeLooks() {
                       placeholder="Piece"
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => saveEdit(look.id)} className="flex-1">Save</Button>
+                      <Button size="sm" onClick={() => saveEdit(look.id)} disabled={editUploading} className="flex-1">Save</Button>
                       <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
                     </div>
                   </div>
