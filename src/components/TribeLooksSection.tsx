@@ -6,13 +6,21 @@ import tribeAnne from '@/assets/tribe-anne.jpeg'
 import tribeLuna from '@/assets/tribe-luna.jpeg'
 import tribe1 from '@/assets/tribe-1.jpg'
 import { ScrollReveal } from './ScrollReveal'
+import { fetchPublicTable } from '@/lib/publicContent'
 
-const tribeLooks = [
+interface Look { image: string; name: string; piece: string }
+
+// Shown until (or alongside, if there are fewer than 4) admin-curated /
+// customer-approved looks exist in the database.
+const fallbackLooks: Look[] = [
   { image: tribeTess, name: 'Tess', piece: 'Beaded Dress' },
   { image: tribeAnne, name: 'Anne', piece: 'Beaded Bracelet' },
   { image: tribeLuna, name: 'Luna', piece: 'Beaded Dog Collar' },
   { image: tribe1, name: 'Amani K.', piece: 'Layered Beaded Necklace' },
 ]
+
+const VISIBLE_COUNT = 4
+const ROTATE_INTERVAL_MS = 5000
 
 const offsets = [
   'md:mt-0',
@@ -35,12 +43,43 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function TribeLooksSection() {
-  const [order, setOrder] = useState(tribeLooks)
+  const [pool, setPool] = useState<Look[]>(fallbackLooks)
+  const [startIndex, setStartIndex] = useState(0)
 
+  // Load real looks from the database (admin-curated + approved customer
+  // submissions). Falls back to the bundled defaults if there aren't
+  // enough approved looks yet, so the section never looks empty.
   useEffect(() => {
-    // Initial shuffle so each visit feels fresh
-    setOrder(prev => shuffle(prev))
+    fetchPublicTable<{ image_url: string; name: string; piece_name: string }>(
+      'tribe_looks',
+      'select=image_url,name,piece_name&status=eq.approved&order=created_at.desc&limit=16'
+    )
+      .then(data => {
+        const live: Look[] = data.map(d => ({ image: d.image_url, name: d.name, piece: d.piece_name }))
+        if (live.length >= VISIBLE_COUNT) {
+          setPool(shuffle(live))
+        } else if (live.length > 0) {
+          // Mix real looks in with fallbacks so real submissions show up
+          // right away even before there are enough to fill the grid alone.
+          setPool(shuffle([...live, ...fallbackLooks]))
+        } else {
+          setPool(shuffle(fallbackLooks))
+        }
+      })
+      .catch(() => setPool(shuffle(fallbackLooks)))
   }, [])
+
+  // Rotate through the pool automatically, showing a new set of 4 every
+  // few seconds when there are more looks than fit on screen at once.
+  useEffect(() => {
+    if (pool.length <= VISIBLE_COUNT) return
+    const id = setInterval(() => {
+      setStartIndex(i => (i + VISIBLE_COUNT) % pool.length)
+    }, ROTATE_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [pool])
+
+  const visible = Array.from({ length: Math.min(VISIBLE_COUNT, pool.length) }, (_, i) => pool[(startIndex + i) % pool.length])
 
   return (
     <section className="py-20 md:py-32 bg-card overflow-hidden">
@@ -61,20 +100,20 @@ export function TribeLooksSection() {
           layout
           className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto"
         >
-          <AnimatePresence initial={false}>
-          {order.map((look, i) => (
+          <AnimatePresence mode="popLayout" initial={false}>
+          {visible.map((look, i) => (
             <motion.div
-              key={look.name}
+              key={`${startIndex}-${look.name}-${i}`}
               layout
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, rotate: -6, scale: 0.85, y: 30 }}
+              animate={{ opacity: 1, rotate: 0, scale: 1, y: 0 }}
+              exit={{ opacity: 0, rotate: 6, scale: 0.85 }}
+              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
               className={`group relative ${offsets[i]}`}
             >
               <motion.div
                 className="relative overflow-hidden rounded-2xl shadow-lg"
-                whileHover={{ y: -8, scale: 1.03 }}
+                whileHover={{ y: -8, scale: 1.03, rotate: 0 }}
                 transition={{ duration: 0.35, ease: 'easeOut' }}
               >
                 <img
