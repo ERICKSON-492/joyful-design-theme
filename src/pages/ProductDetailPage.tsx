@@ -15,6 +15,7 @@ interface Product {
   name: string
   description: string | null
   price: number
+  sale_price: number | null
   price_min: number | null
   price_max: number | null
   image_url: string | null
@@ -55,7 +56,7 @@ export default function ProductDetailPage() {
       ? product.description.replace(/\s+/g, ' ').trim().slice(0, 155)
       : 'Handcrafted African jewelry and decor from Ushanga Chronicles, Nairobi.',
     id ? `/product/${id}` : undefined,
-    !loading && !product
+    !loading && !product // unknown/invalid product id (e.g. old/legacy links) should never be indexed
   )
 
   useEffect(() => {
@@ -79,9 +80,11 @@ export default function ProductDetailPage() {
     load()
   }, [id])
 
+  // Get unique sizes and colors
   const sizes = [...new Set(variants.filter(v => v.size).map(v => v.size!))]
   const colors = [...new Set(variants.filter(v => v.color).map(v => v.color!))]
 
+  // Auto-select variant when size/color chosen
   useEffect(() => {
     if (variants.length === 0) return
     const match = variants.find(v =>
@@ -91,6 +94,7 @@ export default function ProductDetailPage() {
     setSelectedVariant(match || null)
   }, [selectedSize, selectedColor, variants])
 
+  // Reset quantity to 1 when variant changes to avoid carrying over an invalid quantity
   useEffect(() => {
     setQuantity(1)
   }, [selectedVariant])
@@ -101,6 +105,7 @@ export default function ProductDetailPage() {
 
   const safeIdx = Math.min(imgIdx, Math.max(0, gallery.length - 1))
 
+  // Dynamically inject a high-priority preload link for the active main display image
   useEffect(() => {
     if (gallery.length === 0 || !gallery[safeIdx]) return
     const link = document.createElement('link')
@@ -144,17 +149,14 @@ export default function ProductDetailPage() {
   const prevImg = () => setImgIdx(i => (i - 1 + gallery.length) % gallery.length)
   const nextImg = () => setImgIdx(i => (i + 1) % gallery.length)
 
-  const currentPrice = selectedVariant ? selectedVariant.price : product.price
+  const onSale = !selectedVariant && !!product.sale_price && product.sale_price < product.price
+  const currentPrice = selectedVariant ? selectedVariant.price : (onSale ? product.sale_price! : product.price)
   const currentStock = selectedVariant ? selectedVariant.stock : product.stock
-  const isPreorder = product.is_preorder
-  const canOrder = isPreorder || currentStock > 0
+  const canOrder = product.is_preorder || currentStock > 0
   const needsVariant = variants.length > 0 && !selectedVariant
-  
-  // Bugfix: Prevent Pre-orders from breaking the increment limit math bounds
-  const maxAllowedQuantity = isPreorder ? 99 : currentStock
 
   const handleAddToCart = () => {
-    if (needsVariant || !canOrder) return
+    if (needsVariant) return
     const variantLabel = selectedVariant
       ? [selectedVariant.size, selectedVariant.color].filter(Boolean).join(' / ')
       : ''
@@ -163,13 +165,13 @@ export default function ProductDetailPage() {
       name: variantLabel ? `${product.name} (${variantLabel})` : product.name,
       price: currentPrice,
       image_url: product.image_url,
-      stock: currentStock, 
+      stock: currentStock, // ✅ pass stock so CartContext enforces the limit
     }, quantity)
   }
 
   const getButtonLabel = () => {
     if (needsVariant) return 'Select Options'
-    if (isPreorder) return 'Pre-Order Now'
+    if (product.is_preorder) return 'Pre-Order Now'
     if (currentStock === 0) return 'Sold Out'
     return 'Add to Cart'
   }
@@ -243,78 +245,52 @@ export default function ProductDetailPage() {
                   <p className="text-2xl font-bold text-primary">From {format(Math.min(...variants.map(v => v.price)))}</p>
                 )
               ) : (
-                <p className="text-2xl font-bold text-primary">{format(currentPrice)}</p>
+                <p className="flex items-center gap-3">
+                  <span className="text-2xl font-bold text-primary">{format(currentPrice)}</span>
+                  {onSale && (
+                    <>
+                      <span className="text-base text-muted-foreground line-through">{format(product.price)}</span>
+                      <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 font-semibold rounded">Sale</span>
+                    </>
+                  )}
+                </p>
               )}
             </div>
 
             {/* Badges */}
             <div className="flex flex-wrap gap-2">
-              {isPreorder && (
+              {product.is_preorder && (
                 <span className="bg-neutral-800 text-white text-xs px-3 py-1.5 font-semibold flex items-center gap-1 rounded border border-border">
                   <Clock className="w-3 h-3" /> Pre-Order
                 </span>
               )}
-              {!isPreorder && currentStock > 0 && currentStock <= 3 && (
+              {!product.is_preorder && currentStock > 0 && currentStock <= 3 && (
                 <span className="bg-destructive text-destructive-foreground text-xs px-3 py-1.5 font-semibold rounded">
                   Only {currentStock} left
                 </span>
               )}
-              {!isPreorder && currentStock === 0 && !needsVariant && (
+              {!product.is_preorder && currentStock === 0 && !needsVariant && (
                 <span className="bg-foreground text-background text-xs px-3 py-1.5 font-semibold rounded">Sold Out</span>
               )}
             </div>
 
-            {isPreorder && product.preorder_label && (
+            {product.is_preorder && product.preorder_label && (
               <p className="text-foreground text-sm font-medium flex items-center gap-1">
                 <Clock className="w-4 h-4 text-muted-foreground" /> {product.preorder_label}
               </p>
             )}
 
-            {/* Advanced Layout Grouped Description (Matches Image Layout) */}
             {product.description && (() => {
-              const blocks = product.description.split('\n\n').map(b => b.trim()).filter(Boolean);
-              
-              return (
-                <div className="space-y-4 text-sm leading-relaxed text-muted-foreground max-h-[320px] overflow-y-auto pr-1 border-b border-dashed border-border/60 pb-4">
-                  {blocks.map((block, i) => {
-                    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-                    
-                    // Match visual section header tokens dynamically
-                    const isHeader = lines[0].endsWith(':') || 
-                                     ['Why You\'ll Love It', 'Product Specifications', 'Care & Storage Instructions', 'Product Disclaimer'].includes(lines[0]);
-
-                    if (isHeader) {
-                      return (
-                        <div key={i} className="mt-3 space-y-1.5">
-                          <h3 className="font-semibold text-foreground text-sm tracking-wide uppercase opacity-90">{lines[0].replace(/:$/, '')}</h3>
-                          {lines.slice(1).length > 0 && (
-                            <ul className="list-disc pl-4 space-y-1 text-muted-foreground/90">
-                              {lines.slice(1).map((line, j) => (
-                                <li key={j}>{line.replace(/^[-•*◦o]\s*/, '')}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={i} className="space-y-1">
-                        {lines.map((line, j) => {
-                          if (/^[-•*◦o]\s*/.test(line)) {
-                            return (
-                              <ul key={j} className="list-disc pl-4 my-0.5 text-muted-foreground/90">
-                                <li>{line.replace(/^[-•*◦o]\s*/, '')}</li>
-                              </ul>
-                            );
-                          }
-                          return <p key={j}>{line}</p>;
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
+              const lines = product.description.split('\n').map(l => l.trim()).filter(Boolean)
+              return lines.length > 1 ? (
+                <ul className="text-muted-foreground text-sm leading-relaxed list-disc pl-5 space-y-1">
+                  {lines.map((line, i) => (
+                    <li key={i}>{line.replace(/^[-•*]\s*/, '')}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-sm leading-relaxed">{lines[0]}</p>
+              )
             })()}
 
             {/* Size Selection */}
@@ -358,11 +334,12 @@ export default function ProductDetailPage() {
               <p className="text-sm text-muted-foreground">Selected: <span className="font-medium text-foreground">{selectedVariant.variant_label}</span></p>
             )}
 
-            {/* Quantity Selector Layout */}
-            {!needsVariant && canOrder && currentStock > 0 && (
+            {/* Quantity */}
+            {!needsVariant && canOrder && (
               <div>
                 <label className="text-sm font-semibold text-foreground block mb-2">Quantity</label>
                 <div className="flex items-center border border-border rounded-lg w-fit">
+                  {/* ✅ - button disabled at 1 */}
                   <button
                     onClick={() => setQuantity(q => Math.max(1, q - 1))}
                     disabled={quantity <= 1}
@@ -371,15 +348,17 @@ export default function ProductDetailPage() {
                     <Minus className="w-4 h-4" />
                   </button>
                   <span className="px-6 text-sm font-medium min-w-[3rem] text-center">{quantity}</span>
+                  {/* ✅ + button capped at currentStock */}
                   <button
-                    onClick={() => setQuantity(q => Math.min(q + 1, maxAllowedQuantity))}
-                    disabled={quantity >= maxAllowedQuantity}
+                    onClick={() => setQuantity(q => Math.min(q + 1, currentStock))}
+                    disabled={quantity >= currentStock}
                     className="p-3 hover:bg-accent transition-colors rounded-r-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
-                {!isPreorder && currentStock <= 10 && currentStock > 0 && (
+                {/* Stock hint shown when stock is low */}
+                {currentStock <= 10 && currentStock > 0 && (
                   <p className={`text-xs mt-1.5 ${currentStock <= 3 ? 'text-red-500 font-semibold' : 'text-orange-500'}`}>
                     Only {currentStock} in stock
                   </p>
@@ -435,6 +414,7 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
+      {/* Spacer so content isn't hidden behind sticky bar on mobile */}
       <div className="md:hidden h-20" aria-hidden />
     </div>
   )
