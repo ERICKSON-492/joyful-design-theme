@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { ShoppingBag, Loader2, CheckCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation, Search } from 'lucide-react'
+import { ShoppingBag, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation, Search } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 import { useSEO } from '@/hooks/useSEO'
@@ -84,6 +84,7 @@ const NAIROBI_AREAS: { name: string; price: number }[] = [
   { name: 'Ngara', price: 300 }, { name: 'Ojijo Road', price: 300 },
 ]
 
+// Super Metro specific area mapping
 const SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Thika Town', route: 'Super Metro - Thika' },
   { area: 'Thika', route: 'Super Metro - Thika' },
@@ -93,6 +94,7 @@ const SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Kitengela', route: 'Super Metro - Kitengela' },
 ]
 
+// These areas are served by Super Metro + Pickup Mtaani only (no doorstep)
 const SUPER_METRO_ONLY_AREAS = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
 
 async function reverseGeocode(lat: number, lon: number) {
@@ -158,6 +160,10 @@ export default function CheckoutPage() {
   const [buildingName, setBuildingName] = useState('')
   const [floorNumber, setFloorNumber] = useState('')
   const [houseNumber, setHouseNumber] = useState('')
+  const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{ id: string; code: string; discount_type: string; discount_value: number } | null>(null)
+  const [couponMessage, setCouponMessage] = useState<{ text: string; ok: boolean } | null>(null)
+  const [checkingCoupon, setCheckingCoupon] = useState(false)
   const { userId, name: accountName, email: accountEmail } = useCheckoutAuth()
 
   useEffect(() => {
@@ -180,6 +186,7 @@ export default function CheckoutPage() {
     load()
   }, [])
 
+  // Build location suggestions as user types
   useEffect(() => {
     if (!locationSearch.trim() || locationSearch.length < 2) {
       setLocationSuggestions([])
@@ -187,12 +194,14 @@ export default function CheckoutPage() {
     }
     const q = locationSearch.toLowerCase()
 
+    // Check Nairobi areas first
     const nairobiMatches = NAIROBI_AREAS.filter(a => a.name.toLowerCase().includes(q))
     if (nairobiMatches.length > 0) {
       setLocationSuggestions(nairobiMatches.slice(0, 8))
       return
     }
 
+    // Check upcountry regions from DB
     const regionMatches: { name: string }[] = []
     const seen = new Set<string>()
     shippingMethods.forEach(m => {
@@ -207,6 +216,7 @@ export default function CheckoutPage() {
     setLocationSuggestions(regionMatches.slice(0, 8))
   }, [locationSearch, shippingMethods])
 
+  // When a location is selected, compute available delivery options
   const handleSelectLocation = (loc: { name: string; price?: number }) => {
     setSelectedLocation(loc.name)
     setLocationSearch(loc.name)
@@ -218,6 +228,7 @@ export default function CheckoutPage() {
     if (isNairobiArea && loc.price !== undefined) {
       const options: ShippingMethod[] = []
 
+      // Pickup from Shop is always free and available for any Nairobi-area order
       options.push({
         id: 'pickup-shop-free',
         name: 'Pickup from Shop (Free)',
@@ -228,9 +239,11 @@ export default function CheckoutPage() {
         regions: null,
       })
 
+      // Always add Pickup Mtaani
       const mtaani = shippingMethods.find(m => m.name.toLowerCase().includes('pickup mtaani'))
       if (mtaani) options.push(mtaani)
 
+      // Add only the specific Super Metro route for this area (exact match)
       const superMetroMatch = SUPER_METRO_AREAS.find(s =>
         s.area.toLowerCase() === loc.name.toLowerCase()
       )
@@ -239,18 +252,16 @@ export default function CheckoutPage() {
         if (sm) options.push(sm)
       }
 
+      // Add Doorstep with area-specific price (only if not a Super Metro-only area)
       const isSuperMetroOnly = SUPER_METRO_ONLY_AREAS.includes(loc.name)
       const doorstep = shippingMethods.find(m => m.name.toLowerCase().includes('doorstep'))
       if (doorstep && !isSuperMetroOnly) {
-        options.push({ 
-          ...doorstep, 
-          name: 'Doorstep Delivery', // Clean name without baseline references
-          price: loc.price 
-        })
+        options.push({ ...doorstep, price: loc.price })
       }
 
       setAvailableOptions(options)
     } else {
+      // Upcountry: find all methods whose regions include this location
       const matches = shippingMethods.filter(m =>
         m.regions?.some(r => r.toLowerCase() === loc.name.toLowerCase())
       )
@@ -268,6 +279,7 @@ export default function CheckoutPage() {
         const geoData = await reverseGeocode(latitude, longitude)
         if (geoData) {
           const suburb = geoData.suburb || geoData.city || ''
+          // Try to match to a Nairobi area
           const matchedArea = NAIROBI_AREAS.find(a =>
             suburb.toLowerCase().includes(a.name.toLowerCase()) ||
             a.name.toLowerCase().includes(suburb.toLowerCase())
@@ -296,7 +308,50 @@ export default function CheckoutPage() {
   }
 
   const shippingCost = selectedShipping?.price || 0
-  const grandTotal = totalPrice + shippingCost
+  const discountAmount = appliedCoupon
+    ? Math.min(
+        appliedCoupon.discount_type === 'percentage'
+          ? totalPrice * (appliedCoupon.discount_value / 100)
+          : appliedCoupon.discount_value,
+        totalPrice
+      )
+    : 0
+  const grandTotal = Math.round(Math.max(totalPrice - discountAmount, 0) + shippingCost)
+
+  const applyCoupon = useCallback(async () => {
+    if (!couponCode.trim()) return
+    setCheckingCoupon(true)
+    setCouponMessage(null)
+    try {
+      const { data, error } = await supabase.rpc('validate_coupon', {
+        p_code: couponCode.trim(),
+        p_order_amount: totalPrice,
+      })
+      const result = Array.isArray(data) ? data[0] : data
+      if (error || !result?.valid) {
+        setAppliedCoupon(null)
+        setCouponMessage({ text: result?.message || error?.message || 'Invalid coupon code', ok: false })
+        return
+      }
+      setAppliedCoupon({
+        id: result.coupon_id,
+        code: couponCode.trim().toUpperCase(),
+        discount_type: result.discount_type,
+        discount_value: result.discount_value,
+      })
+      setCouponMessage({ text: result.message || 'Coupon applied!', ok: true })
+    } catch {
+      setCouponMessage({ text: 'Could not validate coupon. Try again.', ok: false })
+    } finally {
+      setCheckingCoupon(false)
+    }
+  }, [couponCode, totalPrice])
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponCode('')
+    setCouponMessage(null)
+  }
 
   const sendOrderEmail = useCallback(async (orderId: string) => {
     const targetEmail = email || accountEmail
@@ -307,6 +362,7 @@ export default function CheckoutPage() {
       items: items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price })),
       subtotal, shippingLabel: selectedShipping?.name, shippingCost, grandTotal,
       shippingAddress: [houseNumber, floorNumber, buildingName, selectedLocation, postalCode, country].filter(Boolean).join(', '),
+      couponCode: appliedCoupon?.code, discountAmount,
     })
     const itemsHtml = items.map(item => `
       <tr>
@@ -325,6 +381,7 @@ export default function CheckoutPage() {
         <p>Hi ${name || 'there'}, your order <strong>#${orderId}</strong> has been received.</p>
         <table style="width:100%;border-collapse:collapse;"><tbody>${itemsHtml}</tbody></table>
         <hr style="margin:12px 0;" />
+        ${discountAmount > 0 ? `<p style="text-align:right;color:#16a34a;">Discount${appliedCoupon ? ` (${appliedCoupon.code})` : ''}: - KSh ${discountAmount.toLocaleString()}</p>` : ''}
         <p style="text-align:right;font-weight:bold;">Grand Total: KSh ${grandTotal.toLocaleString()}</p>
         ${receiptUrl ? `<div style="text-align:center;margin:18px 0;"><a href="${receiptUrl}" style="background:#D4A017;color:#fff;padding:12px 22px;border-radius:8px;font-weight:700;text-decoration:none;">View Invoice Receipt</a></div>` : ''}
       </div>`
@@ -333,7 +390,7 @@ export default function CheckoutPage() {
         body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
       })
     } catch (err) { console.error('Email send error:', err) }
-  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, selectedLocation, postalCode, country, buildingName, floorNumber, houseNumber])
+  }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, selectedLocation, postalCode, country, buildingName, floorNumber, houseNumber, appliedCoupon, discountAmount])
 
   const handleMpesaPayment = useCallback(async () => {
     if (!userId) { toast.error('Please log in first'); navigate('/auth', { state: { returnTo: '/checkout' } }); return }
@@ -354,14 +411,23 @@ export default function CheckoutPage() {
           location: selectedLocation, postal_code: postalCode, country,
           email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost,
           building_name: buildingName || null, floor_number: floorNumber || null, house_number: houseNumber || null,
+          coupon_code: appliedCoupon?.code || null, discount_amount: discountAmount || null,
         }
       }
       const { data: order, error: orderError } = await supabase.from('orders').insert(orderData).select('id').single()
       if (orderError) throw new Error(orderError.message)
 
-      if (selectedPayment === 'cod') {
+      // A coupon (or free pickup + full discount) can bring the total to
+      // zero — M-Pesa can't process a KSh 0 charge, so treat it like a
+      // completed free order instead of attempting STK push.
+      if (selectedPayment === 'cod' || grandTotal <= 0) {
+        if (grandTotal <= 0 && selectedPayment !== 'cod') {
+          await supabase.from('orders').update({ status: 'confirmed' }).eq('id', order.id)
+        }
+        if (appliedCoupon) supabase.rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
         await sendOrderEmail(order.id); setStatus('success'); clearCart()
-        toast.success('Order placed! Pay on delivery 🎉'); return
+        toast.success(grandTotal <= 0 ? 'Order placed — nothing to pay! 🎉' : 'Order placed! Pay on delivery 🎉')
+        return
       }
 
       setStatus('pushing')
@@ -379,12 +445,16 @@ export default function CheckoutPage() {
         try {
           const { data: queryData } = await supabase.functions.invoke('mpesa-stk-push', { body: { action: 'query', checkout_request_id: checkoutRequestId } })
           if (queryData?.ResultCode === '0' || queryData?.ResultCode === 0) {
+            if (appliedCoupon) supabase.rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
             await sendOrderEmail(order.id); setStatus('success'); clearCart(); toast.success('Payment successful! 🎉'); return
           }
         } catch { }
         if (attempts < 15) { setTimeout(poll, 4000) } else {
           const { data: orderCheck } = await supabase.from('orders').select('status').eq('id', order.id).single()
-          if (orderCheck?.status === 'paid') { await sendOrderEmail(order.id); setStatus('success'); clearCart(); toast.success('Payment confirmed! 🎉') }
+          if (orderCheck?.status === 'paid') {
+            if (appliedCoupon) supabase.rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
+            await sendOrderEmail(order.id); setStatus('success'); clearCart(); toast.success('Payment confirmed! 🎉')
+          }
           else { setStatus('failed'); setError('Payment timed out. Contact us on WhatsApp if amount was deducted.') }
         }
       }
@@ -392,7 +462,7 @@ export default function CheckoutPage() {
     } catch (err: any) {
       setStatus('failed'); setError(err.message || 'Something went wrong'); toast.error('Payment failed')
     }
-  }, [phone, name, items, grandTotal, userId, selectedLocation, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, buildingName, floorNumber, houseNumber, clearCart, navigate, sendOrderEmail])
+  }, [phone, name, items, grandTotal, userId, selectedLocation, postalCode, country, email, selectedShipping, shippingCost, selectedPayment, coordinates, buildingName, floorNumber, houseNumber, appliedCoupon, discountAmount, clearCart, navigate, sendOrderEmail])
 
   if (status === 'success') {
     return (
@@ -438,7 +508,7 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
 
-            {/* STEP 0 — Cart Review */}
+            {/* STEP 0 — Cart */}
             {step === 0 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
@@ -485,7 +555,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* STEP 1 — Shipping Information */}
+            {/* STEP 1 — Shipping */}
             {step === 1 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -501,6 +571,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="p-4 space-y-4">
+                  {/* Name & Phone */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1.5">Full Name *</label>
@@ -532,6 +603,7 @@ export default function CheckoutPage() {
                     </select>
                   </div>
 
+                  {/* Location Search */}
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1.5">
                       Your Location * <span className="text-muted-foreground font-normal text-xs">(type your area, estate or town)</span>
@@ -552,8 +624,10 @@ export default function CheckoutPage() {
                             <button key={loc.name} type="button"
                               onClick={() => handleSelectLocation(loc)}
                               className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-accent transition-colors text-left">
-                              {/* FIXED: Hides base raw price indicators inside suggestions dropdown list */}
                               <span className="text-foreground">{loc.name}</span>
+                              {loc.price !== undefined && (
+                                <span className="text-xs text-muted-foreground">Doorstep from KSh {loc.price}</span>
+                              )}
                             </button>
                           ))}
                         </div>
@@ -566,185 +640,216 @@ export default function CheckoutPage() {
                     )}
                   </div>
 
-                  {/* Delivery Options Picker */}
+                  {/* Delivery Options — only shown after location selected */}
                   {selectedLocation && (
-                    <div className="pt-2 animate-fade-in">
+                    <div>
                       <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                        <Truck className="w-4 h-4 text-primary" /> Select Delivery Method *
+                        <Truck className="w-4 h-4 text-primary" /> Available Delivery Options
                       </label>
-                      <div className="space-y-2">
-                        {availableOptions.map((option) => (
-                          <div
-                            key={option.id}
-                            onClick={() => setSelectedShipping(option)}
-                            className={`border rounded-lg p-3.5 flex items-center justify-between cursor-pointer transition-all ${
-                              selectedShipping?.id === option.id
-                                ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                : 'border-border bg-background hover:border-muted-foreground/30'
-                            }`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <input
-                                type="radio"
-                                name="shippingMethod"
-                                checked={selectedShipping?.id === option.id}
-                                onChange={() => setSelectedShipping(option)}
-                                className="mt-1 accent-primary"
-                              />
-                              <div>
-                                <p className="text-sm font-semibold text-foreground">{option.name}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{option.estimated_days || 'Estimated 1-3 days'}</p>
+
+                      {availableOptions.length === 0 ? (
+                        <div className="p-4 rounded-lg bg-muted text-center border border-dashed border-border">
+                          <p className="text-xs text-muted-foreground">No delivery options found for this location. Contact us on WhatsApp.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {availableOptions.map((m, idx) => (
+                            <label key={`${m.id}-${idx}`}
+                              className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                                selectedShipping?.id === m.id && selectedShipping?.price === m.price
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border hover:border-primary/50'
+                              }`}>
+                              <input type="radio" name="shipping"
+                                checked={selectedShipping?.id === m.id && selectedShipping?.price === m.price}
+                                onChange={() => setSelectedShipping(m)} className="accent-primary" />
+                              <div className="flex-1">
+                                <p className="font-medium text-foreground text-sm">{m.name}</p>
+                                <p className="text-xs text-muted-foreground">{m.estimated_days || 'Standard delivery'}</p>
                               </div>
-                            </div>
-                            <p className="text-sm font-bold text-foreground">
-                              {option.price === 0 ? 'Free' : `KSh ${option.price.toLocaleString()}`}
-                            </p>
-                          </div>
-                        ))}
+                              <span className="font-bold text-primary text-sm">{m.price > 0 ? `KSh ${m.price.toLocaleString()}` : 'Free'}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Building / floor / house number — only needed for door-to-door (Doorstep) delivery */}
+                  {selectedShipping?.name.toLowerCase().includes('doorstep') && (
+                    <div className="space-y-3 p-3 rounded-lg bg-muted/40 border border-border">
+                      <p className="text-xs font-semibold text-foreground flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-primary" /> Door-to-door details — helps our rider find you
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-foreground mb-1">Building / Estate Name *</label>
+                          <input type="text" value={buildingName} onChange={e => setBuildingName(e.target.value)} placeholder="e.g. Jamuhuri Heights"
+                            className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-foreground mb-1">Floor No.</label>
+                          <input type="text" value={floorNumber} onChange={e => setFloorNumber(e.target.value)} placeholder="e.g. 3rd Floor"
+                            className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-foreground mb-1">House / Door No. *</label>
+                          <input type="text" value={houseNumber} onChange={e => setHouseNumber(e.target.value)} placeholder="e.g. B14"
+                            className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary" />
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Extra Doorstep fields conditional checks */}
-                  {isDoorstepSelected && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 animate-fade-in">
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">Building/Apartment Name *</label>
-                        <input type="text" value={buildingName} onChange={e => setBuildingName(e.target.value)} placeholder="e.g. Apex Plaza"
-                          className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2 text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">Floor Number</label>
-                        <input type="text" value={floorNumber} onChange={e => setFloorNumber(e.target.value)} placeholder="e.g. 3rd Floor"
-                          className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2 text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">House/Office No *</label>
-                        <input type="text" value={houseNumber} onChange={e => setHouseNumber(e.target.value)} placeholder="e.g. House B4"
-                          className="w-full border border-border bg-background text-foreground rounded-lg px-3 py-2 text-sm" />
-                      </div>
+                  {/* Info note for shop pickup */}
+                  {selectedShipping?.id === 'pickup-shop-free' && (
+                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-200 flex gap-2 items-start">
+                      <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>Free — collect your order from our shop. We'll send you the pickup address and let you know when it's ready via WhatsApp/SMS.</span>
                     </div>
                   )}
-                </div>
 
-                <div className="p-4 border-t border-border">
-                  <button
-                    onClick={() => setStep(2)}
-                    disabled={!canGoToPayment}
-                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ minHeight: '48px' }}
-                  >
-                    Continue to Payment
+                  <button onClick={() => setStep(2)} disabled={!canGoToPayment}
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 mt-2" style={{ minHeight: '48px' }}>
+                    Proceed to Payment
                   </button>
                 </div>
               </div>
             )}
 
-            {/* STEP 2 — Payment Processing Layout */}
+            {/* STEP 2 — Payment */}
             {step === 2 && (
               <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 border-b border-border">
                   <h2 className="font-display font-semibold text-foreground flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-primary" /> Select Payment Method
+                    <CreditCard className="w-5 h-5 text-primary" /> Payment Options
                   </h2>
                 </div>
-
                 <div className="p-4 space-y-4">
-                  {error && (
-                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm font-medium">
-                      {error}
+                  {paymentMethods.length > 0 && (
+                    <div className="space-y-2">
+                      {paymentMethods.map(pm => (
+                        <label key={pm.id}
+                          className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                            selectedPayment === pm.provider ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                          }`}>
+                          <input type="radio" name="payment" checked={selectedPayment === pm.provider}
+                            onChange={() => setSelectedPayment(pm.provider)} className="accent-primary" />
+                          <div>
+                            <p className="font-medium text-foreground text-sm">{pm.name}</p>
+                            {pm.provider === 'mpesa' && <p className="text-xs text-muted-foreground">Pay via M-Pesa STK Push</p>}
+                            {pm.provider === 'cod' && <p className="text-xs text-muted-foreground">Pay cash when your order arrives</p>}
+                          </div>
+                        </label>
+                      ))}
                     </div>
                   )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {paymentMethods.map((method) => (
-                      <div
-                        key={method.id}
-                        onClick={() => !isProcessing && setSelectedPayment(method.provider)}
-                        className={`border rounded-lg p-4 flex flex-col justify-between cursor-pointer transition-all ${
-                          selectedPayment === method.provider
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                            : 'border-border bg-background hover:border-muted-foreground/30'
-                        } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-bold text-foreground">{method.name}</span>
-                          <input
-                            type="radio"
-                            name="paymentMethod"
-                            checked={selectedPayment === method.provider}
-                            onChange={() => setSelectedPayment(method.provider)}
-                            disabled={isProcessing}
-                            className="accent-primary"
-                          />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {method.provider === 'mpesa' 
-                            ? 'Instant M-Pesa STK Push popup message to your mobile device phone.' 
-                            : 'Pay conveniently on item arrival/pickup handling.'}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
                   {selectedPayment === 'mpesa' && (
-                    <div className="p-4 bg-muted/40 border border-border rounded-lg space-y-2 animate-fade-in">
-                      <p className="text-xs font-semibold text-foreground">M-Pesa Checkout Requirements:</p>
-                      <p className="text-xs text-muted-foreground">
-                        Keep your mobile device unlocked. An STK push verification notification will prompt your Sim Pin entry to secure <strong>KSh {grandTotal.toLocaleString()}</strong> instantly.
-                      </p>
+                    <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-4 text-sm text-green-800 dark:text-green-200">
+                      <strong>How it works:</strong> An M-Pesa prompt will be sent to <strong>{phone}</strong>. Enter your PIN to complete payment.
                     </div>
                   )}
-                </div>
-
-                <div className="p-4 border-t border-border">
-                  <button
-                    onClick={handleMpesaPayment}
-                    disabled={isProcessing || !userId}
-                    className="w-full bg-primary text-primary-foreground py-3.5 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                    style={{ minHeight: '50px' }}
-                  >
-                    {status === 'creating' && <><Loader2 className="w-4 h-4 animate-spin" /> Structuring Order...</>}
-                    {status === 'pushing' && <><Loader2 className="w-4 h-4 animate-spin" /> Triggering STK Push...</>}
-                    {status === 'polling' && <><Loader2 className="w-4 h-4 animate-spin" /> Awaiting SIM Verification PIN...</>}
-                    {status === 'idle' && (selectedPayment === 'cod' ? 'Complete Order (COD)' : 'Pay via M-Pesa Now')}
-                  </button>
-                  {!userId && (
-                    <p className="text-xs text-center text-destructive font-semibold mt-2">
-                      Please register or check authentication state to enable checkout channels.
-                    </p>
+                  {selectedPayment === 'cod' && (
+                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-200">
+                      <strong>Cash on Delivery:</strong> Pay KSh {grandTotal.toLocaleString()} to the delivery agent on arrival.
+                    </div>
                   )}
+                  {error && (
+                    <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
+                      <XCircle className="w-4 h-4 flex-shrink-0" /> {error}
+                    </div>
+                  )}
+                  <button onClick={handleMpesaPayment} disabled={isProcessing}
+                    className="w-full bg-primary text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2" style={{ minHeight: '48px' }}>
+                    {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {status === 'creating' && 'Creating order...'}
+                    {status === 'pushing' && 'Sending M-Pesa prompt...'}
+                    {status === 'polling' && 'Waiting for confirmation...'}
+                    {status === 'idle' && (selectedPayment === 'cod' ? 'Place Order' : 'Complete Checkout')}
+                  </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Sticky Desktop Right Panel Summary Column */}
+          {/* Summary Sidebar */}
           <div className="space-y-4">
             <div className="bg-card border border-border rounded-lg p-4 sticky top-24">
-              <h2 className="font-display font-semibold text-foreground border-b border-border pb-3 mb-3">
-                Order Summary
-              </h2>
-              <div className="space-y-2 border-b border-border pb-3 text-sm">
+              <h2 className="font-display font-semibold text-foreground mb-4">Summary</h2>
+              <div className="space-y-2 text-sm border-b border-border pb-3 mb-3">
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Subtotal ({totalItems} items)</span>
+                  <span>Subtotal</span>
                   <span className="font-medium text-foreground">KSh {totalPrice.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
-                  <span className="font-medium text-foreground">
-                    {selectedShipping ? (shippingCost === 0 ? 'Free' : `KSh ${shippingCost.toLocaleString()}`) : 'Calculated next'}
-                  </span>
+                  <span className="font-medium text-foreground">{selectedShipping ? `KSh ${shippingCost.toLocaleString()}` : '—'}</span>
                 </div>
+                {selectedLocation && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Location</span>
+                    <span className="font-medium text-foreground text-xs">{selectedLocation}</span>
+                  </div>
+                )}
+                {selectedShipping && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Via</span>
+                    <span className="font-medium text-foreground text-xs">{selectedShipping.name}</span>
+                  </div>
+                )}
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount {appliedCoupon && `(${appliedCoupon.code})`}</span>
+                    <span className="font-medium">- KSh {discountAmount.toLocaleString()}</span>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between items-center pt-3 text-base font-bold text-foreground">
-                <span>Grand Total</span>
-                <span className="text-primary text-lg">KSh {grandTotal.toLocaleString()}</span>
+
+              {/* Coupon code */}
+              <div className="mb-4">
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg px-3 py-2 text-sm">
+                    <span className="text-green-700 dark:text-green-300 font-medium">
+                      "{appliedCoupon.code}" applied
+                    </span>
+                    <button onClick={removeCoupon} className="text-xs text-muted-foreground hover:text-destructive underline">
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                        onKeyDown={e => e.key === 'Enter' && applyCoupon()}
+                        placeholder="Coupon code"
+                        className="flex-1 border border-border bg-background rounded-lg px-3 py-2 text-sm uppercase"
+                      />
+                      <button
+                        onClick={applyCoupon}
+                        disabled={checkingCoupon || !couponCode.trim()}
+                        className="bg-foreground text-background px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide disabled:opacity-50 shrink-0"
+                      >
+                        {checkingCoupon ? '...' : 'Apply'}
+                      </button>
+                    </div>
+                    {couponMessage && (
+                      <p className={`text-xs mt-1.5 ${couponMessage.ok ? 'text-green-600' : 'text-destructive'}`}>
+                        {couponMessage.text}
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
-              
-              <div className="mt-4 pt-3 border-t border-border text-[11px] text-muted-foreground space-y-1.5">
-                <div className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-green-600" /> Secure SSL end-to-end processing</div>
-                <div className="flex items-center gap-1.5"><Truck className="w-3.5 h-3.5 text-primary" /> Monitored logistics partners across Kenya</div>
+              <div className="flex justify-between items-baseline mb-4">
+                <span className="font-semibold text-base text-foreground">Total</span>
+                <span className="text-xl font-extrabold text-primary">KSh {grandTotal.toLocaleString()}</span>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 flex gap-2 items-start text-xs text-muted-foreground">
+                <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <span>Your payment and personal details are kept secure.</span>
               </div>
             </div>
           </div>
