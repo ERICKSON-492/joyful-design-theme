@@ -11,6 +11,7 @@ interface Product {
   id: string
   name: string
   price: number
+  sale_price: number | null
   price_min: number | null
   price_max: number | null
   image_url: string | null
@@ -84,7 +85,7 @@ export default function ShopPage() {
     const loadProducts = async () => {
       setLoading(true)
       try {
-        let query = 'select=id,name,price,price_min,price_max,image_url,stock,category,subcategory,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
+        let query = 'select=id,name,price,sale_price,price_min,price_max,image_url,stock,category,subcategory,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
         if (activeCategory !== 'All') query += `&category=eq.${encodeURIComponent(activeCategory)}`
         if (activeSub !== 'All') query += `&subcategory=eq.${encodeURIComponent(activeSub)}`
         if (searchQuery) query += `&name=ilike.*${encodeURIComponent(searchQuery)}*`
@@ -127,7 +128,7 @@ export default function ShopPage() {
       navigate(`/product/${product.id}`)
       return
     }
-    const finalPrice = state?.price ?? product.price
+    const finalPrice = state?.price ?? (product.sale_price && product.sale_price < product.price ? product.sale_price : product.price)
     const finalName = state?.label ? `${product.name} (${state.label})` : product.name
     const finalId = state?.label ? `${product.id}::${state.label}` : product.id
     addToCart({ id: finalId, name: finalName, price: finalPrice, image_url: product.image_url, stock: product.stock })
@@ -192,6 +193,11 @@ export default function ShopPage() {
                     )}
                     {/* Badges */}
                     <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+                      {product.sale_price && product.sale_price < product.price && (
+                        <span className="bg-primary text-primary-foreground text-xs px-2 py-1 font-semibold rounded">
+                          Sale
+                        </span>
+                      )}
                       {product.is_preorder && (
                         <span className="bg-black text-white text-xs px-2 py-1 font-semibold flex items-center gap-1 rounded">
                           <Clock className="w-3 h-3" /> Pre-Order
@@ -222,6 +228,11 @@ export default function ShopPage() {
                     ) : product.price_min && product.price_max ? (
                       <p className="text-foreground font-bold text-sm">
                         {format(product.price_min)} - {format(product.price_max)}
+                      </p>
+                    ) : product.sale_price && product.sale_price < product.price ? (
+                      <p className="flex items-center gap-2">
+                        <span className="text-foreground font-bold text-sm">{format(product.sale_price)}</span>
+                        <span className="text-muted-foreground text-xs line-through">{format(product.price)}</span>
                       </p>
                     ) : (
                       <p className="text-foreground font-bold text-sm">{format(product.price)}</p>
