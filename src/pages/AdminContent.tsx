@@ -30,6 +30,32 @@ interface SectionConfig {
 
 const SECTIONS: SectionConfig[] = [
   {
+    // FIX: Synced key signature perfectly with your frontend component
+    key: 'about_where_it_began',
+    label: 'Where It All Began (About Page)',
+    description: "Linda's origin story on the Chronicle / About page.",
+    hasImage: true,
+    bodyLabel: 'Story (separate paragraphs with blank lines)',
+    bodyPlaceholder: 'In 2018, Linda received a single beaded necklace...',
+    defaults: {
+      title: 'Where It All Began',
+      body: "In 2018, Linda received a single beaded necklace on her graduation day. It wasn't just a gift - it was a spark. That one bead carried the weight of centuries of African craftsmanship, the stories of hands that wove it, and the promise of something greater.\n\nFrom that moment, Linda began learning the art herself - studying under Maasai artisans, understanding the language of beads, colors, and patterns that had been passed down through generations.\n\nUshanga Chronicles was born from that passion. Every piece is handcrafted in Nairobi, Kenya, rooted in African heritage but designed for modern life. Each creation carries a story - not just of the artisan who made it, but of the person who wears it.\n\nToday, the Ushanga Tribe spans the globe. What started with one bead has become a thousand stories, and counting.",
+    },
+  },
+  {
+    // FIX: Synced key signature perfectly with your frontend component
+    key: 'about_the_craft',
+    label: 'The Craft (About Page)',
+    description: 'The craft section on the Chronicle / About page.',
+    hasImage: true,
+    bodyLabel: 'Story (separate paragraphs with blank lines)',
+    bodyPlaceholder: 'Every piece begins with intention...',
+    defaults: {
+      title: 'The Craft',
+      body: 'Every piece begins with intention. The beads are carefully selected - each color holding meaning, each pattern telling a different chapter.\n\nOur artisans work by hand, using techniques that have been refined over generations. There are no machines, no shortcuts. Just skilled hands, quality materials, and the patience to create something extraordinary.\n\nFrom sisal to leather, cowrie shells to glass beads - every material is sourced with care, ensuring that each piece is not just beautiful, but built to last.',
+    },
+  },
+  {
     key: 'the_chronicle_begins',
     label: 'The Chronicle Begins (Homepage)',
     description: 'The story section on the homepage about how Ushanga started.',
@@ -76,30 +102,6 @@ const SECTIONS: SectionConfig[] = [
     hasSubtitle: true,
     bodyLabel: 'Description',
     bodyPlaceholder: 'Handpicked favorites from our collection...',
-  },
-  {
-    key: 'about_where_it_began',
-    label: 'Where It All Began (About Page)',
-    description: "Linda's origin story on the Chronicle / About page.",
-    hasImage: true,
-    bodyLabel: 'Story (separate paragraphs with blank lines)',
-    bodyPlaceholder: 'In 2018, Linda received a single beaded necklace...',
-    defaults: {
-      title: 'Where It All Began',
-      body: "In 2018, Linda received a single beaded necklace on her graduation day. It wasn't just a gift - it was a spark. That one bead carried the weight of centuries of African craftsmanship, the stories of hands that wove it, and the promise of something greater.\n\nFrom that moment, Linda began learning the art herself - studying under Maasai artisans, understanding the language of beads, colors, and patterns that had been passed down through generations.\n\nUshanga Chronicles was born from that passion. Every piece is handcrafted in Nairobi, Kenya, rooted in African heritage but designed for modern life. Each creation carries a story - not just of the artisan who made it, but of the person who wears it.\n\nToday, the Ushanga Tribe spans the globe. What started with one bead has become a thousand stories, and counting.",
-    },
-  },
-  {
-    key: 'about_the_craft',
-    label: 'The Craft (About Page)',
-    description: 'The craft section on the Chronicle / About page.',
-    hasImage: true,
-    bodyLabel: 'Story (separate paragraphs with blank lines)',
-    bodyPlaceholder: 'Every piece begins with intention...',
-    defaults: {
-      title: 'The Craft',
-      body: 'Every piece begins with intention. The beads are carefully selected - each color holding meaning, each pattern telling a different chapter.\n\nOur artisans work by hand, using techniques that have been refined over generations. There are no machines, no shortcuts. Just skilled hands, quality materials, and the patience to create something extraordinary.\n\nFrom sisal to leather, cowrie shells to glass beads - every material is sourced with care, ensuring that each piece is not just beautiful, but built to last.',
-    },
   },
   {
     key: 'about_storyboard',
@@ -163,6 +165,9 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
   const [contentId, setContentId] = useState(initial?.id || null)
+  
+  // FIX: Track component instance timestamp locally to prevent input flickering on key stroke entries
+  const [imageTimestamp, setImageTimestamp] = useState(Date.now())
 
   const handleSave = async () => {
     setSaving(true)
@@ -193,7 +198,9 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
     const { error } = await supabase.storage.from('product-images').upload(path, file)
     if (error) { toast.error('Upload failed'); setUploading(false); return }
     const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(path)
+    
     setImageUrl(urlData.publicUrl)
+    setImageTimestamp(Date.now()) // Update timestamp specifically upon successful asset transfer
     setUploading(false)
     toast.success('Image uploaded')
   }
@@ -209,7 +216,7 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
       </button>
       {open && (
         <div className="p-4 pt-0 space-y-4 border-t border-border">
-          <div>
+          <div className="mt-4">
             <label className="block text-sm font-medium text-foreground mb-1">Title</label>
             <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Section title" />
           </div>
@@ -226,7 +233,13 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
           {config.hasImage && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Image</label>
-              {imageUrl && <img src={`${imageUrl}?t=${Date.now()}`} alt="Preview" className="w-32 h-32 object-cover rounded mb-2" />}
+              {imageUrl && (
+                <img 
+                  src={imageUrl.includes('?') ? `${imageUrl}&t=${imageTimestamp}` : `${imageUrl}?t=${imageTimestamp}`} 
+                  alt="Preview" 
+                  className="w-32 h-32 object-cover rounded mb-2" 
+                />
+              )}
               <label className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded cursor-pointer hover:bg-accent text-sm">
                 <Upload className="w-4 h-4" />
                 {uploading ? 'Uploading...' : 'Upload Image'}
@@ -261,10 +274,10 @@ export default function AdminContent() {
       })
   }, [])
 
-  if (loading) return <p className="text-muted-foreground">Loading...</p>
+  if (loading) return <p className="text-muted-foreground p-4">Loading content sections...</p>
 
   return (
-    <div>
+    <div className="p-4 md:p-6">
       <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">Site Content</h1>
       <p className="text-muted-foreground mb-8">Edit text and images for different sections of your website.</p>
       <div className="max-w-2xl space-y-4">
