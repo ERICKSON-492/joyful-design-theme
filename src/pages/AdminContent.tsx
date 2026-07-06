@@ -1,3 +1,4 @@
+// app/admin/content/page.tsx (updated version)
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { Save, Upload, ChevronDown, ChevronUp } from 'lucide-react'
+import { Save, Upload, ChevronDown, ChevronUp, X, Loader2 } from 'lucide-react'
 
 interface SiteContent {
   id: string
@@ -163,12 +164,22 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
     }
     if (contentId) {
       const { error } = await supabase.from('site_content').update(payload).eq('id', contentId)
-      if (error) toast.error('Failed to save changes')
-      else toast.success(`${config.label} successfully updated!`)
+      if (error) {
+        toast.error('Failed to save changes')
+        console.error('Update error:', error)
+      } else {
+        toast.success(`${config.label} successfully updated!`)
+        setImageTimestamp(Date.now()) // Refresh image cache
+      }
     } else {
       const { data, error } = await supabase.from('site_content').insert({ section_key: config.key, ...payload }).select('id').single()
-      if (error) toast.error('Failed to initialize content section')
-      else { toast.success(`${config.label} successfully created!`); setContentId(data.id) }
+      if (error) {
+        toast.error('Failed to initialize content section')
+        console.error('Insert error:', error)
+      } else {
+        toast.success(`${config.label} successfully created!`)
+        setContentId(data.id)
+      }
     }
     setSaving(false)
   }
@@ -176,17 +187,85 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    // Validate file
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB')
+      return
+    }
+
     setUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `site-content/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) { toast.error('Image transfer failed'); setUploading(false); return }
-    const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(path)
-    
-    setImageUrl(urlData.publicUrl)
-    setImageTimestamp(Date.now())
-    setUploading(false)
-    toast.success('New layout asset uploaded')
+    try {
+      // Create a unique filename with section key
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${config.key}-${Date.now()}.${fileExt}`
+      const filePath = `site-images/${fileName}`
+
+      // Upload to site_images bucket
+      const { error: uploadError } = await supabase.storage
+        .from('site_images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        toast.error('Image upload failed. Please try again.')
+        return
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('site_images')
+        .getPublicUrl(filePath)
+
+      setImageUrl(publicUrl)
+      setImageTimestamp(Date.now())
+      toast.success('Image uploaded successfully!')
+    } catch (error) {
+      console.error('Error:', error)
+      toast.error('An error occurred during upload')
+    } finally {
+      setUploading(false)
+      if (e.target) e.target.value = '' // Reset file input
+    }
+  }
+
+  const handleRemoveImage = async () => {
+    if (!imageUrl) return
+    if (!confirm('Are you sure you want to remove this image?')) return
+
+    try {
+      // Extract file path from URL
+      const url = new URL(imageUrl)
+      const pathParts = url.pathname.split('/')
+      const bucketIndex = pathParts.indexOf('site_images')
+      if (bucketIndex !== -1) {
+        const filePath = pathParts.slice(bucketIndex + 1).join('/')
+        
+        // Delete from storage
+        const { error: deleteError } = await supabase.storage
+          .from('site_images')
+          .remove([filePath])
+        
+        if (deleteError) {
+          console.error('Delete error:', deleteError)
+          toast.error('Failed to delete image from storage')
+        }
+      }
+
+      setImageUrl('')
+      setImageTimestamp(Date.now())
+      toast.success('Image removed successfully')
+    } catch (error) {
+      console.error('Error:', error)
+      toast.error('Failed to remove image')
+    }
   }
 
   return (
@@ -217,23 +296,71 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
           {config.hasImage && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Image Asset</label>
+              
+              {/* Image Preview with Remove Button */}
               {imageUrl && (
-                <img 
-                  src={imageUrl.includes('?') ? `${imageUrl}&t=${imageTimestamp}` : `${imageUrl}?t=${imageTimestamp}`} 
-                  alt="Preview" 
-                  className="w-32 h-32 object-cover rounded mb-2 border border-border" 
-                />
+                <div className="relative inline-block mb-2">
+                  <img 
+                    src={imageUrl.includes('?') ? `${imageUrl}&t=${imageTimestamp}` : `${imageUrl}?t=${imageTimestamp}`} 
+                    alt="Preview" 
+                    className="w-32 h-32 object-cover rounded border border-border" 
+                  />
+                  <button
+                    onClick={handleRemoveImage}
+                    className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                    disabled={uploading}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               )}
-              <label className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded cursor-pointer hover:bg-accent text-sm">
-                <Upload className="w-4 h-4" />
-                {uploading ? 'Uploading asset...' : 'Upload New Image'}
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
-              </label>
-              <p className="text-xs text-muted-foreground mt-1">Leave empty to use local system defaults</p>
+              
+              {/* Upload Button */}
+              <div className="flex items-center gap-4">
+                <label className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded cursor-pointer hover:bg-accent text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      {imageUrl ? 'Replace Image' : 'Upload Image'}
+                    </>
+                  )}
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={handleImageUpload} 
+                    disabled={uploading} 
+                  />
+                </label>
+                {uploading && <span className="text-sm text-muted-foreground">Processing image...</span>}
+              </div>
+              
+              <p className="text-xs text-muted-foreground mt-1">
+                {imageUrl ? 'Custom image uploaded' : 'Leave empty to use local system defaults'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Supported formats: JPG, PNG, WEBP. Max size: 5MB
+              </p>
             </div>
           )}
+          
           <Button onClick={handleSave} disabled={saving} className="gap-2">
-            <Save className="w-4 h-4" /> {saving ? 'Saving changes...' : 'Save Changes'}
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes
+              </>
+            )}
           </Button>
         </div>
       )}
@@ -250,21 +377,33 @@ export default function AdminContent() {
       .from('site_content')
       .select('*')
       .in('section_key', SECTIONS.map(s => s.key))
-      .then(({ data }) => {
-        const map: Record<string, SiteContent> = {}
-        data?.forEach(row => { map[row.section_key] = row })
-        setContentMap(map)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Error fetching content:', error)
+          toast.error('Failed to load content')
+        } else {
+          const map: Record<string, SiteContent> = {}
+          data?.forEach(row => { map[row.section_key] = row })
+          setContentMap(map)
+        }
         setLoading(false)
       })
   }, [])
 
-  if (loading) return <p className="text-muted-foreground p-6">Streaming database connection definitions...</p>
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-[400px]">
+      <div className="flex items-center gap-3 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin" />
+        <span>Loading content...</span>
+      </div>
+    </div>
+  )
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-4 md:p-6 max-w-4xl">
       <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">Site Content</h1>
       <p className="text-muted-foreground mb-8">Edit text and images for different sections of your website.</p>
-      <div className="max-w-2xl space-y-4">
+      <div className="space-y-4">
         {SECTIONS.map(config => (
           <SectionEditor key={config.key} config={config} initial={contentMap[config.key] || null} />
         ))}
