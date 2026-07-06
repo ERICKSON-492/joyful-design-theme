@@ -30,10 +30,9 @@ interface SectionConfig {
 
 const SECTIONS: SectionConfig[] = [
   {
-    // FIX: Synced key signature perfectly with your frontend component
     key: 'about_where_it_began',
-    label: 'Where It All Began (About Page)',
-    description: "Linda's origin story on the Chronicle / About page.",
+    label: "Where It All Began (Linda's Story)",
+    description: "Linda's origin story shown on The Chronicle page.",
     hasImage: true,
     bodyLabel: 'Story (separate paragraphs with blank lines)',
     bodyPlaceholder: 'In 2018, Linda received a single beaded necklace...',
@@ -43,10 +42,9 @@ const SECTIONS: SectionConfig[] = [
     },
   },
   {
-    // FIX: Synced key signature perfectly with your frontend component
     key: 'about_the_craft',
-    label: 'The Craft (About Page)',
-    description: 'The craft section on the Chronicle / About page.',
+    label: 'The Craft (About Section)',
+    description: 'The description of artisan methods shown on The Chronicle page.',
     hasImage: true,
     bodyLabel: 'Story (separate paragraphs with blank lines)',
     bodyPlaceholder: 'Every piece begins with intention...',
@@ -57,15 +55,11 @@ const SECTIONS: SectionConfig[] = [
   },
   {
     key: 'the_chronicle_begins',
-    label: 'The Chronicle Begins (Homepage)',
-    description: 'The story section on the homepage about how Ushanga started.',
+    label: 'The Chronicle Begins (Homepage Snapshot)',
+    description: 'The story teaser segment appearing on the home landing page.',
     hasImage: true,
-    bodyLabel: 'Story (separate paragraphs with blank lines)',
-    bodyPlaceholder: 'Write the chronicle story...',
-    defaults: {
-      title: 'The Chronicle Begins',
-      body: 'It started with one bead. A single beaded necklace, gifted to Linda on her graduation day in 2018. That moment sparked something - a deep connection to the craft, the culture, and the stories each bead carries.\n\nWhat began as a passion project grew into Ushanga Chronicles - a brand rooted in African heritage, handcrafted by skilled artisans, and worn by the Ushanga Tribe across the world.',
-    },
+    bodyLabel: 'Story paragraphs',
+    bodyPlaceholder: 'Write the homepage snapshot story...',
   },
   {
     key: 'custom_order_teaser',
@@ -74,10 +68,6 @@ const SECTIONS: SectionConfig[] = [
     hasSubtitle: true,
     bodyLabel: 'Description',
     bodyPlaceholder: 'Every piece tells your story...',
-    defaults: {
-      title: 'Something made just for you',
-      body: 'Every piece tells your story. Commission a custom creation from Linda. From imagination to your hands - handcrafted with intention.',
-    },
   },
   {
     key: 'homepage_intro',
@@ -105,15 +95,11 @@ const SECTIONS: SectionConfig[] = [
   },
   {
     key: 'about_storyboard',
-    label: 'Storyboard Showcase (About Page)',
-    description: 'The gallery photo strip rendering beneath the process timeline.',
+    label: 'Storyboard Showcase (About Page Behind-the-Scenes)',
+    description: 'The media banner running directly below your process workflow.',
     hasImage: true,
     bodyLabel: 'Caption text',
     bodyPlaceholder: 'Enter a caption for this layout graphic...',
-    defaults: {
-      title: 'Storyboard Showcase',
-      body: 'Diverse scenarios, characters, and styles - all generated through our AI pipeline',
-    },
   },
   {
     key: 'footer_brand',
@@ -165,8 +151,6 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
   const [contentId, setContentId] = useState(initial?.id || null)
-  
-  // FIX: Track component instance timestamp locally to prevent input flickering on key stroke entries
   const [imageTimestamp, setImageTimestamp] = useState(Date.now())
 
   const handleSave = async () => {
@@ -179,12 +163,12 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
     }
     if (contentId) {
       const { error } = await supabase.from('site_content').update(payload).eq('id', contentId)
-      if (error) toast.error('Failed to save')
-      else toast.success(`${config.label} updated!`)
+      if (error) toast.error('Failed to save changes')
+      else toast.success(`${config.label} successfully updated!`)
     } else {
       const { data, error } = await supabase.from('site_content').insert({ section_key: config.key, ...payload }).select('id').single()
-      if (error) toast.error('Failed to save')
-      else { toast.success(`${config.label} created!`); setContentId(data.id) }
+      if (error) toast.error('Failed to initialize content section')
+      else { toast.success(`${config.label} successfully created!`); setContentId(data.id) }
     }
     setSaving(false)
   }
@@ -196,13 +180,13 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
     const ext = file.name.split('.').pop()
     const path = `site-content/${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) { toast.error('Upload failed'); setUploading(false); return }
+    if (error) { toast.error('Image transfer failed'); setUploading(false); return }
     const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(path)
     
     setImageUrl(urlData.publicUrl)
-    setImageTimestamp(Date.now()) // Update timestamp specifically upon successful asset transfer
+    setImageTimestamp(Date.now())
     setUploading(false)
-    toast.success('Image uploaded')
+    toast.success('New layout asset uploaded')
   }
 
   return (
@@ -232,24 +216,24 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
           </div>
           {config.hasImage && (
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Image</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Image Asset</label>
               {imageUrl && (
                 <img 
                   src={imageUrl.includes('?') ? `${imageUrl}&t=${imageTimestamp}` : `${imageUrl}?t=${imageTimestamp}`} 
                   alt="Preview" 
-                  className="w-32 h-32 object-cover rounded mb-2" 
+                  className="w-32 h-32 object-cover rounded mb-2 border border-border" 
                 />
               )}
               <label className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded cursor-pointer hover:bg-accent text-sm">
                 <Upload className="w-4 h-4" />
-                {uploading ? 'Uploading...' : 'Upload Image'}
+                {uploading ? 'Uploading asset...' : 'Upload New Image'}
                 <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
               </label>
-              <p className="text-xs text-muted-foreground mt-1">Leave empty to use default photo</p>
+              <p className="text-xs text-muted-foreground mt-1">Leave empty to use local system defaults</p>
             </div>
           )}
           <Button onClick={handleSave} disabled={saving} className="gap-2">
-            <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}
+            <Save className="w-4 h-4" /> {saving ? 'Saving changes...' : 'Save Changes'}
           </Button>
         </div>
       )}
@@ -274,7 +258,7 @@ export default function AdminContent() {
       })
   }, [])
 
-  if (loading) return <p className="text-muted-foreground p-4">Loading content sections...</p>
+  if (loading) return <p className="text-muted-foreground p-6">Streaming database connection definitions...</p>
 
   return (
     <div className="p-4 md:p-6">
