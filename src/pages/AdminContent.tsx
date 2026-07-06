@@ -1,4 +1,3 @@
-// app/admin/content/page.tsx (updated version)
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -7,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { Save, Upload, ChevronDown, ChevronUp, X, Loader2 } from 'lucide-react'
+import { Save, Upload, ChevronDown, ChevronUp, X, Loader2, Image as ImageIcon } from 'lucide-react'
 
 interface SiteContent {
   id: string
@@ -153,91 +152,130 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
   const [open, setOpen] = useState(false)
   const [contentId, setContentId] = useState(initial?.id || null)
   const [imageTimestamp, setImageTimestamp] = useState(Date.now())
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  // Create preview URL when file is selected
+  useEffect(() => {
+    if (selectedFile) {
+      const url = URL.createObjectURL(selectedFile)
+      setPreviewUrl(url)
+      return () => URL.revokeObjectURL(url)
+    }
+    setPreviewUrl(null)
+  }, [selectedFile])
 
   const handleSave = async () => {
     setSaving(true)
-    const payload = {
-      title,
-      body,
-      subtitle: config.hasSubtitle ? subtitle || null : null,
-      image_url: config.hasImage && imageUrl ? imageUrl : null,
-    }
-    if (contentId) {
-      const { error } = await supabase.from('site_content').update(payload).eq('id', contentId)
-      if (error) {
-        toast.error('Failed to save changes')
-        console.error('Update error:', error)
-      } else {
-        toast.success(`${config.label} successfully updated!`)
-        setImageTimestamp(Date.now()) // Refresh image cache
+    
+    try {
+      let finalImageUrl = imageUrl
+
+      // If there's a selected file, upload it first
+      if (selectedFile) {
+        setUploading(true)
+        const fileExt = selectedFile.name.split('.').pop()
+        const fileName = `${config.key}-${Date.now()}.${fileExt}`
+        const filePath = `site-images/${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('site_images')
+          .upload(filePath, selectedFile, {
+            cacheControl: '3600',
+            upsert: false
+          })
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError)
+          toast.error('Failed to upload image')
+          setSaving(false)
+          setUploading(false)
+          return
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('site_images')
+          .getPublicUrl(filePath)
+
+        finalImageUrl = publicUrl
+        setImageUrl(finalImageUrl)
+        setSelectedFile(null)
+        setPreviewUrl(null)
+        setImageTimestamp(Date.now())
+        toast.success('Image uploaded successfully')
       }
-    } else {
-      const { data, error } = await supabase.from('site_content').insert({ section_key: config.key, ...payload }).select('id').single()
-      if (error) {
-        toast.error('Failed to initialize content section')
-        console.error('Insert error:', error)
-      } else {
-        toast.success(`${config.label} successfully created!`)
-        setContentId(data.id)
+
+      const payload = {
+        title,
+        body,
+        subtitle: config.hasSubtitle ? subtitle || null : null,
+        image_url: config.hasImage && finalImageUrl ? finalImageUrl : null,
       }
+
+      if (contentId) {
+        const { error } = await supabase.from('site_content').update(payload).eq('id', contentId)
+        if (error) {
+          toast.error('Failed to save changes')
+          console.error('Update error:', error)
+        } else {
+          toast.success(`${config.label} successfully updated!`)
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('site_content')
+          .insert({ section_key: config.key, ...payload })
+          .select('id')
+          .single()
+        
+        if (error) {
+          toast.error('Failed to initialize content section')
+          console.error('Insert error:', error)
+        } else {
+          toast.success(`${config.label} successfully created!`)
+          setContentId(data.id)
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      toast.error('An error occurred')
+    } finally {
+      setSaving(false)
+      setUploading(false)
     }
-    setSaving(false)
   }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     // Validate file
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file')
+      e.target.value = ''
       return
     }
     if (file.size > 5 * 1024 * 1024) {
       toast.error('Image size should be less than 5MB')
+      e.target.value = ''
       return
     }
 
-    setUploading(true)
-    try {
-      // Create a unique filename with section key
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${config.key}-${Date.now()}.${fileExt}`
-      const filePath = `site-images/${fileName}`
-
-      // Upload to site_images bucket
-      const { error: uploadError } = await supabase.storage
-        .from('site_images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        })
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError)
-        toast.error('Image upload failed. Please try again.')
-        return
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('site_images')
-        .getPublicUrl(filePath)
-
-      setImageUrl(publicUrl)
-      setImageTimestamp(Date.now())
-      toast.success('Image uploaded successfully!')
-    } catch (error) {
-      console.error('Error:', error)
-      toast.error('An error occurred during upload')
-    } finally {
-      setUploading(false)
-      if (e.target) e.target.value = '' // Reset file input
-    }
+    setSelectedFile(file)
+    toast.success(`Selected: ${file.name}`)
   }
 
   const handleRemoveImage = async () => {
     if (!imageUrl) return
+    
+    // If there's a selected file, just clear it
+    if (selectedFile) {
+      setSelectedFile(null)
+      setPreviewUrl(null)
+      toast.success('Image selection cleared')
+      return
+    }
+
+    // Otherwise remove from storage
     if (!confirm('Are you sure you want to remove this image?')) return
 
     try {
@@ -248,7 +286,6 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
       if (bucketIndex !== -1) {
         const filePath = pathParts.slice(bucketIndex + 1).join('/')
         
-        // Delete from storage
         const { error: deleteError } = await supabase.storage
           .from('site_images')
           .remove([filePath])
@@ -259,65 +296,107 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
         }
       }
 
-      setImageUrl('')
-      setImageTimestamp(Date.now())
-      toast.success('Image removed successfully')
+      // Update database
+      const { error: updateError } = await supabase
+        .from('site_content')
+        .update({ image_url: null })
+        .eq('id', contentId)
+
+      if (updateError) {
+        toast.error('Failed to remove image from content')
+      } else {
+        setImageUrl('')
+        setImageTimestamp(Date.now())
+        toast.success('Image removed successfully')
+      }
     } catch (error) {
       console.error('Error:', error)
       toast.error('Failed to remove image')
     }
   }
 
+  const displayImage = previewUrl || imageUrl
+
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-4 hover:bg-accent/50 transition-colors text-left">
+      <button 
+        onClick={() => setOpen(!open)} 
+        className="w-full flex items-center justify-between p-4 hover:bg-accent/50 transition-colors text-left"
+      >
         <div>
           <h3 className="font-display text-lg font-semibold text-foreground">{config.label}</h3>
           <p className="text-xs text-muted-foreground">{config.description}</p>
         </div>
         {open ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
       </button>
+      
       {open && (
         <div className="p-4 pt-0 space-y-4 border-t border-border">
           <div className="mt-4">
             <label className="block text-sm font-medium text-foreground mb-1">Title</label>
-            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Section title" />
+            <Input 
+              value={title} 
+              onChange={e => setTitle(e.target.value)} 
+              placeholder="Section title" 
+            />
           </div>
+          
           {config.hasSubtitle && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Subtitle</label>
-              <Input value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="Optional subtitle" />
+              <Input 
+                value={subtitle} 
+                onChange={e => setSubtitle(e.target.value)} 
+                placeholder="Optional subtitle" 
+              />
             </div>
           )}
+          
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">{config.bodyLabel || 'Body'}</label>
-            <Textarea value={body} onChange={e => setBody(e.target.value)} rows={6} placeholder={config.bodyPlaceholder} />
+            <label className="block text-sm font-medium text-foreground mb-1">
+              {config.bodyLabel || 'Body'}
+            </label>
+            <Textarea 
+              value={body} 
+              onChange={e => setBody(e.target.value)} 
+              rows={6} 
+              placeholder={config.bodyPlaceholder} 
+            />
           </div>
+          
           {config.hasImage && (
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Image Asset</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Image
+              </label>
               
-              {/* Image Preview with Remove Button */}
-              {imageUrl && (
-                <div className="relative inline-block mb-2">
+              {/* Image Preview */}
+              {displayImage && (
+                <div className="relative inline-block mb-3">
                   <img 
-                    src={imageUrl.includes('?') ? `${imageUrl}&t=${imageTimestamp}` : `${imageUrl}?t=${imageTimestamp}`} 
+                    src={displayImage.includes('?') ? displayImage : `${displayImage}?t=${imageTimestamp}`} 
                     alt="Preview" 
-                    className="w-32 h-32 object-cover rounded border border-border" 
+                    className="w-40 h-40 object-cover rounded-lg border border-border shadow-sm" 
                   />
                   <button
                     onClick={handleRemoveImage}
                     className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                     disabled={uploading}
+                    type="button"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
               
-              {/* Upload Button */}
-              <div className="flex items-center gap-4">
-                <label className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded cursor-pointer hover:bg-accent text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              {/* File Upload */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <label className={`
+                  inline-flex items-center gap-2 px-4 py-2.5 border-2 border-dashed rounded-lg 
+                  cursor-pointer hover:bg-accent/50 transition-all text-sm font-medium
+                  ${selectedFile ? 'border-primary bg-primary/5' : 'border-border'}
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                `}>
                   {uploading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -326,42 +405,80 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
                   ) : (
                     <>
                       <Upload className="w-4 h-4" />
-                      {imageUrl ? 'Replace Image' : 'Upload Image'}
+                      {selectedFile ? 'Change Image' : displayImage ? 'Replace Image' : 'Choose Image'}
                     </>
                   )}
                   <input 
                     type="file" 
                     accept="image/*" 
                     className="hidden" 
-                    onChange={handleImageUpload} 
+                    onChange={handleFileSelect} 
                     disabled={uploading} 
                   />
                 </label>
-                {uploading && <span className="text-sm text-muted-foreground">Processing image...</span>}
+                
+                {selectedFile && (
+                  <span className="text-sm text-muted-foreground flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4" />
+                    {selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)
+                  </span>
+                )}
               </div>
               
-              <p className="text-xs text-muted-foreground mt-1">
-                {imageUrl ? 'Custom image uploaded' : 'Leave empty to use local system defaults'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Supported formats: JPG, PNG, WEBP. Max size: 5MB
-              </p>
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {selectedFile ? 'Image will be uploaded when you save' : 'Upload a new image or select from your computer'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Supported: JPG, PNG, WEBP • Max: 5MB
+                </p>
+                {imageUrl && !selectedFile && (
+                  <p className="text-xs text-green-600">
+                    ✓ Current image uploaded
+                  </p>
+                )}
+              </div>
             </div>
           )}
           
-          <Button onClick={handleSave} disabled={saving} className="gap-2">
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Save Changes
-              </>
+          <div className="flex items-center gap-4 pt-2">
+            <Button 
+              onClick={handleSave} 
+              disabled={saving || uploading} 
+              className="gap-2 min-w-[120px]"
+            >
+              {saving || uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {uploading ? 'Uploading...' : 'Saving...'}
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+            
+            {selectedFile && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSelectedFile(null)
+                  setPreviewUrl(null)
+                }}
+                disabled={uploading}
+              >
+                Cancel Upload
+              </Button>
             )}
-          </Button>
+          </div>
+          
+          {selectedFile && (
+            <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+              ⚠️ You have a new image selected. Click "Save Changes" to upload it.
+            </div>
+          )}
         </div>
       )}
     </div>
