@@ -433,6 +433,8 @@ export type Database = {
           customer_name: string | null
           id: string
           items: Json
+          latitude: number | null
+          longitude: number | null
           mpesa_checkout_request_id: string | null
           mpesa_receipt_number: string | null
           phone: string
@@ -448,6 +450,8 @@ export type Database = {
           customer_name?: string | null
           id?: string
           items?: Json
+          latitude?: number | null
+          longitude?: number | null
           mpesa_checkout_request_id?: string | null
           mpesa_receipt_number?: string | null
           phone: string
@@ -463,6 +467,8 @@ export type Database = {
           customer_name?: string | null
           id?: string
           items?: Json
+          latitude?: number | null
+          longitude?: number | null
           mpesa_checkout_request_id?: string | null
           mpesa_receipt_number?: string | null
           phone?: string
@@ -624,6 +630,7 @@ export type Database = {
           price: number
           price_max: number | null
           price_min: number | null
+          sale_price: number | null
           stock: number
           subcategory: string | null
           updated_at: string
@@ -643,6 +650,7 @@ export type Database = {
           price: number
           price_max?: number | null
           price_min?: number | null
+          sale_price?: number | null
           stock?: number
           subcategory?: string | null
           updated_at?: string
@@ -662,9 +670,49 @@ export type Database = {
           price?: number
           price_max?: number | null
           price_min?: number | null
+          sale_price?: number | null
           stock?: number
           subcategory?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      coupons: {
+        Row: {
+          id: string
+          code: string
+          discount_type: string
+          discount_value: number
+          min_order_amount: number | null
+          usage_limit: number | null
+          times_used: number
+          is_active: boolean
+          expires_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          discount_type: string
+          discount_value: number
+          min_order_amount?: number | null
+          usage_limit?: number | null
+          times_used?: number
+          is_active?: boolean
+          expires_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          discount_type?: string
+          discount_value?: number
+          min_order_amount?: number | null
+          usage_limit?: number | null
+          times_used?: number
+          is_active?: boolean
+          expires_at?: string | null
+          created_at?: string
         }
         Relationships: []
       }
@@ -943,6 +991,20 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      validate_coupon: {
+        Args: { p_code: string; p_order_amount: number }
+        Returns: {
+          valid: boolean
+          message: string
+          coupon_id: string
+          discount_type: string
+          discount_value: number
+        }[]
+      }
+      redeem_coupon: {
+        Args: { p_coupon_id: string }
+        Returns: undefined
       }
     }
     Enums: {
