@@ -36,8 +36,7 @@ export default function TheChronicle() {
       .select('section_key, title, body, image_url')
       .in('section_key', ['about_where_it_began', 'about_the_craft'])
       .then(({ data }) => {
-        // Set a fresh timestamp for this specific data fetch instance
-        setTimestamp(Date.now())
+        setTimestamp(Date.now()) // Stamp data fetch instance to safely reset active layout assets
         
         data?.forEach(row => {
           if (row.section_key === 'about_where_it_began') {
@@ -61,7 +60,6 @@ export default function TheChronicle() {
   const renderParagraphs = (text: string) =>
     text.split('\n\n').filter(Boolean).map((p, i) => <p key={i}>{p}</p>)
 
-  // Helper utility to apply cache busting parameters safely to storage URLs
   const getImageUrl = (url: string | null, fallbackSrc: string) => {
     if (!url) return fallbackSrc
     return url.includes('?') ? `${url}&t=${timestamp}` : `${url}?t=${timestamp}`
