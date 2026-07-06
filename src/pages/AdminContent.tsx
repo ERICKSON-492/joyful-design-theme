@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -78,13 +80,13 @@ const SECTIONS: SectionConfig[] = [
   {
     key: 'about_where_it_began',
     label: 'Where It All Began (About Page)',
-    description: 'Linda\'s origin story on the Chronicle / About page.',
+    description: "Linda's origin story on the Chronicle / About page.",
     hasImage: true,
     bodyLabel: 'Story (separate paragraphs with blank lines)',
     bodyPlaceholder: 'In 2018, Linda received a single beaded necklace...',
     defaults: {
       title: 'Where It All Began',
-      body: 'In 2018, Linda received a single beaded necklace on her graduation day. It wasn\'t just a gift - it was a spark. That one bead carried the weight of centuries of African craftsmanship, the stories of hands that wove it, and the promise of something greater.\n\nFrom that moment, Linda began learning the art herself - studying under Maasai artisans, understanding the language of beads, colors, and patterns that had been passed down through generations.\n\nUshanga Chronicles was born from that passion. Every piece is handcrafted in Nairobi, Kenya, rooted in African heritage but designed for modern life. Each creation carries a story - not just of the artisan who made it, but of the person who wears it.\n\nToday, the Ushanga Tribe spans the globe. What started with one bead has become a thousand stories, and counting.',
+      body: "In 2018, Linda received a single beaded necklace on her graduation day. It wasn't just a gift - it was a spark. That one bead carried the weight of centuries of African craftsmanship, the stories of hands that wove it, and the promise of something greater.\n\nFrom that moment, Linda began learning the art herself - studying under Maasai artisans, understanding the language of beads, colors, and patterns that had been passed down through generations.\n\nUshanga Chronicles was born from that passion. Every piece is handcrafted in Nairobi, Kenya, rooted in African heritage but designed for modern life. Each creation carries a story - not just of the artisan who made it, but of the person who wears it.\n\nToday, the Ushanga Tribe spans the globe. What started with one bead has become a thousand stories, and counting.",
     },
   },
   {
@@ -97,6 +99,18 @@ const SECTIONS: SectionConfig[] = [
     defaults: {
       title: 'The Craft',
       body: 'Every piece begins with intention. The beads are carefully selected - each color holding meaning, each pattern telling a different chapter.\n\nOur artisans work by hand, using techniques that have been refined over generations. There are no machines, no shortcuts. Just skilled hands, quality materials, and the patience to create something extraordinary.\n\nFrom sisal to leather, cowrie shells to glass beads - every material is sourced with care, ensuring that each piece is not just beautiful, but built to last.',
+    },
+  },
+  {
+    key: 'about_storyboard',
+    label: 'Storyboard Showcase (About Page)',
+    description: 'The gallery photo strip rendering beneath the process timeline.',
+    hasImage: true,
+    bodyLabel: 'Caption text',
+    bodyPlaceholder: 'Enter a caption for this layout graphic...',
+    defaults: {
+      title: 'Storyboard Showcase',
+      body: 'Diverse scenarios, characters, and styles - all generated through our AI pipeline',
     },
   },
   {
