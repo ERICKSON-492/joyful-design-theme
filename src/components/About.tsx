@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/integrations/supabase/client'
 
+// Force Next.js to treat this component route dynamically on the server
+export const revalidate = 0
+
 export function About() {
   const [activeFrame, setActiveFrame] = useState(-1)
   const [animationStarted, setAnimationStarted] = useState(false)
@@ -56,7 +59,10 @@ export function About() {
         .eq('section_key', 'about_storyboard')
         .maybeSingle()
 
-      if (data?.image_url) setStoryboardUrl(data.image_url)
+      if (data?.image_url) {
+        // Appending a timestamp bypasses CDN layer caching for newly uploaded images
+        setStoryboardUrl(`${data.image_url}?t=${Date.now()}`)
+      }
       if (data?.body) setStoryboardCaption(data.body)
     }
 
@@ -294,7 +300,7 @@ export function About() {
               {storyboardUrl ? (
                 <Image 
                   src={storyboardUrl}
-                  alt="Collection of AI-generated video content thumbnails showcasing dynamic dashboard upload"
+                  alt="Collection of AI-generated video content thumbnails"
                   className="w-full h-auto rounded-xl"
                   width={1152}
                   height={648}
