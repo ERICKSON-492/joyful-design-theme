@@ -14,8 +14,8 @@ const textContainerVariants = {
 
 const textItemVariants = {
   hidden: { opacity: 0, y: 28 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] } },
-  exit: { opacity: 0, y: -14, transition: { duration: 0.3, ease: 'easeIn' } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] as const } },
+  exit: { opacity: 0, y: -14, transition: { duration: 0.3, ease: 'easeIn' as const } },
 }
 
 // ==========================================
@@ -41,54 +41,103 @@ interface Slide {
 }
 
 const localSlides: Slide[] = [
+
   {
+
     id: 'hero-tribe',
+
     image_url: heroTribeImg,
+
     title: 'USHANGA CHRONICLES',
+
     subtitle: 'One bead. A thousand stories.',
+
     cta_text: 'Explore the Tribe',
+
     cta_link: '/shop', // Links to the full shop catalog
+
   },
+
   {
+
     id: 'hero-jewelry',
+
     image_url: heroJewelryImg,
+
     title: 'HERITAGE INSPIRED',
+
     subtitle: 'Handcrafted African jewelry.',
+
     cta_text: 'Shop Collection',
+
     cta_link: '/shop?cat=wear-it', // FIXED: Points to jewelry category
+
   },
+
   {
+
     id: 'hero-decor',
+
     image_url: heroDecorImg,
+
     title: 'NAIROBI ARTISANS',
+
     subtitle: 'Stunning home decor and pet accessories.',
+
     cta_text: 'View Decor',
+
     cta_link: '/shop?cat=live-with-it', // FIXED: Points to pet category (verify if it matches your db tag)
+
   },
+
   {
+
     id: 'hero-variant3',
+
     image_url: variant3,
+
     title: 'CRAFTED WITH PRIDE',
+
     subtitle: 'Every piece tells a story.',
+
     cta_text: 'Discover More',
+
     cta_link: '/shop',
+
   },
+
   {
+
     id: 'hero-variant4',
+
     image_url: variant4,
+
     title: 'TIMELESS TRADITIONS',
+
     subtitle: 'Where culture meets craft.',
+
     cta_text: 'Shop the Look',
+
     cta_link: '/shop?cat=wear-it', // FIXED: Points to jewelry category
+
   },
+
   {
+
     id: 'hero-variant5',
+
     image_url: variant5,
+
     title: 'MADE FOR EVERY HOME',
+
     subtitle: 'Bring artisan beauty indoors.',
+
     cta_text: 'See Collection',
+
     cta_link: '/shop?cat=live-with-it', // FIXED: Points to home decor category (verify query value)
+
   },
+
 ]
 export function HeroSection() {
   const [current, setCurrent] = useState(0)
