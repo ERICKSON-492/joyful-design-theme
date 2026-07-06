@@ -39,19 +39,37 @@ export default function TheChronicle() {
   const [timestamp, setTimestamp] = useState(Date.now())
 
   useEffect(() => {
+    let isMounted = true
+    let timeoutId: NodeJS.Timeout
+
     const fetchContent = async () => {
       try {
         setLoading(true)
         setError(null)
         
+        // Set a timeout to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            setLoading(false)
+            setError('Loading took too long. Showing fallback content.')
+            console.warn('Supabase request timed out, using fallback content')
+          }
+        }, 5000) // 5 second timeout
+
         const { data, error: fetchError } = await supabase
           .from('site_content')
           .select('section_key, title, body, image_url')
           .in('section_key', ['about_where_it_began', 'about_the_craft'])
 
+        // Clear timeout since we got a response
+        clearTimeout(timeoutId)
+
+        if (!isMounted) return
+
         if (fetchError) {
           console.error('Error fetching content:', fetchError)
           setError('Failed to load content. Using fallback content.')
+          setLoading(false)
           return
         }
 
@@ -79,13 +97,25 @@ export default function TheChronicle() {
         }
       } catch (err) {
         console.error('Unexpected error:', err)
-        setError('An unexpected error occurred. Using fallback content.')
+        if (isMounted) {
+          setError('An unexpected error occurred. Using fallback content.')
+        }
       } finally {
-        setLoading(false)
+        if (isMounted) {
+          setLoading(false)
+        }
       }
     }
 
     fetchContent()
+
+    // Cleanup
+    return () => {
+      isMounted = false
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
   }, [])
 
   const renderParagraphs = (text: string) => {
@@ -116,6 +146,7 @@ export default function TheChronicle() {
     }
   }
 
+  // Show loading state
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center bg-background">
