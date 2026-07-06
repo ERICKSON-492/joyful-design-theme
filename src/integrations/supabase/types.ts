@@ -716,6 +716,36 @@ export type Database = {
         }
         Relationships: []
       }
+      nairobi_areas: {
+        Row: {
+          id: string
+          name: string
+          doorstep_price: number
+          super_metro_route: string | null
+          super_metro_only: boolean
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          doorstep_price: number
+          super_metro_route?: string | null
+          super_metro_only?: boolean
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          doorstep_price?: number
+          super_metro_route?: string | null
+          super_metro_only?: boolean
+          is_active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
