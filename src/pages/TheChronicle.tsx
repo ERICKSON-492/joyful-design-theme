@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState } from 'react'
 import lindaPortrait from '@/assets/linda-portrait.jpg'
 import artisanWorking from '@/assets/artisan-working.jpg'
@@ -26,6 +28,7 @@ export default function TheChronicle() {
   useSEO('Our Story', 'The story behind Ushanga Chronicles — handcrafted African jewelry and decor made by artisans in Nairobi, Kenya.', '/about-us')
   const [origin, setOrigin] = useState(fallbackOrigin)
   const [craft, setCraft] = useState(fallbackCraft)
+  const [timestamp, setTimestamp] = useState(Date.now())
 
   useEffect(() => {
     supabase
@@ -33,15 +36,36 @@ export default function TheChronicle() {
       .select('section_key, title, body, image_url')
       .in('section_key', ['about_where_it_began', 'about_the_craft'])
       .then(({ data }) => {
+        // Set a fresh timestamp for this specific data fetch instance
+        setTimestamp(Date.now())
+        
         data?.forEach(row => {
-          if (row.section_key === 'about_where_it_began') setOrigin({ title: row.title, body: row.body, image_url: row.image_url })
-          if (row.section_key === 'about_the_craft') setCraft({ title: row.title, body: row.body, image_url: row.image_url })
+          if (row.section_key === 'about_where_it_began') {
+            setOrigin({ 
+              title: row.title || fallbackOrigin.title, 
+              body: row.body || fallbackOrigin.body, 
+              image_url: row.image_url 
+            })
+          }
+          if (row.section_key === 'about_the_craft') {
+            setCraft({ 
+              title: row.title || fallbackCraft.title, 
+              body: row.body || fallbackCraft.body, 
+              image_url: row.image_url 
+            })
+          }
         })
       })
   }, [])
 
   const renderParagraphs = (text: string) =>
     text.split('\n\n').filter(Boolean).map((p, i) => <p key={i}>{p}</p>)
+
+  // Helper utility to apply cache busting parameters safely to storage URLs
+  const getImageUrl = (url: string | null, fallbackSrc: string) => {
+    if (!url) return fallbackSrc
+    return url.includes('?') ? `${url}&t=${timestamp}` : `${url}?t=${timestamp}`
+  }
 
   return (
     <div className="bg-background">
@@ -62,9 +86,9 @@ export default function TheChronicle() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto items-center">
             <img
-              src={origin.image_url || lindaPortrait}
+              src={getImageUrl(origin.image_url, lindaPortrait.src || lindaPortrait)}
               alt="Linda, founder of Ushanga Chronicles"
-              className="w-full max-w-md mx-auto"
+              className="w-full max-w-md mx-auto object-cover rounded-lg shadow-sm"
               loading="lazy"
             />
             <div>
@@ -92,9 +116,9 @@ export default function TheChronicle() {
               </div>
             </div>
             <img
-              src={craft.image_url || artisanWorking}
+              src={getImageUrl(craft.image_url, artisanWorking.src || artisanWorking)}
               alt="Artisan handcrafting a beaded piece"
-              className="w-full max-w-md mx-auto order-1 lg:order-2"
+              className="w-full max-w-md mx-auto order-1 lg:order-2 object-cover rounded-lg shadow-sm"
               loading="lazy"
             />
           </div>
