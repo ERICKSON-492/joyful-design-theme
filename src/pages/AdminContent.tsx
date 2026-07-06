@@ -226,7 +226,7 @@ function SectionEditor({ config, initial }: { config: SectionConfig; initial: Si
           {config.hasImage && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Image</label>
-              {imageUrl && <img src={imageUrl} alt="Preview" className="w-32 h-32 object-cover rounded mb-2" />}
+              {imageUrl && <img src={`${imageUrl}?t=${Date.now()}`} alt="Preview" className="w-32 h-32 object-cover rounded mb-2" />}
               <label className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded cursor-pointer hover:bg-accent text-sm">
                 <Upload className="w-4 h-4" />
                 {uploading ? 'Uploading...' : 'Upload Image'}
