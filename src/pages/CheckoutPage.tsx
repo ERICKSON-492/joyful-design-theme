@@ -95,9 +95,8 @@ const FALLBACK_SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Kitengela', route: 'Super Metro - Kitengela' },
 ]
 
-// Fallback: these areas are served by Super Metro + Pickup Mtaani only (no doorstep)
-const FALLBACK_SUPER_METRO_ONLY_AREAS = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
 
+const FALLBACK_SUPER_METRO_ONLY_AREAS: string[] = []
 async function reverseGeocode(lat: number, lon: number) {
   try {
     const response = await fetch(
