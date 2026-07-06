@@ -29,7 +29,7 @@ interface PaymentMethodOption {
 }
 
 // All Nairobi areas with doorstep prices
-const NAIROBI_AREAS: { name: string; price: number }[] = [
+const FALLBACK_NAIROBI_AREAS: { name: string; price: number }[] = [
   { name: 'CBD', price: 150 },
   { name: 'South B', price: 350 }, { name: 'South C', price: 350 },
   { name: 'Next Gen Mall', price: 350 }, { name: 'Imara Daima', price: 350 },
@@ -84,8 +84,9 @@ const NAIROBI_AREAS: { name: string; price: number }[] = [
   { name: 'Ngara', price: 300 }, { name: 'Ojijo Road', price: 300 },
 ]
 
-// Super Metro specific area mapping
-const SUPER_METRO_AREAS: { area: string; route: string }[] = [
+// Fallback Super Metro specific area mapping, used only if the
+// nairobi_areas table can't be reached.
+const FALLBACK_SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Thika Town', route: 'Super Metro - Thika' },
   { area: 'Thika', route: 'Super Metro - Thika' },
   { area: 'Juja', route: 'Super Metro - Thika' },
@@ -94,8 +95,8 @@ const SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Kitengela', route: 'Super Metro - Kitengela' },
 ]
 
-// These areas are served by Super Metro + Pickup Mtaani only (no doorstep)
-const SUPER_METRO_ONLY_AREAS = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
+// Fallback: these areas are served by Super Metro + Pickup Mtaani only (no doorstep)
+const FALLBACK_SUPER_METRO_ONLY_AREAS = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
 
 async function reverseGeocode(lat: number, lon: number) {
   try {
@@ -164,6 +165,9 @@ export default function CheckoutPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ id: string; code: string; discount_type: string; discount_value: number } | null>(null)
   const [couponMessage, setCouponMessage] = useState<{ text: string; ok: boolean } | null>(null)
   const [checkingCoupon, setCheckingCoupon] = useState(false)
+  const [nairobiAreas, setNairobiAreas] = useState(FALLBACK_NAIROBI_AREAS)
+  const [superMetroAreas, setSuperMetroAreas] = useState(FALLBACK_SUPER_METRO_AREAS)
+  const [superMetroOnlyAreas, setSuperMetroOnlyAreas] = useState(FALLBACK_SUPER_METRO_ONLY_AREAS)
   const { userId, name: accountName, email: accountEmail } = useCheckoutAuth()
 
   useEffect(() => {
@@ -186,6 +190,23 @@ export default function CheckoutPage() {
     load()
   }, [])
 
+  // Load admin-editable Nairobi delivery areas. Falls back to the bundled
+  // defaults if the table isn't reachable, so checkout keeps working even
+  // if that migration hasn't been applied yet.
+  useEffect(() => {
+    fetchPublicTable<{ name: string; doorstep_price: number; super_metro_route: string | null; super_metro_only: boolean }>(
+      'nairobi_areas',
+      'select=name,doorstep_price,super_metro_route,super_metro_only&is_active=eq.true&order=name.asc'
+    )
+      .then(data => {
+        if (!data || data.length === 0) return
+        setNairobiAreas(data.map(d => ({ name: d.name, price: d.doorstep_price })))
+        setSuperMetroAreas(data.filter(d => d.super_metro_route).map(d => ({ area: d.name, route: d.super_metro_route! })))
+        setSuperMetroOnlyAreas(data.filter(d => d.super_metro_only).map(d => d.name))
+      })
+      .catch(() => { /* keep fallback data */ })
+  }, [])
+
   // Build location suggestions as user types
   useEffect(() => {
     if (!locationSearch.trim() || locationSearch.length < 2) {
@@ -195,7 +216,7 @@ export default function CheckoutPage() {
     const q = locationSearch.toLowerCase()
 
     // Check Nairobi areas first
-    const nairobiMatches = NAIROBI_AREAS.filter(a => a.name.toLowerCase().includes(q))
+    const nairobiMatches = nairobiAreas.filter(a => a.name.toLowerCase().includes(q))
     if (nairobiMatches.length > 0) {
       setLocationSuggestions(nairobiMatches.slice(0, 8))
       return
@@ -214,7 +235,7 @@ export default function CheckoutPage() {
       })
     })
     setLocationSuggestions(regionMatches.slice(0, 8))
-  }, [locationSearch, shippingMethods])
+  }, [locationSearch, shippingMethods, nairobiAreas])
 
   // When a location is selected, compute available delivery options
   const handleSelectLocation = (loc: { name: string; price?: number }) => {
@@ -223,7 +244,7 @@ export default function CheckoutPage() {
     setShowSuggestions(false)
     setSelectedShipping(null)
 
-    const isNairobiArea = NAIROBI_AREAS.some(a => a.name === loc.name)
+    const isNairobiArea = nairobiAreas.some(a => a.name === loc.name)
 
     if (isNairobiArea && loc.price !== undefined) {
       const options: ShippingMethod[] = []
@@ -244,7 +265,7 @@ export default function CheckoutPage() {
       if (mtaani) options.push(mtaani)
 
       // Add only the specific Super Metro route for this area (exact match)
-      const superMetroMatch = SUPER_METRO_AREAS.find(s =>
+      const superMetroMatch = superMetroAreas.find(s =>
         s.area.toLowerCase() === loc.name.toLowerCase()
       )
       if (superMetroMatch) {
@@ -253,7 +274,7 @@ export default function CheckoutPage() {
       }
 
       // Add Doorstep with area-specific price (only if not a Super Metro-only area)
-      const isSuperMetroOnly = SUPER_METRO_ONLY_AREAS.includes(loc.name)
+      const isSuperMetroOnly = superMetroOnlyAreas.includes(loc.name)
       const doorstep = shippingMethods.find(m => m.name.toLowerCase().includes('doorstep'))
       if (doorstep && !isSuperMetroOnly) {
         options.push({ ...doorstep, price: loc.price })
@@ -280,7 +301,7 @@ export default function CheckoutPage() {
         if (geoData) {
           const suburb = geoData.suburb || geoData.city || ''
           // Try to match to a Nairobi area
-          const matchedArea = NAIROBI_AREAS.find(a =>
+          const matchedArea = nairobiAreas.find(a =>
             suburb.toLowerCase().includes(a.name.toLowerCase()) ||
             a.name.toLowerCase().includes(suburb.toLowerCase())
           )
