@@ -96,7 +96,8 @@ const FALLBACK_SUPER_METRO_AREAS: { area: string; route: string }[] = [
 ]
 
 // Fallback: these areas are served by Super Metro + Pickup Mtaani only (no doorstep)
-const FALLBACK_SUPER_METRO_ONLY_AREAS = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
+// All areas have doorstep delivery, so this list is empty
+const FALLBACK_SUPER_METRO_ONLY_AREAS: string[] = []
 
 async function reverseGeocode(lat: number, lon: number) {
   try {
@@ -639,16 +640,18 @@ export default function CheckoutPage() {
                         placeholder="e.g. Juja, Karen, Ahero, Kisumu..."
                         className="w-full border border-border bg-background text-foreground rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary"
                       />
+                      {!selectedLocation && locationSearch.length >= 2 && (
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          Select your area to see available delivery options and prices
+                        </p>
+                      )}
                       {showSuggestions && locationSuggestions.length > 0 && (
                         <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-56 overflow-y-auto">
                           {locationSuggestions.map(loc => (
                             <button key={loc.name} type="button"
                               onClick={() => handleSelectLocation(loc)}
-                              className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-accent transition-colors text-left">
+                              className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-accent transition-colors text-left">
                               <span className="text-foreground">{loc.name}</span>
-                              {loc.price !== undefined && (
-                                <span className="text-xs text-muted-foreground">Doorstep from KSh {loc.price}</span>
-                              )}
                             </button>
                           ))}
                         </div>
