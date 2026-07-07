@@ -95,8 +95,9 @@ const FALLBACK_SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Kitengela', route: 'Super Metro - Kitengela' },
 ]
 
+// Fallback: these areas are served by Super Metro + Pickup Mtaani only (no doorstep)
+const FALLBACK_SUPER_METRO_ONLY_AREAS = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
 
-const FALLBACK_SUPER_METRO_ONLY_AREAS: string[] = []
 async function reverseGeocode(lat: number, lon: number) {
   try {
     const response = await fetch(
@@ -406,7 +407,7 @@ export default function CheckoutPage() {
         ${receiptUrl ? `<div style="text-align:center;margin:18px 0;"><a href="${receiptUrl}" style="background:#D4A017;color:#fff;padding:12px 22px;border-radius:8px;font-weight:700;text-decoration:none;">View Invoice Receipt</a></div>` : ''}
       </div>`
     try {
-      await supabase.functions.invoke('send-email', {
+      await supabase.functions.invoke('send-emails', {
         body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
       })
     } catch (err) { console.error('Email send error:', err) }
@@ -638,18 +639,16 @@ export default function CheckoutPage() {
                         placeholder="e.g. Juja, Karen, Ahero, Kisumu..."
                         className="w-full border border-border bg-background text-foreground rounded-lg pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary"
                       />
-                      {!selectedLocation && locationSearch.length >= 2 && (
-                        <p className="text-xs text-muted-foreground mt-1.5">
-                          Select your area to see available delivery options and prices
-                        </p>
-                      )}
                       {showSuggestions && locationSuggestions.length > 0 && (
                         <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-56 overflow-y-auto">
                           {locationSuggestions.map(loc => (
                             <button key={loc.name} type="button"
                               onClick={() => handleSelectLocation(loc)}
-                              className="w-full flex items-center px-4 py-2.5 text-sm hover:bg-accent transition-colors text-left">
+                              className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-accent transition-colors text-left">
                               <span className="text-foreground">{loc.name}</span>
+                              {loc.price !== undefined && (
+                                <span className="text-xs text-muted-foreground">Doorstep from KSh {loc.price}</span>
+                              )}
                             </button>
                           ))}
                         </div>
