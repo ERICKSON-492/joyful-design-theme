@@ -4,6 +4,25 @@ import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
 import { useSEO } from '@/hooks/useSEO'
 
+// The Supabase JS client coordinates auth-token refresh across browser tabs
+// using the Navigator LockManager API. Occasionally — especially with
+// multiple tabs open, or right after a page load — a request can lose that
+// lock race and fail with "Lock ... was released because another request
+// stole it". This is transient, not a real data/permission problem, so we
+// retry once after a short pause instead of failing the whole submission.
+async function withLockRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (retries > 0 && msg.toLowerCase().includes('lock')) {
+      await new Promise(r => setTimeout(r, 500))
+      return withLockRetry(fn, retries - 1)
+    }
+    throw err
+  }
+}
+
 const steps = ['Category', 'Your Vision', 'Colors & Materials', 'Inspiration', 'Your Details']
 
 const categoryOptions = ['Jewelry', 'Home Decor', 'Fashion Accessory', 'Pet Accessory', 'Other']
@@ -58,27 +77,32 @@ export default function CustomOrderPage() {
       if (formData.file) {
         const ext = formData.file.name.split('.').pop()
         const path = `custom-orders/${Date.now()}.${ext}`
-        const { error: uploadError } = await supabase.storage.from('product-images').upload(path, formData.file)
-        if (uploadError) {
-          console.error('Inspiration photo upload failed:', uploadError)
-          toast.error('Could not upload your inspiration photo, but the rest of your request will still be sent.')
-        } else {
+        try {
+          const { error: uploadError } = await withLockRetry(async () =>
+            await supabase.storage.from('product-images').upload(path, formData.file as File)
+          )
+          if (uploadError) throw uploadError
           const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
           inspirationImageUrl = publicUrl
+        } catch (uploadErr) {
+          console.error('Inspiration photo upload failed:', uploadErr)
+          toast.error('Could not upload your inspiration photo, but the rest of your request will still be sent.')
         }
       }
 
-      const { data: order, error } = await supabase.from('custom_orders').insert({
-        category: formData.category,
-        vision: formData.vision || null,
-        colors: formData.colors.length > 0 ? formData.colors : null,
-        materials: formData.materials || null,
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim() || null,
-        delivery_location: formData.location.trim() || null,
-        inspiration_image_url: inspirationImageUrl,
-      }).select('id').single()
+      const { data: order, error } = await withLockRetry(async () =>
+        await supabase.from('custom_orders').insert({
+          category: formData.category,
+          vision: formData.vision || null,
+          colors: formData.colors.length > 0 ? formData.colors : null,
+          materials: formData.materials || null,
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.trim() || null,
+          delivery_location: formData.location.trim() || null,
+          inspiration_image_url: inspirationImageUrl,
+        }).select('id').single()
+      )
       if (error) throw error
       setSubmitted(true)
 
@@ -123,7 +147,12 @@ export default function CustomOrderPage() {
       }
     } catch (err) {
       console.error('Custom order submission error:', err)
-      toast.error('Something went wrong. Please try again or reach out via WhatsApp.')
+      const msg = err instanceof Error ? err.message : ''
+      toast.error(
+        msg.toLowerCase().includes('lock')
+          ? 'Your browser is still finishing a background task — please wait a moment and tap submit again.'
+          : 'Something went wrong. Please try again or reach out via WhatsApp.'
+      )
     } finally {
       setSubmitting(false)
     }
