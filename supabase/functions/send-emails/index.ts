@@ -37,9 +37,12 @@ async function sendEmail(recipient: string, subject: string, html: string): Prom
 Deno.serve(async (req) => {
   // Handle different request types
   const url = new URL(req.url);
-  
-  // Process single email (called from checkout)
-  if (req.method === 'POST' && url.pathname === '/send') {
+
+  // Process single email (called from checkout, admin panel, etc.)
+  // Accepts both the explicit /send path AND a plain root-path invocation,
+  // since supabase.functions.invoke('send-emails', { body }) posts to the
+  // function's root URL with no sub-path.
+  if (req.method === 'POST' && (url.pathname === '/send' || url.pathname === '/' || url.pathname === '/send-emails')) {
     try {
       const { to, subject, html } = await req.json();
       const success = await sendEmail(to, subject, html);
