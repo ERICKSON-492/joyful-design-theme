@@ -68,13 +68,7 @@ export default function CustomOrderPage() {
     try {
       let inspirationImageUrl: string | null = null
       
-      console.log('=== IMAGE UPLOAD START ===')
-      console.log('File exists?', !!formData.file)
-      console.log('File name:', formData.file?.name)
-      console.log('File size:', formData.file?.size)
-      console.log('File type:', formData.file?.type)
-      
-      // Upload image if present
+      // 1. Upload image if present
       if (formData.file) {
         try {
           setUploadProgress('Uploading your inspiration photo...')
@@ -84,34 +78,9 @@ export default function CustomOrderPage() {
           const fileName = `${Date.now()}.${ext}`
           const path = `custom-orders/${fileName}`
           
-          console.log('📤 Uploading to path:', path)
+          console.log('📤 Uploading file to:', path)
           
-          // Check if bucket exists
-          const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets()
-          console.log('Available buckets:', buckets?.map(b => b.name))
-          if (bucketsError) {
-            console.error('Error listing buckets:', bucketsError)
-          }
-          
-          const bucketExists = buckets?.some(b => b.name === 'product-images')
-          console.log('Bucket "product-images" exists:', bucketExists)
-          
-          if (!bucketExists) {
-            console.log('Creating bucket...')
-            const { error: createError } = await supabase.storage.createBucket('product-images', {
-              public: true,
-              allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg'],
-              fileSizeLimit: 5242880,
-            })
-            if (createError) {
-              console.error('Failed to create bucket:', createError)
-            } else {
-              console.log('✅ Bucket created successfully')
-            }
-          }
-          
-          // Upload the file
-          const { error: uploadError, data: uploadData } = await supabase.storage
+          const { error: uploadError } = await supabase.storage
             .from('product-images')
             .upload(path, file, {
               cacheControl: '3600',
@@ -119,50 +88,26 @@ export default function CustomOrderPage() {
               contentType: file.type
             })
             
-          if (uploadError) {
-            console.error('❌ Upload error:', uploadError)
-            throw uploadError
-          }
+          if (uploadError) throw uploadError
           
-          console.log('✅ Upload successful:', uploadData)
-          
-          // Get the public URL
+          // Get the public URL mapping string
           const { data: { publicUrl } } = supabase.storage
             .from('product-images')
             .getPublicUrl(path)
           
-          console.log('🔗 Generated public URL:', publicUrl)
-          
-          // CRITICAL: Assign the URL to the variable
           inspirationImageUrl = publicUrl
-          
-          console.log('=== INSPIRATION IMAGE URL SET ===')
-          console.log('Value:', inspirationImageUrl)
-          console.log('Type:', typeof inspirationImageUrl)
-          console.log('Length:', inspirationImageUrl?.length)
-          console.log('Is null?', inspirationImageUrl === null)
-          console.log('Is undefined?', inspirationImageUrl === undefined)
-          
           setUploadProgress('Photo uploaded successfully!')
+          console.log('🔗 Image URL established:', inspirationImageUrl)
           
         } catch (uploadErr) {
-          console.error('❌ Upload failed:', uploadErr)
-          const errorMsg = uploadErr instanceof Error ? uploadErr.message : 'Unknown error'
-          toast.error(`Photo upload failed: ${errorMsg}`)
+          console.error('❌ Storage upload failed:', uploadErr)
+          toast.error('Photo upload failed. Attempting submission without photo...')
           inspirationImageUrl = null
-          setUploadProgress('Continuing without photo...')
         }
-      } else {
-        console.log('📷 No file selected')
       }
 
-      console.log('=== BEFORE INSERT ===')
-      console.log('inspirationImageUrl value:', inspirationImageUrl)
-      console.log('inspirationImageUrl is null?', inspirationImageUrl === null)
-      console.log('inspirationImageUrl is undefined?', inspirationImageUrl === undefined)
-
-      // Build the order data
-      const orderData: any = {
+      // 2. Build the exact order payload matching your DB structure
+      const orderData = {
         category: formData.category,
         vision: formData.vision || null,
         colors: formData.colors.length > 0 ? formData.colors : null,
@@ -171,49 +116,27 @@ export default function CustomOrderPage() {
         phone: formData.phone.trim(),
         email: formData.email.trim() || null,
         delivery_location: formData.location.trim() || null,
-      }
-
-      // Add the image URL explicitly
-      if (inspirationImageUrl) {
-        orderData.inspiration_image_url = inspirationImageUrl
-        console.log('✅ Adding image URL to order data:', inspirationImageUrl)
-      } else {
-        console.log('⚠️ No image URL to add, setting to null')
-        orderData.inspiration_image_url = null
+        inspiration_image_url: inspirationImageUrl, // Always mapped to text column or null
       }
       
-      console.log('=== ORDER DATA ===')
-      console.log(JSON.stringify(orderData, null, 2))
+      console.log('🚀 Sending order data payload:', orderData)
 
-      // Insert the custom order
-      const { data: order, error } = await supabase
+      // 3. Insert into the database
+      const { data: order, error: insertError } = await supabase
         .from('custom_orders')
         .insert(orderData)
         .select('*')
         .single()
 
-      if (error) {
-        console.error('❌ Insert error:', error)
-        throw new Error(error.message)
+      if (insertError) {
+        console.error('❌ Insert process error details:', insertError)
+        throw new Error(insertError.message)
       }
 
-      console.log('=== ORDER SAVED ===')
-      console.log('Full order:', order)
-      console.log('Saved image URL:', order.inspiration_image_url)
-      
-      if (order.inspiration_image_url) {
-        console.log('✅✅✅ IMAGE URL WAS SAVED SUCCESSFULLY! ✅✅✅')
-        toast.success('Your Chronicle has been sent to Linda with your photo! 🎉')
-      } else {
-        console.warn('⚠️⚠️⚠️ IMAGE URL WAS NOT SAVED ⚠️⚠️⚠️')
-        console.warn('What we sent:', inspirationImageUrl)
-        console.warn('What was saved:', order.inspiration_image_url)
-        toast.warning('Your order was saved but the image may not have been attached.')
-      }
-
+      toast.success('Your Chronicle request has been sent! 🎉')
       setSubmitted(true)
 
-      // Send notifications in the background
+      // 4. Background Email Dispatch Logic
       const detailsHtml = `
         <p><strong>Category:</strong> ${formData.category || '—'}</p>
         ${formData.vision ? `<p><strong>Vision:</strong> ${formData.vision}</p>` : ''}
@@ -226,14 +149,13 @@ export default function CustomOrderPage() {
         ${formData.email ? `<p><strong>Email:</strong> ${formData.email}</p>` : ''}
       `
 
-      // Fire-and-forget emails
       supabase.functions.invoke('send-emails', {
         body: {
           to: 'admin@ushangachronicles.com',
           subject: `New Custom Order Request${order?.id ? ` #${order.id.slice(0, 8)}` : ''}`,
           html: `<h2>New Chronicle request from ${formData.name}</h2>${detailsHtml}`,
         }
-      }).catch(err => console.error('Admin notification email failed:', err))
+      }).catch(err => console.error('Admin alert dispatch failed:', err))
 
       if (formData.email.trim()) {
         supabase.functions.invoke('send-emails', {
@@ -246,16 +168,16 @@ export default function CustomOrderPage() {
               <hr style="margin:16px 0;" />
               <h3>What you told us</h3>
               ${detailsHtml}
-              <p style="margin-top:16px;color:#6B7280;font-size:13px;">If anything above needs correcting, just reply to this email or reach us on WhatsApp.</p>
+              <p style="margin-top:16px;color:#6B7280;font-size:13px;">If anything above needs correcting, reply to this thread or ping us on WhatsApp.</p>
             `,
           }
-        }).catch(err => console.error('Customer confirmation email failed:', err))
+        }).catch(err => console.error('Customer confirmation dispatch failed:', err))
       }
 
     } catch (err) {
-      console.error('❌ Submission error:', err)
+      console.error('❌ Outer submission runtime caught exception:', err)
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      toast.error(`Something went wrong: ${msg}. Please try again or contact us via WhatsApp.`)
+      toast.error(`Submission block failure: ${msg}. Please refresh or reach out over WhatsApp directly!`)
     } finally {
       setSubmitting(false)
       setUploadProgress('')
@@ -382,6 +304,7 @@ export default function CustomOrderPage() {
                   {colorSwatches.map((swatch) => (
                     <button 
                       key={swatch.name} 
+                      type="button"
                       onClick={() => toggleColor(swatch.name)} 
                       className={`w-10 h-10 rounded-full border-2 transition-all ${formData.colors.includes(swatch.name) ? 'border-foreground scale-110' : 'border-transparent'}`} 
                       style={{ backgroundColor: swatch.color }} 
@@ -414,7 +337,6 @@ export default function CustomOrderPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0]
                       if (file) {
-                        console.log('📷 File selected:', { name: file.name, size: file.size, type: file.type })
                         if (file.size > 5 * 1024 * 1024) {
                           toast.error('File too large. Please upload an image under 5MB.')
                           return
@@ -480,9 +402,10 @@ export default function CustomOrderPage() {
             )}
           </div>
 
-          {/* Navigation */}
+          {/* Navigation Controls */}
           <div className="flex justify-between mt-8">
             <button 
+              type="button"
               onClick={prev} 
               disabled={currentStep === 0} 
               className="px-6 py-3 border border-border text-sm font-semibold disabled:opacity-30 hover:bg-accent transition-colors rounded-lg" 
@@ -492,6 +415,7 @@ export default function CustomOrderPage() {
             </button>
             {currentStep < 4 ? (
               <button 
+                type="button"
                 onClick={next} 
                 disabled={!canProceed()}
                 className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed" 
@@ -501,6 +425,7 @@ export default function CustomOrderPage() {
               </button>
             ) : (
               <button 
+                type="button"
                 onClick={handleSubmit} 
                 disabled={submitting || !formData.name.trim() || !formData.phone.trim() || !formData.category} 
                 className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 rounded-lg" 
