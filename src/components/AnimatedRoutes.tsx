@@ -1,8 +1,9 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { PageTransition } from './PageTransition'
 import AdminLayout from '../components/AdminLayout'
+import { trackPageView } from '@/lib/analytics'
 
 const HomePage = lazy(() => import('../pages/HomePage'))
 const TheChronicle = lazy(() => import('../pages/TheChronicle'))
@@ -26,6 +27,7 @@ const AdminCoupons = lazy(() => import('../pages/AdminCoupons'))
 const AdminNairobiAreas = lazy(() => import('../pages/AdminNairobiAreas'))
 const AdminCustomOrders = lazy(() => import('../pages/AdminCustomOrders'))
 const AdminUsers = lazy(() => import('../pages/AdminUsers'))
+const AdminAnalytics = lazy(() => import('../pages/AdminAnalytics'))
 const AdminPayments = lazy(() => import('../pages/AdminPayments'))
 const AdminReviews = lazy(() => import('../pages/AdminReviews'))
 const AdminInventory = lazy(() => import('../pages/AdminInventory'))
@@ -57,6 +59,10 @@ export function AnimatedRoutes() {
   const location = useLocation()
   const isAdmin = location.pathname.startsWith('/admin')
 
+  useEffect(() => {
+    if (!isAdmin) trackPageView(location.pathname)
+  }, [location.pathname, isAdmin])
+
   if (isAdmin) {
     return (
       <Suspense fallback={<RouteLoader />}>
@@ -76,6 +82,7 @@ export function AnimatedRoutes() {
             <Route path="delivery-areas" element={<AdminNairobiAreas />} />
             <Route path="custom-orders" element={<AdminCustomOrders />} />
             <Route path="customers" element={<AdminUsers />} />
+            <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="payments" element={<AdminPayments />} />
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="inventory" element={<AdminInventory />} />
