@@ -4,6 +4,25 @@ import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
 import { useSEO } from '@/hooks/useSEO'
 
+// The Supabase JS client coordinates auth-token refresh across browser tabs
+// using the Navigator LockManager API. Occasionally — especially with
+// multiple tabs open, or right after a page load — a request can lose that
+// lock race and fail with "Lock ... was released because another request
+// stole it". This is transient, not a real data/permission problem, so we
+// retry once after a short pause instead of failing the whole submission.
+async function withLockRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (retries > 0 && msg.toLowerCase().includes('lock')) {
+      await new Promise(r => setTimeout(r, 500))
+      return withLockRetry(fn, retries - 1)
+    }
+    throw err
+  }
+}
+
 const steps = ['Category', 'Your Vision', 'Colors & Materials', 'Inspiration', 'Your Details']
 
 const categoryOptions = ['Jewelry', 'Home Decor', 'Fashion Accessory', 'Pet Accessory', 'Other']
@@ -37,7 +56,6 @@ export default function CustomOrderPage() {
     email: '',
     location: '',
   })
-  const [uploadProgress, setUploadProgress] = useState<string>('')
 
   const next = () => setCurrentStep((s) => Math.min(s + 1, 4))
   const prev = () => setCurrentStep((s) => Math.max(s - 1, 0))
@@ -52,169 +70,57 @@ export default function CustomOrderPage() {
   }
 
   const handleSubmit = async () => {
-    if (!formData.name.trim() || !formData.phone.trim()) {
-      toast.error('Please fill in your name and phone number')
-      return
-    }
-    
-    if (!formData.category) {
-      toast.error('Please select a category')
-      return
-    }
-
+    if (!formData.name.trim() || !formData.phone.trim()) return
     setSubmitting(true)
-    setUploadProgress('Preparing your order...')
-    
     try {
       let inspirationImageUrl: string | null = null
-      
-      console.log('=== STEP 1: Check if file exists ===')
-      console.log('formData.file:', formData.file)
-      console.log('formData.file name:', formData.file?.name)
-      console.log('formData.file size:', formData.file?.size)
-      console.log('formData.file type:', formData.file?.type)
-      
-      // Upload image if present
       if (formData.file) {
+        const ext = formData.file.name.split('.').pop()
+        const path = `custom-orders/${Date.now()}.${ext}`
         try {
-          setUploadProgress('Uploading your inspiration photo...')
-          
-          const file = formData.file
-          const ext = file.name.split('.').pop()
-          const fileName = `${Date.now()}.${ext}`
-          const path = `custom-orders/${fileName}`
-          
-          console.log('=== STEP 2: Starting upload ===')
-          console.log('File:', { name: file.name, size: file.size, type: file.type })
-          console.log('Path:', path)
-          
-          // Check if bucket exists
-          const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets()
-          console.log('Available buckets:', buckets?.map(b => b.name))
-          if (bucketsError) {
-            console.error('Error listing buckets:', bucketsError)
-          }
-          
-          const bucketExists = buckets?.some(b => b.name === 'product-images')
-          console.log('Bucket "product-images" exists:', bucketExists)
-          
-          if (!bucketExists) {
-            console.log('Creating bucket...')
-            const { error: createError } = await supabase.storage.createBucket('product-images', {
-              public: true,
-              allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg'],
-              fileSizeLimit: 5242880,
-            })
-            if (createError) {
-              console.error('Failed to create bucket:', createError)
-            } else {
-              console.log('Bucket created successfully')
-            }
-          }
-          
-          // Upload the file
-          const { error: uploadError, data: uploadData } = await supabase.storage
-            .from('product-images')
-            .upload(path, file, {
-              cacheControl: '3600',
-              upsert: false,
-              contentType: file.type
-            })
-            
-          if (uploadError) {
-            console.error('❌ Upload error:', uploadError)
-            throw uploadError
-          }
-          
-          console.log('=== STEP 3: Upload successful ===')
-          console.log('Upload data:', uploadData)
-          
-          // Get the public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(path)
-          
-          console.log('=== STEP 4: Got public URL ===')
-          console.log('Public URL:', publicUrl)
-          
+          const { error: uploadError } = await withLockRetry(async () =>
+            await supabase.storage.from('product-images').upload(path, formData.file as File)
+          )
+          if (uploadError) throw uploadError
+          const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
           inspirationImageUrl = publicUrl
-          console.log('=== STEP 5: Set inspirationImageUrl ===')
-          console.log('inspirationImageUrl is now:', inspirationImageUrl)
-          
-          setUploadProgress('Photo uploaded successfully!')
-          
         } catch (uploadErr) {
-          console.error('❌ Upload failed:', uploadErr)
-          const errorMsg = uploadErr instanceof Error ? uploadErr.message : 'Unknown error'
-          toast.error(`Photo upload failed: ${errorMsg}`)
-          inspirationImageUrl = null
-          setUploadProgress('Continuing without photo...')
+          console.error('Inspiration photo upload failed:', uploadErr)
+          toast.error('Could not upload your inspiration photo, but the rest of your request will still be sent.')
         }
-      } else {
-        console.log('=== No file selected ===')
       }
 
-      console.log('=== STEP 6: Before insert ===')
-      console.log('inspirationImageUrl value:', inspirationImageUrl)
-      console.log('inspirationImageUrl type:', typeof inspirationImageUrl)
-      console.log('inspirationImageUrl is null?', inspirationImageUrl === null)
-      console.log('inspirationImageUrl is undefined?', inspirationImageUrl === undefined)
-
-      // Insert the custom order
-      const orderData = {
-        category: formData.category,
-        vision: formData.vision || null,
-        colors: formData.colors.length > 0 ? formData.colors : null,
-        materials: formData.materials || null,
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim() || null,
-        delivery_location: formData.location.trim() || null,
-        inspiration_image_url: inspirationImageUrl,
-      }
-      
-      console.log('=== STEP 7: Order data being sent ===')
-      console.log(JSON.stringify(orderData, null, 2))
-
-      const { data: order, error } = await supabase
-        .from('custom_orders')
-        .insert(orderData)
-        .select('id, inspiration_image_url')
-        .single()
-
-      if (error) {
-        console.error('❌ Insert error:', error)
-        throw new Error(error.message)
-      }
-
-      console.log('=== STEP 8: Order saved ===')
-      console.log('Saved order:', order)
-      console.log('Saved image URL:', order.inspiration_image_url)
-      
-      // Double-check if the URL was saved
-      if (order.inspiration_image_url !== inspirationImageUrl) {
-        console.warn('⚠️ Mismatch: Saved URL differs from what we sent!')
-        console.warn('Sent:', inspirationImageUrl)
-        console.warn('Saved:', order.inspiration_image_url)
-      }
-
+      const { data: order, error } = await withLockRetry(async () =>
+        await supabase.from('custom_orders').insert({
+          category: formData.category,
+          vision: formData.vision || null,
+          colors: formData.colors.length > 0 ? formData.colors : null,
+          materials: formData.materials || null,
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.trim() || null,
+          delivery_location: formData.location.trim() || null,
+          inspiration_image_url: inspirationImageUrl,
+        }).select('id').single()
+      )
+      if (error) throw error
       setSubmitted(true)
-      toast.success('Your Chronicle has been sent to Linda! 🎉')
 
-      // Send notifications in the background
+      // Fire-and-forget notification emails — a delivery hiccup here
+      // shouldn't block the customer from seeing the success screen,
+      // since their request is already safely saved either way.
       const detailsHtml = `
         <p><strong>Category:</strong> ${formData.category || '—'}</p>
         ${formData.vision ? `<p><strong>Vision:</strong> ${formData.vision}</p>` : ''}
         ${formData.colors.length ? `<p><strong>Colors:</strong> ${formData.colors.join(', ')}</p>` : ''}
         ${formData.materials ? `<p><strong>Materials:</strong> ${formData.materials}</p>` : ''}
         ${formData.location ? `<p><strong>Delivery location:</strong> ${formData.location}</p>` : ''}
-        ${inspirationImageUrl ? `<p><strong>Inspiration photo:</strong> <a href="${inspirationImageUrl}">View photo</a></p>` : '<p><em>No inspiration photo uploaded</em></p>'}
+        ${inspirationImageUrl ? `<p><strong>Inspiration photo:</strong> <a href="${inspirationImageUrl}">${inspirationImageUrl}</a></p>` : ''}
         <p><strong>Name:</strong> ${formData.name}</p>
         <p><strong>Phone:</strong> ${formData.phone}</p>
         ${formData.email ? `<p><strong>Email:</strong> ${formData.email}</p>` : ''}
       `
 
-      // Fire-and-forget emails
       supabase.functions.invoke('send-emails', {
         body: {
           to: 'admin@ushangachronicles.com',
@@ -239,23 +145,17 @@ export default function CustomOrderPage() {
           }
         }).catch(err => console.error('Customer confirmation email failed:', err))
       }
-
     } catch (err) {
-      console.error('❌ Custom order submission error:', err)
-      const msg = err instanceof Error ? err.message : 'Unknown error'
-      toast.error(`Something went wrong: ${msg}. Please try again or contact us via WhatsApp.`)
+      console.error('Custom order submission error:', err)
+      const msg = err instanceof Error ? err.message : ''
+      toast.error(
+        msg.toLowerCase().includes('lock')
+          ? 'Your browser is still finishing a background task — please wait a moment and tap submit again.'
+          : 'Something went wrong. Please try again or reach out via WhatsApp.'
+      )
     } finally {
       setSubmitting(false)
-      setUploadProgress('')
-      console.log('=== SUBMISSION COMPLETE ===')
     }
-  }
-
-  // Validate current step before proceeding
-  const canProceed = () => {
-    if (currentStep === 0) return !!formData.category
-    if (currentStep === 4) return !!formData.name.trim() && !!formData.phone.trim()
-    return true
   }
 
   if (submitted) {
@@ -268,15 +168,9 @@ export default function CustomOrderPage() {
           <h2 className="font-display text-3xl font-bold text-foreground mb-4">
             Your Chronicle is in Linda's hands
           </h2>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-muted-foreground">
             Expect a response within 48 hours. Thank you for trusting us with your story.
           </p>
-          <button 
-            onClick={() => window.location.href = '/'}
-            className="bg-primary text-primary-foreground px-8 py-3 font-bold text-sm tracking-wider uppercase rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            Return Home
-          </button>
         </div>
       </div>
     )
@@ -320,29 +214,14 @@ export default function CustomOrderPage() {
             Step {currentStep + 1} of 5 - {steps[currentStep]}
           </p>
 
-          {/* Upload progress indicator */}
-          {uploadProgress && (
-            <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg text-center">
-              <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-              <span className="text-sm text-foreground">{uploadProgress}</span>
-            </div>
-          )}
-
           {/* Step Content */}
-          <div className="bg-card p-6 md:p-10 border border-border rounded-lg">
+          <div className="bg-card p-6 md:p-10 border border-border">
             {currentStep === 0 && (
               <div className="space-y-4">
                 <h3 className="font-display text-xl font-bold mb-4">What are you looking for?</h3>
                 {categoryOptions.map((opt) => (
-                  <label key={opt} className="flex items-center gap-3 p-4 border border-border cursor-pointer hover:border-primary transition-colors rounded-lg" style={{ minHeight: '44px' }}>
-                    <input 
-                      type="radio" 
-                      name="category" 
-                      value={opt} 
-                      checked={formData.category === opt} 
-                      onChange={() => setFormData({ ...formData, category: opt })} 
-                      className="accent-[#D4A017] w-5 h-5" 
-                    />
+                  <label key={opt} className="flex items-center gap-3 p-4 border border-border cursor-pointer hover:border-primary transition-colors" style={{ minHeight: '44px' }}>
+                    <input type="radio" name="category" value={opt} checked={formData.category === opt} onChange={() => setFormData({ ...formData, category: opt })} className="accent-[#D4A017] w-5 h-5" />
                     <span className="text-sm font-medium">{opt}</span>
                   </label>
                 ))}
@@ -352,15 +231,7 @@ export default function CustomOrderPage() {
             {currentStep === 1 && (
               <div>
                 <h3 className="font-display text-xl font-bold mb-4">Describe your vision</h3>
-                <textarea 
-                  value={formData.vision} 
-                  onChange={(e) => setFormData({ ...formData, vision: e.target.value })} 
-                  placeholder="Tell us what you're dreaming of. The more detail, the better." 
-                  maxLength={2000} 
-                  rows={6} 
-                  className="w-full p-4 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none rounded-lg" 
-                  style={{ minHeight: '160px' }} 
-                />
+                <textarea value={formData.vision} onChange={(e) => setFormData({ ...formData, vision: e.target.value })} placeholder="Tell us what you're dreaming of. The more detail, the better." maxLength={2000} rows={6} className="w-full p-4 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" style={{ minHeight: '160px' }} />
               </div>
             )}
 
@@ -370,50 +241,21 @@ export default function CustomOrderPage() {
                 <p className="text-sm text-muted-foreground mb-4">Select your preferred colors</p>
                 <div className="flex flex-wrap gap-3 mb-6">
                   {colorSwatches.map((swatch) => (
-                    <button 
-                      key={swatch.name} 
-                      onClick={() => toggleColor(swatch.name)} 
-                      className={`w-10 h-10 rounded-full border-2 transition-all ${formData.colors.includes(swatch.name) ? 'border-foreground scale-110' : 'border-transparent'}`} 
-                      style={{ backgroundColor: swatch.color }} 
-                      aria-label={swatch.name} 
-                    />
+                    <button key={swatch.name} onClick={() => toggleColor(swatch.name)} className={`w-10 h-10 rounded-full border-2 transition-all ${formData.colors.includes(swatch.name) ? 'border-foreground scale-110' : 'border-transparent'}`} style={{ backgroundColor: swatch.color }} aria-label={swatch.name} />
                   ))}
                 </div>
                 <label className="text-sm font-medium block mb-2">Any specific materials? (e.g. sisal, beads, leather, cowrie shells)</label>
-                <input 
-                  type="text" 
-                  value={formData.materials} 
-                  onChange={(e) => setFormData({ ...formData, materials: e.target.value })} 
-                  maxLength={200} 
-                  className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-lg" 
-                  style={{ minHeight: '44px' }} 
-                />
+                <input type="text" value={formData.materials} onChange={(e) => setFormData({ ...formData, materials: e.target.value })} maxLength={200} className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" style={{ minHeight: '44px' }} />
               </div>
             )}
 
             {currentStep === 3 && (
               <div>
                 <h3 className="font-display text-xl font-bold mb-4">Inspiration Photo</h3>
-                <p className="text-sm text-muted-foreground mb-4">Upload a photo for inspiration (optional) - accepts JPG/PNG (Max 5MB)</p>
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-border p-10 cursor-pointer hover:border-primary transition-colors rounded-lg" style={{ minHeight: '120px' }}>
+                <p className="text-sm text-muted-foreground mb-4">Upload a photo for inspiration (optional) - accepts JPG/PNG</p>
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-border p-10 cursor-pointer hover:border-primary transition-colors" style={{ minHeight: '120px' }}>
                   <span className="text-muted-foreground text-sm">{formData.file ? formData.file.name : 'Click to upload or drag & drop'}</span>
-                  <input 
-                    type="file" 
-                    accept="image/jpeg,image/png" 
-                    className="hidden" 
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        console.log('📷 File selected:', { name: file.name, size: file.size, type: file.type })
-                        // Check file size (5MB max)
-                        if (file.size > 5 * 1024 * 1024) {
-                          toast.error('File too large. Please upload an image under 5MB.')
-                          return
-                        }
-                        setFormData({ ...formData, file })
-                      }
-                    }} 
-                  />
+                  <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => setFormData({ ...formData, file: e.target.files?.[0] || null })} />
                 </label>
               </div>
             )}
@@ -423,49 +265,19 @@ export default function CustomOrderPage() {
                 <h3 className="font-display text-xl font-bold mb-4">Your Details</h3>
                 <div>
                   <label className="text-sm font-medium block mb-1">Name *</label>
-                  <input 
-                    type="text" 
-                    value={formData.name} 
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
-                    maxLength={100} 
-                    className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-lg" 
-                    style={{ minHeight: '44px' }} 
-                    required 
-                  />
+                  <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} maxLength={100} className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" style={{ minHeight: '44px' }} required />
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">Phone Number *</label>
-                  <input 
-                    type="tel" 
-                    value={formData.phone} 
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
-                    maxLength={20} 
-                    className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-lg" 
-                    style={{ minHeight: '44px' }} 
-                    required 
-                  />
+                  <input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} maxLength={20} className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" style={{ minHeight: '44px' }} required />
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">Email (optional)</label>
-                  <input 
-                    type="email" 
-                    value={formData.email} 
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
-                    maxLength={255} 
-                    className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-lg" 
-                    style={{ minHeight: '44px' }} 
-                  />
+                  <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} maxLength={255} className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" style={{ minHeight: '44px' }} />
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-1">Delivery Location</label>
-                  <input 
-                    type="text" 
-                    value={formData.location} 
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
-                    maxLength={200} 
-                    className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 rounded-lg" 
-                    style={{ minHeight: '44px' }} 
-                  />
+                  <input type="text" value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} maxLength={200} className="w-full p-3 border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" style={{ minHeight: '44px' }} />
                 </div>
               </div>
             )}
@@ -473,32 +285,17 @@ export default function CustomOrderPage() {
 
           {/* Navigation */}
           <div className="flex justify-between mt-8">
-            <button 
-              onClick={prev} 
-              disabled={currentStep === 0} 
-              className="px-6 py-3 border border-border text-sm font-semibold disabled:opacity-30 hover:bg-accent transition-colors rounded-lg" 
-              style={{ minHeight: '44px' }}
-            >
+            <button onClick={prev} disabled={currentStep === 0} className="px-6 py-3 border border-border text-sm font-semibold disabled:opacity-30 hover:bg-accent transition-colors" style={{ minHeight: '44px' }}>
               Back
             </button>
             {currentStep < 4 ? (
-              <button 
-                onClick={next} 
-                disabled={!canProceed()}
-                className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed" 
-                style={{ minHeight: '44px' }}
-              >
+              <button onClick={next} className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors" style={{ minHeight: '44px' }}>
                 Next
               </button>
             ) : (
-              <button 
-                onClick={handleSubmit} 
-                disabled={submitting || !formData.name.trim() || !formData.phone.trim() || !formData.category} 
-                className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 rounded-lg" 
-                style={{ minHeight: '44px' }}
-              >
+              <button onClick={handleSubmit} disabled={submitting} className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold tracking-wider uppercase hover:bg-[#c49515] transition-colors disabled:opacity-50 flex items-center gap-2" style={{ minHeight: '44px' }}>
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {submitting ? 'Sending...' : 'Send My Chronicle to Linda'}
+                Send My Chronicle to Linda
               </button>
             )}
           </div>
