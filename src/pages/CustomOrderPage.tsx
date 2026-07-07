@@ -68,16 +68,11 @@ export default function CustomOrderPage() {
     try {
       let inspirationImageUrl: string | null = null
       
-      console.log('=== STARTING SUBMISSION ===')
-      console.log('Form data:', {
-        category: formData.category,
-        name: formData.name,
-        phone: formData.phone,
-        hasFile: !!formData.file,
-        fileName: formData.file?.name,
-        fileSize: formData.file?.size,
-        fileType: formData.file?.type,
-      })
+      console.log('=== STEP 1: Check if file exists ===')
+      console.log('formData.file:', formData.file)
+      console.log('formData.file name:', formData.file?.name)
+      console.log('formData.file size:', formData.file?.size)
+      console.log('formData.file type:', formData.file?.type)
       
       // Upload image if present
       if (formData.file) {
@@ -89,13 +84,9 @@ export default function CustomOrderPage() {
           const fileName = `${Date.now()}.${ext}`
           const path = `custom-orders/${fileName}`
           
-          console.log('📤 Starting upload:', { 
-            fileName, 
-            path, 
-            fileSize: file.size,
-            fileType: file.type,
-            bucket: 'product-images'
-          })
+          console.log('=== STEP 2: Starting upload ===')
+          console.log('File:', { name: file.name, size: file.size, type: file.type })
+          console.log('Path:', path)
           
           // Check if bucket exists
           const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets()
@@ -108,7 +99,17 @@ export default function CustomOrderPage() {
           console.log('Bucket "product-images" exists:', bucketExists)
           
           if (!bucketExists) {
-            throw new Error('Storage bucket "product-images" does not exist!')
+            console.log('Creating bucket...')
+            const { error: createError } = await supabase.storage.createBucket('product-images', {
+              public: true,
+              allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg'],
+              fileSizeLimit: 5242880,
+            })
+            if (createError) {
+              console.error('Failed to create bucket:', createError)
+            } else {
+              console.log('Bucket created successfully')
+            }
           }
           
           // Upload the file
@@ -121,45 +122,44 @@ export default function CustomOrderPage() {
             })
             
           if (uploadError) {
-            console.error('❌ Upload error details:', uploadError)
-            throw new Error(`Upload failed: ${uploadError.message}`)
+            console.error('❌ Upload error:', uploadError)
+            throw uploadError
           }
           
-          console.log('✅ Upload successful:', uploadData)
+          console.log('=== STEP 3: Upload successful ===')
+          console.log('Upload data:', uploadData)
           
           // Get the public URL
           const { data: { publicUrl } } = supabase.storage
             .from('product-images')
             .getPublicUrl(path)
           
-          console.log('🔗 Public URL generated:', publicUrl)
+          console.log('=== STEP 4: Got public URL ===')
+          console.log('Public URL:', publicUrl)
+          
           inspirationImageUrl = publicUrl
+          console.log('=== STEP 5: Set inspirationImageUrl ===')
+          console.log('inspirationImageUrl is now:', inspirationImageUrl)
+          
           setUploadProgress('Photo uploaded successfully!')
           
-          // Verify the URL works
-          try {
-            const response = await fetch(publicUrl, { method: 'HEAD' })
-            console.log('URL verification:', response.status, response.statusText)
-            if (!response.ok) {
-              console.warn('⚠️ URL returned non-200 status:', response.status)
-            }
-          } catch (fetchErr) {
-            console.warn('⚠️ Could not verify URL:', fetchErr)
-          }
-          
         } catch (uploadErr) {
-          console.error('❌ Inspiration photo upload failed:', uploadErr)
+          console.error('❌ Upload failed:', uploadErr)
           const errorMsg = uploadErr instanceof Error ? uploadErr.message : 'Unknown error'
           toast.error(`Photo upload failed: ${errorMsg}`)
-          // Continue without the image
+          inspirationImageUrl = null
           setUploadProgress('Continuing without photo...')
         }
       } else {
-        console.log('📷 No file selected for upload')
+        console.log('=== No file selected ===')
       }
 
-      setUploadProgress('Saving your order...')
-      
+      console.log('=== STEP 6: Before insert ===')
+      console.log('inspirationImageUrl value:', inspirationImageUrl)
+      console.log('inspirationImageUrl type:', typeof inspirationImageUrl)
+      console.log('inspirationImageUrl is null?', inspirationImageUrl === null)
+      console.log('inspirationImageUrl is undefined?', inspirationImageUrl === undefined)
+
       // Insert the custom order
       const orderData = {
         category: formData.category,
@@ -173,8 +173,8 @@ export default function CustomOrderPage() {
         inspiration_image_url: inspirationImageUrl,
       }
       
-      console.log('📝 Inserting order with data:', orderData)
-      console.log('Image URL being saved:', inspirationImageUrl)
+      console.log('=== STEP 7: Order data being sent ===')
+      console.log(JSON.stringify(orderData, null, 2))
 
       const { data: order, error } = await supabase
         .from('custom_orders')
@@ -183,14 +183,15 @@ export default function CustomOrderPage() {
         .single()
 
       if (error) {
-        console.error('❌ Supabase insert error:', error)
+        console.error('❌ Insert error:', error)
         throw new Error(error.message)
       }
 
-      console.log('✅ Order saved successfully:', order)
-      console.log('✅ Image URL saved in DB:', order.inspiration_image_url)
+      console.log('=== STEP 8: Order saved ===')
+      console.log('Saved order:', order)
+      console.log('Saved image URL:', order.inspiration_image_url)
       
-      // Double-check the saved data
+      // Double-check if the URL was saved
       if (order.inspiration_image_url !== inspirationImageUrl) {
         console.warn('⚠️ Mismatch: Saved URL differs from what we sent!')
         console.warn('Sent:', inspirationImageUrl)
@@ -242,13 +243,7 @@ export default function CustomOrderPage() {
     } catch (err) {
       console.error('❌ Custom order submission error:', err)
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      
-      // Check if it's a lock-related error
-      if (msg.toLowerCase().includes('lock')) {
-        toast.error('Please wait a moment and try again')
-      } else {
-        toast.error(`Something went wrong: ${msg}. Please try again or contact us via WhatsApp.`)
-      }
+      toast.error(`Something went wrong: ${msg}. Please try again or contact us via WhatsApp.`)
     } finally {
       setSubmitting(false)
       setUploadProgress('')
