@@ -101,8 +101,6 @@ export default function AdminOrders() {
 
   try {
     // First, update the order status in database
-    console.log(`Updating order ${id} to status: ${newStatus}`);
-    
     const { error: updateError } = await supabase
       .from('orders')
       .update({ status: newStatus })
@@ -115,8 +113,6 @@ export default function AdminOrders() {
 
     // Update local state immediately
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
-    
-    console.log('Order status updated successfully');
 
     // Get customer email for notification
     const customerEmail = getCustomerEmail(order)
@@ -128,9 +124,7 @@ export default function AdminOrders() {
 
     // Try to send email notification (don't block status update if email fails)
     try {
-      console.log('Sending email notification to:', customerEmail);
-      
-      const { error: emailError } = await supabase.functions.invoke('send-email', {
+      const { error: emailError } = await supabase.functions.invoke('send-emails', {
         body: {
           to: customerEmail,
           subject: `Order #${id.slice(0, 8)} Status Update - Ushanga Chronicles`,
