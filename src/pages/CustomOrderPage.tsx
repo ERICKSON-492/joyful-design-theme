@@ -54,7 +54,21 @@ export default function CustomOrderPage() {
     if (!formData.name.trim() || !formData.phone.trim()) return
     setSubmitting(true)
     try {
-      const { error } = await supabase.from('custom_orders').insert({
+      let inspirationImageUrl: string | null = null
+      if (formData.file) {
+        const ext = formData.file.name.split('.').pop()
+        const path = `custom-orders/${Date.now()}.${ext}`
+        const { error: uploadError } = await supabase.storage.from('product-images').upload(path, formData.file)
+        if (uploadError) {
+          console.error('Inspiration photo upload failed:', uploadError)
+          toast.error('Could not upload your inspiration photo, but the rest of your request will still be sent.')
+        } else {
+          const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
+          inspirationImageUrl = publicUrl
+        }
+      }
+
+      const { data: order, error } = await supabase.from('custom_orders').insert({
         category: formData.category,
         vision: formData.vision || null,
         colors: formData.colors.length > 0 ? formData.colors : null,
@@ -63,9 +77,50 @@ export default function CustomOrderPage() {
         phone: formData.phone.trim(),
         email: formData.email.trim() || null,
         delivery_location: formData.location.trim() || null,
-      })
+        inspiration_image_url: inspirationImageUrl,
+      }).select('id').single()
       if (error) throw error
       setSubmitted(true)
+
+      // Fire-and-forget notification emails — a delivery hiccup here
+      // shouldn't block the customer from seeing the success screen,
+      // since their request is already safely saved either way.
+      const detailsHtml = `
+        <p><strong>Category:</strong> ${formData.category || '—'}</p>
+        ${formData.vision ? `<p><strong>Vision:</strong> ${formData.vision}</p>` : ''}
+        ${formData.colors.length ? `<p><strong>Colors:</strong> ${formData.colors.join(', ')}</p>` : ''}
+        ${formData.materials ? `<p><strong>Materials:</strong> ${formData.materials}</p>` : ''}
+        ${formData.location ? `<p><strong>Delivery location:</strong> ${formData.location}</p>` : ''}
+        ${inspirationImageUrl ? `<p><strong>Inspiration photo:</strong> <a href="${inspirationImageUrl}">${inspirationImageUrl}</a></p>` : ''}
+        <p><strong>Name:</strong> ${formData.name}</p>
+        <p><strong>Phone:</strong> ${formData.phone}</p>
+        ${formData.email ? `<p><strong>Email:</strong> ${formData.email}</p>` : ''}
+      `
+
+      supabase.functions.invoke('send-emails', {
+        body: {
+          to: 'admin@ushangachronicles.com',
+          subject: `New Custom Order Request${order?.id ? ` #${order.id.slice(0, 8)}` : ''}`,
+          html: `<h2>New Chronicle request from ${formData.name}</h2>${detailsHtml}`,
+        }
+      }).catch(err => console.error('Admin notification email failed:', err))
+
+      if (formData.email.trim()) {
+        supabase.functions.invoke('send-emails', {
+          body: {
+            to: formData.email.trim(),
+            subject: 'We received your Chronicle request — Ushanga Chronicles',
+            html: `
+              <h2>Thank you, ${formData.name}!</h2>
+              <p>Your Chronicle is in Linda's hands. We'll follow up within 48 hours to confirm details and pricing.</p>
+              <hr style="margin:16px 0;" />
+              <h3>What you told us</h3>
+              ${detailsHtml}
+              <p style="margin-top:16px;color:#6B7280;font-size:13px;">If anything above needs correcting, just reply to this email or reach us on WhatsApp.</p>
+            `,
+          }
+        }).catch(err => console.error('Customer confirmation email failed:', err))
+      }
     } catch (err) {
       console.error('Custom order submission error:', err)
       toast.error('Something went wrong. Please try again or reach out via WhatsApp.')
@@ -85,7 +140,7 @@ export default function CustomOrderPage() {
             Your Chronicle is in Linda's hands
           </h2>
           <p className="text-muted-foreground">
-            Expect a response within 24 hours. Thank you for trusting us with your story.
+            Expect a response within 48 hours. Thank you for trusting us with your story.
           </p>
         </div>
       </div>
