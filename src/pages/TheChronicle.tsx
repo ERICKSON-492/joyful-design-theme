@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import lindaPortrait from '@/assets/linda-portrait.jpg'
 import artisanWorking from '@/assets/artisan-working.jpg'
 import { supabase } from '@/integrations/supabase/client'
@@ -32,11 +32,15 @@ export default function TheChronicle() {
     '/about-us'
   )
   
-  const [origin, setOrigin] = useState(fallbackOrigin)
-  const [craft, setCraft] = useState(fallbackCraft)
+  const [content, setContent] = useState({
+    origin: fallbackOrigin,
+    craft: fallbackCraft
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [timestamp, setTimestamp] = useState(Date.now())
+  
+  // Use useMemo to anchor a single cache-busting timestamp per component mount lifecycle
+  const cacheBustTimestamp = useMemo(() => Date.now(), [])
 
   useEffect(() => {
     let isMounted = true
@@ -47,21 +51,19 @@ export default function TheChronicle() {
         setLoading(true)
         setError(null)
         
-        // Set a timeout to prevent infinite loading
         timeoutId = setTimeout(() => {
           if (isMounted) {
             setLoading(false)
             setError('Loading took too long. Showing fallback content.')
             console.warn('Supabase request timed out, using fallback content')
           }
-        }, 5000) // 5 second timeout
+        }, 5000)
 
         const { data, error: fetchError } = await supabase
           .from('site_content')
           .select('section_key, title, body, image_url')
           .in('section_key', ['about_where_it_began', 'about_the_craft'])
 
-        // Clear timeout since we got a response
         clearTimeout(timeoutId)
 
         if (!isMounted) return
@@ -72,28 +74,28 @@ export default function TheChronicle() {
           setLoading(false)
           return
         }
-
-        // Update timestamp for cache busting
-        setTimestamp(Date.now())
         
-        // Process data if available
         if (data && data.length > 0) {
+          const updatedContent = { ...content }
+          
           data.forEach(row => {
             if (row.section_key === 'about_where_it_began') {
-              setOrigin({ 
+              updatedContent.origin = { 
                 title: row.title || fallbackOrigin.title, 
                 body: row.body || fallbackOrigin.body, 
                 image_url: row.image_url || null
-              })
+              }
             }
             if (row.section_key === 'about_the_craft') {
-              setCraft({ 
+              updatedContent.craft = { 
                 title: row.title || fallbackCraft.title, 
                 body: row.body || fallbackCraft.body, 
                 image_url: row.image_url || null
-              })
+              }
             }
           })
+          
+          setContent(updatedContent)
         }
       } catch (err) {
         console.error('Unexpected error:', err)
@@ -109,12 +111,9 @@ export default function TheChronicle() {
 
     fetchContent()
 
-    // Cleanup
     return () => {
       isMounted = false
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
+      if (timeoutId) clearTimeout(timeoutId)
     }
   }, [])
 
@@ -127,26 +126,26 @@ export default function TheChronicle() {
     ))
   }
 
-  const getImageUrl = (url: string | null, fallbackSrc: string) => {
-    if (!url) return fallbackSrc
+  const getImageUrl = (url: string | null, fallbackSrc: string | { src: string }) => {
+    const fallback = typeof fallbackSrc === 'string' ? fallbackSrc : fallbackSrc.src
+    if (!url) return fallback
     
-    // If it's a Supabase storage URL, add timestamp for cache busting
     if (url.includes('supabase.co') || url.includes('storage.googleapis.com')) {
       const separator = url.includes('?') ? '&' : '?'
-      return `${url}${separator}t=${timestamp}`
+      return `${url}${separator}t=${cacheBustTimestamp}`
     }
     
     return url
   }
 
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>, fallbackSrc: string) => {
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>, fallbackSrc: string | { src: string }) => {
+    const fallback = typeof fallbackSrc === 'string' ? fallbackSrc : fallbackSrc.src
     const img = e.currentTarget
-    if (img.src !== fallbackSrc) {
-      img.src = fallbackSrc
+    if (img.src !== fallback) {
+      img.src = fallback
     }
   }
 
-  // Show loading state
   if (loading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center bg-background">
@@ -168,7 +167,7 @@ export default function TheChronicle() {
             One bead. A thousand stories.
           </p>
           {error && (
-            <p className="mt-4 text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
+            <p className="mt-4 text-sm text-amber-600 bg-amber-50 p-3 rounded-lg max-w-md mx-auto">
               ⚠️ {error}
             </p>
           )}
@@ -181,21 +180,20 @@ export default function TheChronicle() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto items-center">
             <div className="relative">
               <img
-                src={getImageUrl(origin.image_url, lindaPortrait.src || lindaPortrait)}
+                src={getImageUrl(content.origin.image_url, lindaPortrait)}
                 alt="Linda, founder of Ushanga Chronicles"
                 className="w-full max-w-md mx-auto object-cover rounded-lg shadow-lg aspect-[4/3]"
                 loading="lazy"
-                onError={(e) => handleImageError(e, lindaPortrait.src || lindaPortrait)}
+                onError={(e) => handleImageError(e, lindaPortrait)}
               />
-              {/* Decorative border */}
               <div className="absolute -bottom-4 -right-4 w-full h-full border-2 border-primary/20 rounded-lg -z-10 hidden md:block" />
             </div>
             <div>
               <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-6">
-                {origin.title}
+                {content.origin.title}
               </h2>
               <div className="space-y-4 text-muted-foreground text-base leading-relaxed">
-                {renderParagraphs(origin.body)}
+                {renderParagraphs(content.origin.body)}
               </div>
             </div>
           </div>
@@ -208,21 +206,20 @@ export default function TheChronicle() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto items-center">
             <div className="order-2 lg:order-1">
               <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-6">
-                {craft.title}
+                {content.craft.title}
               </h2>
               <div className="space-y-4 text-muted-foreground text-base leading-relaxed">
-                {renderParagraphs(craft.body)}
+                {renderParagraphs(content.craft.body)}
               </div>
             </div>
             <div className="relative order-1 lg:order-2">
               <img
-                src={getImageUrl(craft.image_url, artisanWorking.src || artisanWorking)}
+                src={getImageUrl(content.craft.image_url, artisanWorking)}
                 alt="Artisan handcrafting a beaded piece"
                 className="w-full max-w-md mx-auto object-cover rounded-lg shadow-lg aspect-[4/3]"
                 loading="lazy"
-                onError={(e) => handleImageError(e, artisanWorking.src || artisanWorking)}
+                onError={(e) => handleImageError(e, artisanWorking)}
               />
-              {/* Decorative border */}
               <div className="absolute -bottom-4 -left-4 w-full h-full border-2 border-primary/20 rounded-lg -z-10 hidden md:block" />
             </div>
           </div>
