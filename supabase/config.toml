@@ -3,6 +3,9 @@ project_id = "qokwavhqqqzjbmyshhfo"
 [functions.process-email-queue]
 verify_jwt = true
 
+[functions.send-emails]
+verify_jwt = true
+
 [functions.send-transactional-email]
 verify_jwt = true
 
