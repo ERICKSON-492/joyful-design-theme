@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Palette, Phone, Mail, MapPin, ChevronDown, ChevronUp } from 'lucide-react'
+import { Palette, Phone, Mail, MapPin, ChevronDown, ChevronUp, Image, ExternalLink, AlertCircle } from 'lucide-react'
 
 interface CustomOrder {
   id: string
@@ -41,6 +41,7 @@ export default function AdminCustomOrders() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({})
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -49,14 +50,33 @@ export default function AdminCustomOrders() {
     if (error) {
       setLoadError(
         error.message.toLowerCase().includes('column') || error.code === '42703'
-          ? 'This page needs the latest custom_orders migration (supabase/migrations/20260707150000_custom_orders_status_and_rls_fix.sql) applied to your live Supabase project.'
+          ? 'This page needs the latest custom_orders migration applied to your live Supabase project.'
           : error.message
       )
       setLoading(false)
       return
     }
-    if (data) setOrders(data as CustomOrder[])
+    if (data) {
+      setOrders(data as CustomOrder[])
+      // Check which images are broken
+      data.forEach(order => {
+        if (order.inspiration_image_url) {
+          checkImageUrl(order.id, order.inspiration_image_url)
+        }
+      })
+    }
     setLoading(false)
+  }
+
+  const checkImageUrl = async (orderId: string, url: string) => {
+    try {
+      const response = await fetch(url, { method: 'HEAD' })
+      if (!response.ok) {
+        setImageErrors(prev => ({ ...prev, [orderId]: true }))
+      }
+    } catch {
+      setImageErrors(prev => ({ ...prev, [orderId]: true }))
+    }
   }
 
   useEffect(() => { fetchOrders() }, [])
@@ -82,8 +102,7 @@ export default function AdminCustomOrders() {
         )}
       </div>
       <p className="text-xs text-muted-foreground mb-6 max-w-2xl">
-        Requests submitted through the "Create Yours" custom order form. You get an email whenever
-        a new one comes in, and the customer gets a confirmation if they left an email address.
+        Requests submitted through the "Create Yours" custom order form.
       </p>
 
       {loadError && (
@@ -126,6 +145,8 @@ export default function AdminCustomOrders() {
         <div className="space-y-3">
           {filtered.map(order => {
             const isExpanded = expandedId === order.id
+            const hasImageError = imageErrors[order.id]
+            
             return (
               <div key={order.id} className="bg-card border border-border rounded-lg overflow-hidden">
                 <button
@@ -141,6 +162,12 @@ export default function AdminCustomOrders() {
                     <span className="text-xs text-muted-foreground whitespace-nowrap hidden md:inline">
                       {new Date(order.created_at).toLocaleDateString()}
                     </span>
+                    {order.inspiration_image_url && (
+                      <span className="text-xs text-green-600 flex items-center gap-1">
+                        <Image className="w-3 h-3" />
+                        {hasImageError ? '⚠️' : '✓'}
+                      </span>
+                    )}
                   </div>
                   {isExpanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
                 </button>
@@ -188,12 +215,57 @@ export default function AdminCustomOrders() {
                       </div>
                     )}
 
-                    {order.inspiration_image_url && (
+                    {order.inspiration_image_url ? (
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1">Inspiration photo</p>
-                        <a href={order.inspiration_image_url} target="_blank" rel="noreferrer">
-                          <img src={order.inspiration_image_url} alt="Inspiration" className="max-w-xs rounded-lg border border-border" />
-                        </a>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs text-muted-foreground">Inspiration photo</p>
+                          <div className="flex gap-2">
+                            <a 
+                              href={order.inspiration_image_url} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                            >
+                              Open <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </div>
+                        {hasImageError ? (
+                          <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 rounded-lg p-4 text-sm">
+                            <div className="flex items-start gap-2">
+                              <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                              <div>
+                                <p className="text-yellow-700 dark:text-yellow-300 font-medium">Image URL exists but cannot be loaded</p>
+                                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 break-all">
+                                  URL: {order.inspiration_image_url}
+                                </p>
+                                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                                  Make sure the storage bucket is public and the file exists.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <img 
+                            src={order.inspiration_image_url} 
+                            alt="Inspiration" 
+                            className="max-w-xs max-h-64 rounded-lg border border-border object-contain bg-muted/30"
+                            onError={() => setImageErrors(prev => ({ ...prev, [order.id]: true }))}
+                          />
+                        )}
+                        <details className="mt-2">
+                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                            Show URL
+                          </summary>
+                          <p className="text-xs font-mono break-all text-muted-foreground mt-1 p-2 bg-muted/30 rounded">
+                            {order.inspiration_image_url}
+                          </p>
+                        </details>
+                      </div>
+                    ) : (
+                      <div className="bg-muted/30 rounded-lg p-4 text-center border border-dashed border-border">
+                        <Image className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
+                        <p className="text-xs text-muted-foreground">No inspiration photo uploaded</p>
                       </div>
                     )}
 
