@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
-import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText, Camera, Truck, CreditCard, Star, Boxes, Mail, BookOpen, Tag, MapPin, Palette, Users } from 'lucide-react'
+import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText, Camera, Truck, CreditCard, Star, Boxes, Mail, BookOpen, Tag, MapPin, Palette, Users, BarChart3 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { useSEO } from '@/hooks/useSEO'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { label: 'Products', href: '/admin/products', icon: Package },
   { label: 'Inventory', href: '/admin/inventory', icon: Boxes },
   { label: 'Customers', href: '/admin/customers', icon: Users },
