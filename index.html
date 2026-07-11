@@ -3,98 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <!-- PRIMARY TITLE & DESCRIPTION -->
-    <title>Ushanga Chronicles — Handcrafted African Jewelry &amp; Home Decor | Nairobi, Kenya</title>
+    <title>Ushanga Chronicles — African Jewelry &amp; Decor, Nairobi</title>
     <meta name="description" content="Ushanga Chronicles — handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya. Every piece tells a story. Shop or commission your custom piece today.">
-    
-    <!-- CRITICAL: TELL GOOGLE TO INDEX YOUR SITE -->
-    <meta name="robots" content="index, follow" />
-    
-    <!-- FAVICON & MANIFEST -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png">
     <link rel="manifest" href="/manifest.json">
-    
-    <!-- OPEN GRAPH / SOCIAL MEDIA -->
     <meta property="og:title" content="Ushanga Chronicles — Handcrafted African Jewelry &amp; Home Decor | Nairobi, Kenya">
-    <meta name="twitter:title" content="Ushanga Chronicles — Handcrafted African Jewelry &amp; Home Decor | Nairobi, Kenya">
-    <meta property="og:description" content="Ushanga Chronicles — handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya. Every piece tells a story. Shop or commission your custom piece today.">
-    <meta name="twitter:description" content="Ushanga Chronicles — handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya. Every piece tells a story. Shop or commission your custom piece today.">
-    <meta property="og:image" content="https://www.ushangachronicles.com/logo.jpeg">
-    <meta name="twitter:image" content="https://www.ushangachronicles.com/logo.jpeg">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://www.ushangachronicles.com">
-    
-    <!-- SCHEMA MARKUP: ORGANIZATION -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org/",
-      "@type": "Organization",
-      "name": "Ushanga Chronicles",
-      "url": "https://www.ushangachronicles.com",
-      "logo": "https://www.ushangachronicles.com/logo.jpeg",
-      "description": "Handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya.",
-      "email": "info@ushangachronicles.com",
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": "Nairobi",
-        "addressCountry": "KE"
-      },
-      "sameAs": [
-        "https://www.instagram.com/ushangachronicles",
-        "https://www.facebook.com/ushangachronicles"
-      ]
-    }
-    </script>
-    
-    <!-- SCHEMA MARKUP: WEBSITE WITH SEARCH ACTION -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org/",
-      "@type": "WebSite",
-      "name": "Ushanga Chronicles",
-      "url": "https://www.ushangachronicles.com",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": {
-          "@type": "EntryPoint",
-          "urlTemplate": "https://www.ushangachronicles.com/search?q={search_term_string}"
-        },
-        "query-input": "required name=search_term_string"
-      }
-    }
-    </script>
-    
-    <!-- SCHEMA MARKUP: LOCAL BUSINESS -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org/",
-      "@type": "LocalBusiness",
-      "name": "Ushanga Chronicles",
-      "image": "https://www.ushangachronicles.com/logo.jpeg",
-      "description": "Handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya.",
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": "Nairobi",
-        "addressCountry": "KE"
-      },
-      "priceRange": "KES 500 - KES 50,000",
-      "telephone": "+254-700-000000"
-    }
-    </script>
+  <meta name="twitter:title" content="Ushanga Chronicles — Handcrafted African Jewelry &amp; Home Decor | Nairobi, Kenya">
+  <meta property="og:description" content="Ushanga Chronicles — handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya. Every piece tells a story. Shop or commission your custom piece today.">
+  <meta name="twitter:description" content="Ushanga Chronicles — handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya. Every piece tells a story. Shop or commission your custom piece today.">
+  <meta property="og:image" content="https://www.ushangachronicles.com/logo.jpeg">
+  <meta name="twitter:image" content="https://www.ushangachronicles.com/logo.jpeg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta property="og:type" content="website">
 
-    <!-- GOOGLE ANALYTICS -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-0LQ501QG00"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-0LQ501QG00');
-    </script>
-  </head>
-  
+  <!--
+    Google Analytics (GA4) — visitor tracking.
+    Replace G-XXXXXXXXXX below with your real Measurement ID from
+    https://analytics.google.com (Admin > Data Streams > your web stream).
+    Until you do, this loads harmlessly but won't record anything real.
+  -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+</head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
