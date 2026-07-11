@@ -142,7 +142,15 @@ const SECTIONS: SectionConfig[] = [
   },
 ]
 
-function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConfig; initial: SiteContent | null; onSaveSuccess: (updatedRow: SiteContent) => void }) {
+export default function SectionEditor({ 
+  config, 
+  initial, 
+  onSaveSuccess 
+}: { 
+  config: SectionConfig; 
+  initial: SiteContent | null; 
+  onSaveSuccess: (updatedRow: SiteContent) => void 
+}) {
   const [title, setTitle] = useState('')
   const [subtitle, setSubtitle] = useState('')
   const [body, setBody] = useState('')
@@ -156,7 +164,6 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
-  // Sync component state cleanly whenever initial database prop finishes loading or updates
   useEffect(() => {
     setTitle(initial?.title || config.defaults?.title || '')
     setSubtitle(initial?.subtitle || config.defaults?.subtitle || '')
@@ -196,9 +203,7 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
         if (uploadError) {
           console.error('Upload error:', uploadError)
           toast.error('Failed to upload image')
-          setSaving(false)
-          setUploading(false)
-          return
+          return // Correctly halts progression if upload fails
         }
 
         const { data: { publicUrl } } = supabase.storage
@@ -209,7 +214,6 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
         setImageUrl(finalImageUrl)
         setSelectedFile(null)
         setPreviewUrl(null)
-        toast.success('Image uploaded successfully')
       }
 
       const payload = {
@@ -246,8 +250,10 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
           console.error('Insert error:', error)
         } else {
           toast.success(`${config.label} successfully created!`)
-          setContentId(data.id)
-          if (data) onSaveSuccess(data)
+          if (data) {
+            setContentId(data.id)
+            onSaveSuccess(data)
+          }
         }
       }
     } catch (error) {
@@ -484,5 +490,8 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
               </Button>
             )}
           </div>
-          
-          {selectedFile && (
+        </div>
+      )}
+    </div>
+  )
+}
