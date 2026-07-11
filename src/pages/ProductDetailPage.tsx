@@ -282,14 +282,36 @@ export default function ProductDetailPage() {
 
             {product.description && (() => {
               const lines = product.description.split('\n').map(l => l.trim()).filter(Boolean)
-              return lines.length > 1 ? (
-                <ul className="text-muted-foreground text-sm leading-relaxed list-disc pl-5 space-y-1">
-                  {lines.map((line, i) => (
-                    <li key={i}>{line.replace(/^[-•*]\s*/, '')}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-sm leading-relaxed">{lines[0]}</p>
+              const isBullet = (l: string) => /^[-•*]\s+/.test(l)
+
+              // Group consecutive bullet-marked lines into <ul> blocks, and
+              // leave everything else (headings, plain description lines)
+              // as its own paragraph, in the original order.
+              const blocks: { type: 'p' | 'ul'; lines: string[] }[] = []
+              for (const line of lines) {
+                const bullet = isBullet(line)
+                const last = blocks[blocks.length - 1]
+                if (bullet && last?.type === 'ul') {
+                  last.lines.push(line)
+                } else {
+                  blocks.push({ type: bullet ? 'ul' : 'p', lines: [line] })
+                }
+              }
+
+              return (
+                <div className="space-y-2">
+                  {blocks.map((block, bi) =>
+                    block.type === 'ul' ? (
+                      <ul key={bi} className="text-muted-foreground text-sm leading-relaxed list-disc pl-5 space-y-1">
+                        {block.lines.map((line, i) => (
+                          <li key={i}>{line.replace(/^[-•*]\s*/, '')}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p key={bi} className="text-muted-foreground text-sm leading-relaxed">{block.lines[0]}</p>
+                    )
+                  )}
+                </div>
               )
             })()}
 
