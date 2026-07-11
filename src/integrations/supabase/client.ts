@@ -13,5 +13,10 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    // PKCE instead of the default implicit flow: this means access/refresh
+    // tokens are exchanged server-to-server and never appear in the URL as
+    // a fragment. Only a short-lived, single-use authorization code does —
+    // which is useless to anyone even if it leaks or gets crawled.
+    flowType: 'pkce',
   }
 });
