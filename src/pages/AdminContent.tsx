@@ -142,15 +142,7 @@ const SECTIONS: SectionConfig[] = [
   },
 ]
 
-export default function SectionEditor({ 
-  config, 
-  initial, 
-  onSaveSuccess 
-}: { 
-  config: SectionConfig; 
-  initial: SiteContent | null; 
-  onSaveSuccess: (updatedRow: SiteContent) => void 
-}) {
+function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConfig; initial: SiteContent | null; onSaveSuccess: (updatedRow: SiteContent) => void }) {
   const [title, setTitle] = useState('')
   const [subtitle, setSubtitle] = useState('')
   const [body, setBody] = useState('')
@@ -159,7 +151,7 @@ export default function SectionEditor({
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
   const [contentId, setContentId] = useState<string | null>(null)
-  
+
   const cacheBustTimestamp = useMemo(() => Date.now(), [imageUrl])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -183,7 +175,6 @@ export default function SectionEditor({
 
   const handleSave = async () => {
     setSaving(true)
-    
     try {
       let finalImageUrl = imageUrl
 
@@ -195,25 +186,22 @@ export default function SectionEditor({
 
         const { error: uploadError } = await supabase.storage
           .from('site_images')
-          .upload(filePath, selectedFile, {
-            cacheControl: '3600',
-            upsert: false
-          })
+          .upload(filePath, selectedFile, { cacheControl: '3600', upsert: false })
 
         if (uploadError) {
           console.error('Upload error:', uploadError)
           toast.error('Failed to upload image')
-          return // Correctly halts progression if upload fails
+          setSaving(false)
+          setUploading(false)
+          return
         }
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('site_images')
-          .getPublicUrl(filePath)
-
+        const { data: { publicUrl } } = supabase.storage.from('site_images').getPublicUrl(filePath)
         finalImageUrl = publicUrl
         setImageUrl(finalImageUrl)
         setSelectedFile(null)
         setPreviewUrl(null)
+        toast.success('Image uploaded successfully')
       }
 
       const payload = {
@@ -224,13 +212,7 @@ export default function SectionEditor({
       }
 
       if (contentId) {
-        const { data, error } = await supabase
-          .from('site_content')
-          .update(payload)
-          .eq('id', contentId)
-          .select('*')
-          .single()
-
+        const { data, error } = await supabase.from('site_content').update(payload).eq('id', contentId).select('*').single()
         if (error) {
           toast.error('Failed to save changes')
           console.error('Update error:', error)
@@ -239,21 +221,14 @@ export default function SectionEditor({
           if (data) onSaveSuccess(data)
         }
       } else {
-        const { data, error } = await supabase
-          .from('site_content')
-          .insert({ section_key: config.key, ...payload })
-          .select('*')
-          .single()
-        
+        const { data, error } = await supabase.from('site_content').insert({ section_key: config.key, ...payload }).select('*').single()
         if (error) {
           toast.error('Failed to initialize content section')
           console.error('Insert error:', error)
         } else {
           toast.success(`${config.label} successfully created!`)
-          if (data) {
-            setContentId(data.id)
-            onSaveSuccess(data)
-          }
+          setContentId(data.id)
+          if (data) onSaveSuccess(data)
         }
       }
     } catch (error) {
@@ -268,58 +243,31 @@ export default function SectionEditor({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file')
-      e.target.value = ''
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size should be less than 5MB')
-      e.target.value = ''
-      return
-    }
-
+    if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); e.target.value = ''; return }
+    if (file.size > 5 * 1024 * 1024) { toast.error('Image size should be less than 5MB'); e.target.value = ''; return }
     setSelectedFile(file)
     toast.success(`Selected: ${file.name}`)
   }
 
   const handleRemoveImage = async () => {
     if (!imageUrl && !selectedFile) return
-    
     if (selectedFile) {
       setSelectedFile(null)
       setPreviewUrl(null)
       toast.success('Image selection cleared')
       return
     }
-
     if (!confirm('Are you sure you want to remove this image?')) return
-
     try {
       const url = new URL(imageUrl)
       const pathParts = url.pathname.split('/')
       const bucketIndex = pathParts.indexOf('site_images')
       if (bucketIndex !== -1) {
         const filePath = pathParts.slice(bucketIndex + 1).join('/')
-        
-        const { error: deleteError } = await supabase.storage
-          .from('site_images')
-          .remove([filePath])
-        
-        if (deleteError) {
-          console.error('Delete error:', deleteError)
-          toast.error('Failed to delete image from storage')
-        }
+        const { error: deleteError } = await supabase.storage.from('site_images').remove([filePath])
+        if (deleteError) { console.error('Delete error:', deleteError); toast.error('Failed to delete image from storage') }
       }
-
-      const { data, error: updateError } = await supabase
-        .from('site_content')
-        .update({ image_url: null })
-        .eq('id', contentId)
-        .select('*')
-        .single()
-
+      const { data, error: updateError } = await supabase.from('site_content').update({ image_url: null }).eq('id', contentId).select('*').single()
       if (updateError) {
         toast.error('Failed to remove image from content')
       } else {
@@ -337,161 +285,130 @@ export default function SectionEditor({
 
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      <button 
-        type="button"
-        onClick={() => setOpen(!open)} 
-        className="w-full flex items-center justify-between p-4 hover:bg-accent/50 transition-colors text-left"
-      >
+      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-4 hover:bg-accent/50 transition-colors text-left">
         <div>
           <h3 className="font-display text-lg font-semibold text-foreground">{config.label}</h3>
           <p className="text-xs text-muted-foreground">{config.description}</p>
         </div>
         {open ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
       </button>
-      
+
       {open && (
         <div className="p-4 pt-0 space-y-4 border-t border-border">
           <div className="mt-4">
             <label className="block text-sm font-medium text-foreground mb-1">Title</label>
-            <Input 
-              value={title} 
-              onChange={e => setTitle(e.target.value)} 
-              placeholder="Section title" 
-            />
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Section title" />
           </div>
-          
+
           {config.hasSubtitle && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Subtitle</label>
-              <Input 
-                value={subtitle} 
-                onChange={e => setSubtitle(e.target.value)} 
-                placeholder="Optional subtitle" 
-              />
+              <Input value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="Optional subtitle" />
             </div>
           )}
-          
+
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              {config.bodyLabel || 'Body'}
-            </label>
-            <Textarea 
-              value={body} 
-              onChange={e => setBody(e.target.value)} 
-              rows={6} 
-              placeholder={config.bodyPlaceholder} 
-            />
+            <label className="block text-sm font-medium text-foreground mb-1">{config.bodyLabel || 'Body'}</label>
+            <Textarea value={body} onChange={e => setBody(e.target.value)} rows={6} placeholder={config.bodyPlaceholder} />
           </div>
-          
+
           {config.hasImage && (
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Image
-              </label>
-              
+              <label className="block text-sm font-medium text-foreground mb-2">Image</label>
+
               {displayImage && (
                 <div className="relative inline-block mb-3">
-                  <img 
-                    src={previewUrl ? displayImage : `${displayImage}?t=${cacheBustTimestamp}`} 
-                    alt="Preview" 
-                    className="w-40 h-40 object-cover rounded-lg border border-border shadow-sm" 
+                  <img
+                    src={previewUrl ? displayImage : `${displayImage}?t=${cacheBustTimestamp}`}
+                    alt="Preview"
+                    className="w-40 h-40 object-cover rounded-lg border border-border shadow-sm"
                   />
-                  <button
-                    onClick={handleRemoveImage}
-                    className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                    disabled={uploading}
-                    type="button"
-                  >
+                  <button onClick={handleRemoveImage} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors" disabled={uploading} type="button">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
-              
+
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <label className={`
-                  inline-flex items-center gap-2 px-4 py-2.5 border-2 border-dashed rounded-lg 
-                  cursor-pointer hover:bg-accent/50 transition-all text-sm font-medium
-                  ${selectedFile ? 'border-primary bg-primary/5' : 'border-border'}
-                `}>
+                <label className={`inline-flex items-center gap-2 px-4 py-2.5 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent/50 transition-all text-sm font-medium ${selectedFile ? 'border-primary bg-primary/5' : 'border-border'}`}>
                   {uploading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Uploading...
-                    </>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
                   ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      {selectedFile ? 'Change Image' : displayImage ? 'Replace Image' : 'Choose Image'}
-                    </>
+                    <><Upload className="w-4 h-4" /> {selectedFile ? 'Change Image' : displayImage ? 'Replace Image' : 'Choose Image'}</>
                   )}
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    onChange={handleFileSelect} 
-                    disabled={uploading} 
-                  />
+                  <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
                 </label>
-                
+
                 {selectedFile && (
                   <span className="text-sm text-muted-foreground flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4" />
-                    {selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)
+                    <ImageIcon className="w-4 h-4" /> {selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)
                   </span>
                 )}
               </div>
-              
+
               <div className="mt-2 space-y-1">
                 <p className="text-xs text-muted-foreground">
                   {selectedFile ? 'Image will be uploaded when you save' : 'Upload a new image or select from your computer'}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Supported: JPG, PNG, WEBP • Max: 5MB
-                </p>
-                {imageUrl && !selectedFile && (
-                  <p className="text-xs text-green-600">
-                    ✓ Current image uploaded
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">Supported: JPG, PNG, WEBP • Max: 5MB</p>
+                {imageUrl && !selectedFile && <p className="text-xs text-green-600">✓ Current image uploaded</p>}
               </div>
             </div>
           )}
-          
+
           <div className="flex items-center gap-4 pt-2">
-            <Button 
-              onClick={handleSave} 
-              disabled={saving || uploading} 
-              className="gap-2 min-w-[120px]"
-            >
+            <Button onClick={handleSave} disabled={saving || uploading} className="gap-2 min-w-[120px]">
               {saving || uploading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {uploading ? 'Uploading...' : 'Saving...'}
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" /> {uploading ? 'Uploading...' : 'Saving...'}</>
               ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Changes
-                </>
+                <><Save className="w-4 h-4" /> Save Changes</>
               )}
             </Button>
-            
+
             {selectedFile && (
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setSelectedFile(null)
-                  setPreviewUrl(null)
-                }}
-                disabled={uploading}
-                type="button"
-              >
+              <Button variant="outline" onClick={() => { setSelectedFile(null); setPreviewUrl(null) }} disabled={uploading} type="button">
                 Cancel Upload
               </Button>
             )}
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+export default function AdminContent() {
+  const [contentMap, setContentMap] = useState<Record<string, SiteContent>>({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase
+      .from('site_content')
+      .select('*')
+      .in('section_key', SECTIONS.map(s => s.key))
+      .then(({ data }) => {
+        const map: Record<string, SiteContent> = {}
+        data?.forEach(row => { map[row.section_key] = row })
+        setContentMap(map)
+        setLoading(false)
+      })
+  }, [])
+
+  const handleSaveSuccess = (updatedRow: SiteContent) => {
+    setContentMap(prev => ({ ...prev, [updatedRow.section_key]: updatedRow }))
+  }
+
+  if (loading) return <p className="text-muted-foreground">Loading...</p>
+
+  return (
+    <div>
+      <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">Site Content</h1>
+      <p className="text-muted-foreground mb-8">Edit text and images for different sections of your website.</p>
+      <div className="max-w-2xl space-y-4">
+        {SECTIONS.map(config => (
+          <SectionEditor key={config.key} config={config} initial={contentMap[config.key] || null} onSaveSuccess={handleSaveSuccess} />
+        ))}
+      </div>
     </div>
   )
 }
