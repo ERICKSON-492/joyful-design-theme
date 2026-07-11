@@ -12,9 +12,14 @@ declare global {
  */
 export function trackPageView(path: string) {
   if (typeof window === 'undefined' || !window.gtag) return
+  // Deliberately build page_location from origin + pathname + search only —
+  // never window.location.hash. During an OAuth redirect, the URL fragment
+  // can briefly contain real session tokens before Supabase strips it, and
+  // that must never be sent to a third party like Google Analytics.
+  const safeLocation = `${window.location.origin}${window.location.pathname}${window.location.search}`
   window.gtag('event', 'page_view', {
     page_path: path,
-    page_location: window.location.href,
+    page_location: safeLocation,
     page_title: document.title,
   })
 }
