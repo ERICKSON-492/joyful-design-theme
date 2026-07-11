@@ -60,7 +60,6 @@ export default function AdminNairobiAreas() {
       name: newArea.name.trim(),
       doorstep_price: parseFloat(newArea.doorstep_price),
       super_metro_route: newArea.super_metro_route.trim() || null,
-      super_metro_only: newArea.super_metro_only,
     })
     setSaving(false)
     if (error) {
@@ -92,12 +91,6 @@ export default function AdminNairobiAreas() {
     fetchAreas()
   }
 
-  const toggleSuperMetroOnly = async (a: Area) => {
-    const { error } = await supabase.from('nairobi_areas').update({ super_metro_only: !a.super_metro_only }).eq('id', a.id)
-    if (error) { toast.error(error.message); return }
-    fetchAreas()
-  }
-
   const toggleActive = async (a: Area) => {
     const { error } = await supabase.from('nairobi_areas').update({ is_active: !a.is_active }).eq('id', a.id)
     if (error) { toast.error(error.message); return }
@@ -118,8 +111,9 @@ export default function AdminNairobiAreas() {
         <div>
           <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Nairobi Delivery Areas</h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Door-to-door delivery pricing by area, shown to customers at checkout. Areas marked
-            "Super Metro only" skip the doorstep option and only offer Super Metro / Pickup Mtaani.
+            Door-to-door delivery pricing by area, shown to customers at checkout. Doorstep delivery
+            is always offered for every area — Super Metro route below is just an additional option
+            alongside it where available, never a replacement.
           </p>
         </div>
         <Button size="sm" onClick={() => setShowAdd(s => !s)}>
@@ -162,14 +156,6 @@ export default function AdminNairobiAreas() {
               placeholder="e.g. Super Metro - Ngong"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
-              checked={newArea.super_metro_only}
-              onChange={e => setNewArea(f => ({ ...f, super_metro_only: e.target.checked }))}
-            />
-            Super Metro / Pickup Mtaani only (no doorstep option)
-          </label>
           <div className="flex gap-2 pt-1">
             <Button size="sm" onClick={addArea} disabled={saving} className="flex-1">
               {saving ? 'Adding...' : 'Add Area'}
@@ -206,7 +192,6 @@ export default function AdminNairobiAreas() {
                 <th className="px-4 py-2 font-medium">Area</th>
                 <th className="px-4 py-2 font-medium">Doorstep Price</th>
                 <th className="px-4 py-2 font-medium">Super Metro Route</th>
-                <th className="px-4 py-2 font-medium">Metro Only</th>
                 <th className="px-4 py-2 font-medium">Active</th>
                 <th className="px-4 py-2 font-medium text-right">Actions</th>
               </tr>
@@ -239,7 +224,6 @@ export default function AdminNairobiAreas() {
                           className="w-full border border-border bg-background rounded px-2 py-1 text-sm"
                         />
                       </td>
-                      <td className="px-4 py-2 text-muted-foreground">{a.super_metro_only ? 'Yes' : 'No'}</td>
                       <td className="px-4 py-2 text-muted-foreground">{a.is_active ? 'Yes' : 'No'}</td>
                       <td className="px-4 py-2">
                         <div className="flex justify-end gap-1">
@@ -253,14 +237,6 @@ export default function AdminNairobiAreas() {
                       <td className="px-4 py-2 font-medium text-foreground">{a.name}</td>
                       <td className="px-4 py-2 text-foreground">KSh {a.doorstep_price.toLocaleString()}</td>
                       <td className="px-4 py-2 text-muted-foreground">{a.super_metro_route || '—'}</td>
-                      <td className="px-4 py-2">
-                        <button
-                          onClick={() => toggleSuperMetroOnly(a)}
-                          className={`text-xs px-2 py-0.5 rounded font-medium ${a.super_metro_only ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}
-                        >
-                          {a.super_metro_only ? 'Yes' : 'No'}
-                        </button>
-                      </td>
                       <td className="px-4 py-2">
                         <button
                           onClick={() => toggleActive(a)}
