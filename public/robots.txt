@@ -4,6 +4,9 @@ Disallow: /admin
 Disallow: /checkout
 Disallow: /account
 Disallow: /my-orders
+Disallow: /*access_token*
+Disallow: /*refresh_token*
+Disallow: /*provider_token*
 
 User-agent: Bingbot
 Allow: /
@@ -11,6 +14,9 @@ Disallow: /admin
 Disallow: /checkout
 Disallow: /account
 Disallow: /my-orders
+Disallow: /*access_token*
+Disallow: /*refresh_token*
+Disallow: /*provider_token*
 
 User-agent: Twitterbot
 Allow: /
@@ -24,5 +30,8 @@ Disallow: /admin
 Disallow: /checkout
 Disallow: /account
 Disallow: /my-orders
+Disallow: /*access_token*
+Disallow: /*refresh_token*
+Disallow: /*provider_token*
 
 Sitemap: https://www.ushangachronicles.com/sitemap.xml
