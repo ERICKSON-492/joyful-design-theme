@@ -95,9 +95,6 @@ const FALLBACK_SUPER_METRO_AREAS: { area: string; route: string }[] = [
   { area: 'Kitengela', route: 'Super Metro - Kitengela' },
 ]
 
-// Fallback: these areas are served by Super Metro + Pickup Mtaani only (no doorstep)
-const FALLBACK_SUPER_METRO_ONLY_AREAS = ['Thika Town', 'Thika', 'Juja', 'Ngong', 'Rongai', 'Kitengela']
-
 async function reverseGeocode(lat: number, lon: number) {
   try {
     const response = await fetch(
@@ -167,7 +164,6 @@ export default function CheckoutPage() {
   const [checkingCoupon, setCheckingCoupon] = useState(false)
   const [nairobiAreas, setNairobiAreas] = useState(FALLBACK_NAIROBI_AREAS)
   const [superMetroAreas, setSuperMetroAreas] = useState(FALLBACK_SUPER_METRO_AREAS)
-  const [superMetroOnlyAreas, setSuperMetroOnlyAreas] = useState(FALLBACK_SUPER_METRO_ONLY_AREAS)
   const { userId, name: accountName, email: accountEmail } = useCheckoutAuth()
 
   useEffect(() => {
@@ -202,7 +198,6 @@ export default function CheckoutPage() {
         if (!data || data.length === 0) return
         setNairobiAreas(data.map(d => ({ name: d.name, price: d.doorstep_price })))
         setSuperMetroAreas(data.filter(d => d.super_metro_route).map(d => ({ area: d.name, route: d.super_metro_route! })))
-        setSuperMetroOnlyAreas(data.filter(d => d.super_metro_only).map(d => d.name))
       })
       .catch(() => { /* keep fallback data */ })
   }, [])
@@ -273,22 +268,18 @@ export default function CheckoutPage() {
         if (sm) options.push(sm)
       }
 
-      // Add Doorstep with area-specific price (only if not a Super Metro-only area).
-      // This never fully disappears even if Admin > Shipping doesn't have a
-      // method whose name matches — it falls back to a sensible default so
-      // customers always have a delivery option for their area.
-      const isSuperMetroOnly = superMetroOnlyAreas.includes(loc.name)
+      // Doorstep is always available for every Nairobi area — Super Metro
+      // (when applicable) is just an additional option alongside it, never
+      // a replacement for it.
       const doorstep = shippingMethods.find(m => {
         const n = m.name.toLowerCase()
         return n.includes('doorstep') || n.includes('door-to-door') || n.includes('door to door') || n.includes('home delivery')
       })
-      if (!isSuperMetroOnly) {
-        options.push(
-          doorstep
-            ? { ...doorstep, price: loc.price }
-            : { id: 'doorstep-default', name: 'Doorstep Delivery', type: 'local', provider: 'doorstep', estimated_days: '1-2 days', price: loc.price, regions: null }
-        )
-      }
+      options.push(
+        doorstep
+          ? { ...doorstep, price: loc.price }
+          : { id: 'doorstep-default', name: 'Doorstep Delivery', type: 'local', provider: 'doorstep', estimated_days: '1-2 days', price: loc.price, regions: null }
+      )
 
       setAvailableOptions(options)
     } else {
