@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { format } from 'date-fns'
@@ -26,17 +28,28 @@ export default function AdminOrders() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [updating, setUpdating] = useState<string | null>(null)
+  const [trackingInputs, setTrackingInputs] = useState<Record<string, string>>({})
 
   const fetchOrders = async () => {
-    const { data } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false })
-    setOrders(data || [])
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      setOrders(data || [])
+    } catch (err) {
+      console.error('Error fetching orders:', err)
+      toast.error('Failed to load orders')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchOrders() }, [])
+  useEffect(() => { 
+    fetchOrders() 
+  }, [])
 
   const getCustomerEmail = (order: Order) => {
     if (!order.shipping_address || typeof order.shipping_address !== 'object' || Array.isArray(order.shipping_address)) {
@@ -53,7 +66,8 @@ export default function AdminOrders() {
     return order.shipping_address as Record<string, unknown>
   }
 
-  const generateStatusEmailHtml = (order: Order, newStatus: string) => {
+  const generateStatusEmailHtml = (order: Order, newStatus: string, updatedTracking?: string) => {
+    const trackingNumber = updatedTracking || order.tracking_number
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
         <div style="text-align: center; padding: 14px 0; border-bottom: 3px solid #D4A017; margin-bottom: 18px;">
@@ -71,9 +85,9 @@ export default function AdminOrders() {
           </p>
         </div>
         
-        ${newStatus === 'shipped' && order.tracking_number ? `
+        ${newStatus === 'shipped' && trackingNumber ? `
           <div style="margin: 16px 0; padding: 12px; background-color: #f0f9ff; border-radius: 8px;">
-            <p style="margin: 0;"><strong>Tracking Number:</strong> ${order.tracking_number}</p>
+            <p style="margin: 0;"><strong>Tracking Number:</strong> ${trackingNumber}</p>
           </div>
         ` : ''}
         
@@ -90,71 +104,74 @@ export default function AdminOrders() {
           </p>
         </div>
       </div>
-    `;
-  };
+    `
+  }
 
   const updateStatus = async (id: string, newStatus: string) => {
-  const order = orders.find(o => o.id === id)
-  if (!order || order.status === newStatus) return
+    const order = orders.find(o => o.id === id)
+    if (!order || order.status === newStatus) return
 
-  setUpdating(id)
+    setUpdating(id)
 
-  try {
-    // First, update the order status in database
-    const { error: updateError } = await supabase
-      .from('orders')
-      .update({ status: newStatus })
-      .eq('id', id)
-
-    if (updateError) {
-      console.error('Database update error:', updateError);
-      throw updateError
-    }
-
-    // Update local state immediately
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
-
-    // Get customer email for notification
-    const customerEmail = getCustomerEmail(order)
-    
-    if (!customerEmail) {
-      toast.success('Status updated (no email on file)')
-      return
-    }
-
-    // Try to send email notification (don't block status update if email fails)
     try {
-      const { error: emailError } = await supabase.functions.invoke('send-emails', {
-        body: {
-          to: customerEmail,
-          subject: `Order #${id.slice(0, 8)} Status Update - Ushanga Chronicles`,
-          html: generateStatusEmailHtml(order, newStatus)
-        }
-      })
-
-      if (emailError) {
-        console.error('Email error:', emailError);
-        toast.warning('Status updated, but email notification failed')
-      } else {
-        toast.success('Status updated & email sent!')
+      const trackingNumber = trackingInputs[id] || order.tracking_number
+      
+      const updatePayload: Partial<Order> = { status: newStatus }
+      if (newStatus === 'shipped' && trackingInputs[id]) {
+        updatePayload.tracking_number = trackingInputs[id]
       }
-    } catch (emailErr) {
-      console.error('Email sending failed:', emailErr);
-      toast.warning('Status updated, but email notification failed')
+
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update(updatePayload)
+        .eq('id', id)
+
+      if (updateError) {
+        console.error('Database update error:', updateError)
+        throw updateError
+      }
+
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updatePayload } : o))
+
+      const customerEmail = getCustomerEmail(order)
+      if (!customerEmail) {
+        toast.success('Status updated (no email on file)')
+        return
+      }
+
+      try {
+        const { error: emailError } = await supabase.functions.invoke('send-emails', {
+          body: {
+            to: customerEmail,
+            subject: `Order #${id.slice(0, 8)} Status Update - Ushanga Chronicles`,
+            html: generateStatusEmailHtml(order, newStatus, trackingNumber || undefined)
+          }
+        })
+
+        if (emailError) {
+          console.error('Email error:', emailError)
+          toast.warning('Status updated, but email notification failed')
+        } else {
+          toast.success('Status updated & email sent!')
+        }
+      } catch (emailErr) {
+        console.error('Email sending failed:', emailErr)
+        toast.warning('Status updated, but email notification failed')
+      }
+      
+    } catch (error) {
+      console.error('Order status update failed:', error)
+      toast.error('Failed to update order status')
+    } finally {
+      setUpdating(null)
     }
-    
-  } catch (error) {
-    console.error('Order status update failed:', error)
-    toast.error('Failed to update order status')
-  } finally {
-    setUpdating(null)
   }
-}
+
   const filtered = orders.filter(o => {
     const matchesSearch = !search || 
       (o.customer_name?.toLowerCase().includes(search.toLowerCase())) ||
-      o.phone.includes(search) ||
-      o.id.includes(search)
+      (o.phone?.includes(search)) ||
+      (o.id.includes(search))
     const matchesStatus = statusFilter === 'all' || o.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -198,7 +215,7 @@ export default function AdminOrders() {
           { label: 'Total', count: orders.length },
           { label: 'Pending', count: orders.filter(o => o.status === 'pending').length },
           { label: 'Paid', count: orders.filter(o => o.status === 'paid').length },
-          { label: 'Revenue', count: `KSh ${orders.filter(o => o.status === 'paid' || o.status === 'delivered').reduce((sum, o) => sum + Number(o.total_amount), 0).toLocaleString()}` },
+          { label: 'Revenue', count: `KSh ${orders.filter(o => o.status === 'paid' || o.status === 'delivered').reduce((sum, o) => sum + Number(o.total_amount || 0), 0).toLocaleString()}` },
         ].map(stat => (
           <div key={stat.label} className="bg-card border border-border rounded-lg p-3 text-center">
             <p className="text-lg font-bold text-foreground">{stat.count}</p>
@@ -233,11 +250,11 @@ export default function AdminOrders() {
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {order.phone} · {format(new Date(order.created_at), 'MMM d, yyyy HH:mm')}
+                      {order.phone || 'No Phone'} · {format(new Date(order.created_at), 'MMM d, yyyy HH:mm')}
                     </p>
                   </div>
                   <p className="font-bold text-foreground text-sm whitespace-nowrap">
-                    KSh {Number(order.total_amount).toLocaleString()}
+                    KSh {Number(order.total_amount || 0).toLocaleString()}
                   </p>
                   {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
                 </div>
@@ -248,11 +265,11 @@ export default function AdminOrders() {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-muted-foreground text-xs mb-1">Order ID</p>
-                        <p className="text-foreground font-mono text-xs break-all">{order.id}</p>
+                        <p className="font-mono text-xs break-all text-foreground">{order.id}</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground text-xs mb-1">M-Pesa Receipt</p>
-                        <p className="text-foreground text-xs">{order.mpesa_receipt_number || '-'}</p>
+                        <p className="text-xs text-foreground">{order.mpesa_receipt_number || '-'}</p>
                       </div>
                     </div>
 
@@ -270,10 +287,10 @@ export default function AdminOrders() {
                       return (
                         <div className="bg-card border border-border rounded-lg p-3 text-sm space-y-1">
                           <p className="text-xs text-muted-foreground mb-1 font-medium">Delivery / Pickup</p>
-                          {method && <p className="text-foreground text-xs"><span className="text-muted-foreground">Method:</span> {method}</p>}
-                          {location && <p className="text-foreground text-xs"><span className="text-muted-foreground">Area:</span> {location}</p>}
+                          {method && <p className="text-xs text-foreground"><span className="text-muted-foreground">Method:</span> {method}</p>}
+                          {location && <p className="text-xs text-foreground"><span className="text-muted-foreground">Area:</span> {location}</p>}
                           {(building || floor || house) && (
-                            <p className="text-foreground text-xs">
+                            <p className="text-xs text-foreground">
                               <span className="text-muted-foreground">Address:</span>{' '}
                               {[house, floor, building].filter(Boolean).join(', ')}
                             </p>
@@ -297,20 +314,44 @@ export default function AdminOrders() {
                       </div>
                     )}
 
-                    {/* Update status */}
-                    <div className="flex items-center gap-3">
-                      <label className="text-xs text-muted-foreground">Update Status:</label>
-                      <select
-                        value={order.status}
-                        disabled={updating === order.id}
-                        onChange={e => updateStatus(order.id, e.target.value)}
-                        className="px-3 py-1.5 rounded-md border border-border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-                      >
-                        {STATUS_OPTIONS.map(s => (
-                          <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                        ))}
-                      </select>
-                      {updating === order.id && <span className="text-xs text-muted-foreground">Saving...</span>}
+                    {/* Update status controls */}
+                    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-muted-foreground">Update Status:</label>
+                        <select
+                          value={order.status}
+                          disabled={updating === order.id}
+                          onChange={e => updateStatus(order.id, e.target.value)}
+                          className="px-3 py-1.5 rounded-md border border-border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+                        >
+                          {STATUS_OPTIONS.map(s => (
+                            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Explicit tracking number assignment field when processing/shipping */}
+                      {(order.status === 'processing' || order.status === 'shipped') && (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder={order.tracking_number || "Add tracking number..."}
+                            value={trackingInputs[order.id] || ''}
+                            onChange={e => setTrackingInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                            className="px-3 py-1.5 rounded-md border border-border bg-card text-foreground text-xs focus:outline-none w-48"
+                          />
+                          {trackingInputs[order.id] && (
+                            <button
+                              onClick={() => updateStatus(order.id, 'shipped')}
+                              className="text-xs px-2 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                            >
+                              Apply Tracking
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {updating === order.id && <span className="text-xs text-muted-foreground animate-pulse">Processing...</span>}
                     </div>
                   </div>
                 )}
