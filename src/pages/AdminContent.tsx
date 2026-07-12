@@ -198,10 +198,10 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
 
         const { data: { publicUrl } } = supabase.storage.from('site_images').getPublicUrl(filePath)
         finalImageUrl = publicUrl
-        setImageUrl(finalImageUrl)
+        
+        // Clean up preview hooks locally before setting final URL state
         setSelectedFile(null)
         setPreviewUrl(null)
-        toast.success('Image uploaded successfully')
       }
 
       const payload = {
@@ -218,7 +218,10 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
           console.error('Update error:', error)
         } else {
           toast.success(`${config.label} successfully updated!`)
-          if (data) onSaveSuccess(data)
+          if (data) {
+            setImageUrl(data.image_url || '')
+            onSaveSuccess(data)
+          }
         }
       } else {
         const { data, error } = await supabase.from('site_content').insert({ section_key: config.key, ...payload }).select('*').single()
@@ -227,8 +230,11 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
           console.error('Insert error:', error)
         } else {
           toast.success(`${config.label} successfully created!`)
-          setContentId(data.id)
-          if (data) onSaveSuccess(data)
+          if (data) {
+            setContentId(data.id)
+            setImageUrl(data.image_url || '')
+            onSaveSuccess(data)
+          }
         }
       }
     } catch (error) {
@@ -398,10 +404,10 @@ export default function AdminContent() {
     setContentMap(prev => ({ ...prev, [updatedRow.section_key]: updatedRow }))
   }
 
-  if (loading) return <p className="text-muted-foreground">Loading...</p>
+  if (loading) return <p className="text-muted-foreground p-6">Loading site contents...</p>
 
   return (
-    <div>
+    <div className="p-6">
       <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">Site Content</h1>
       <p className="text-muted-foreground mb-8">Edit text and images for different sections of your website.</p>
       <div className="max-w-2xl space-y-4">
