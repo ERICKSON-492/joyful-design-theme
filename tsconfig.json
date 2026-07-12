@@ -1,13 +1,27 @@
 {
-  "compilerOptions": {
-    "target": "ES2021",
-    "lib": ["ES2021"],
-    "module": "ES2022",
-    "moduleResolution": "Bundler",
-    "types": ["@cloudflare/workers-types"],
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true
-  },
-  "include": ["src/**/*.ts"]
+"compilerOptions": {
+    "allowJs": true,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    
+"skipLibCheck": true,
+    "strictNullChecks": false
+   
+},
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }
+  
