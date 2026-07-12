@@ -22,30 +22,56 @@ export default function AdminUsers() {
     const load = async () => {
       setLoading(true)
       setLoadError(null)
-      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
-      if (error) {
-        setLoadError(
-          error.message.toLowerCase().includes('column') || error.code === '42703'
-            ? 'This page needs the latest profiles migration (supabase/migrations/20260707160000_add_email_to_profiles.sql) applied to your live Supabase project.'
-            : error.message
-        )
-        setLoading(false)
-        return
-      }
-      if (data) setProfiles(data as Profile[])
+      
+      try {
+        // Fetch from profiles table (not users)
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false })
+        
+        if (error) {
+          console.error('Supabase error:', error)
+          setLoadError(
+            error.message.toLowerCase().includes('permission') 
+              ? 'Permission denied. Please check your Row Level Security policies.'
+              : error.message
+          )
+          setLoading(false)
+          return
+        }
+        
+        if (data) {
+          setProfiles(data as Profile[])
+        }
 
-      // Best-effort order counts per user — if this fails for any reason,
-      // we still show the customer list without it.
-      const { data: orders } = await supabase.from('orders').select('user_id')
-      if (orders) {
-        const counts: Record<string, number> = {}
-        orders.forEach(o => {
-          if (o.user_id) counts[o.user_id] = (counts[o.user_id] || 0) + 1
-        })
-        setOrderCounts(counts)
+        // Fetch order counts
+        const { data: orders, error: ordersError } = await supabase
+          .from('orders')
+          .select('user_id')
+        
+        if (ordersError) {
+          console.warn('Could not fetch order counts:', ordersError)
+          // Don't set error here - just continue without order counts
+        }
+        
+        if (orders) {
+          const counts: Record<string, number> = {}
+          orders.forEach(o => {
+            if (o.user_id) {
+              counts[o.user_id] = (counts[o.user_id] || 0) + 1
+            }
+          })
+          setOrderCounts(counts)
+        }
+      } catch (err: any) {
+        console.error('Load error:', err)
+        setLoadError(err.message || 'Failed to load customers')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
+    
     load()
   }, [])
 
@@ -60,7 +86,7 @@ export default function AdminUsers() {
   }, [profiles, search])
 
   return (
-    <div>
+    <div className="p-6">
       <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
         <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Customers</h1>
         <span className="text-xs text-muted-foreground">{profiles.length} registered</span>
@@ -74,6 +100,9 @@ export default function AdminUsers() {
         <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-lg p-4 mb-6 text-sm">
           <p className="font-semibold mb-1">Couldn't load customers</p>
           <p>{loadError}</p>
+          <p className="mt-2 text-xs opacity-70">
+            Make sure you have proper Row Level Security policies set up for the profiles table.
+          </p>
         </div>
       )}
 
@@ -84,12 +113,14 @@ export default function AdminUsers() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search name, email, or phone..."
-          className="w-full border border-border bg-background rounded-lg pl-9 pr-3 py-2 text-sm"
+          className="w-full border border-border bg-background rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <div className="flex items-center justify-center py-16">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
       ) : loadError ? null : filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
@@ -100,34 +131,46 @@ export default function AdminUsers() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Phone</th>
-                <th className="px-4 py-2 font-medium">Orders</th>
-                <th className="px-4 py-2 font-medium">Joined</th>
+                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Email</th>
+                <th className="px-4 py-3 font-medium">Phone</th>
+                <th className="px-4 py-3 font-medium">Orders</th>
+                <th className="px-4 py-3 font-medium">Joined</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(p => (
-                <tr key={p.id} className="border-b border-border last:border-0 hover:bg-accent/30">
-                  <td className="px-4 py-2 font-medium text-foreground whitespace-nowrap">{p.display_name || '—'}</td>
-                  <td className="px-4 py-2 text-foreground">
+                <tr key={p.id} className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors">
+                  <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">
+                    {p.display_name || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-foreground">
                     {p.email ? (
-                      <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 hover:text-primary">
-                        <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> {p.email}
+                      <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                        <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> 
+                        <span className="truncate max-w-[150px]">{p.email}</span>
                       </a>
                     ) : '—'}
                   </td>
-                  <td className="px-4 py-2 text-foreground whitespace-nowrap">
+                  <td className="px-4 py-3 text-foreground whitespace-nowrap">
                     {p.phone ? (
-                      <a href={`tel:${p.phone}`} className="flex items-center gap-1.5 hover:text-primary">
-                        <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> {p.phone}
+                      <a href={`tel:${p.phone}`} className="flex items-center gap-1.5 hover:text-primary transition-colors">
+                        <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> 
+                        {p.phone}
                       </a>
                     ) : '—'}
                   </td>
-                  <td className="px-4 py-2 text-foreground">{orderCounts[p.user_id] || 0}</td>
-                  <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
-                    {new Date(p.created_at).toLocaleDateString()}
+                  <td className="px-4 py-3 text-foreground text-center">
+                    <span className="inline-flex items-center justify-center bg-primary/10 text-primary px-3 py-0.5 rounded-full text-xs font-medium">
+                      {orderCounts[p.user_id] || 0}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">
+                    {new Date(p.created_at).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric' 
+                    })}
                   </td>
                 </tr>
               ))}
