@@ -134,7 +134,8 @@ export default function AuthPage() {
           return
         }
         
-        const { error } = await supabase.auth.signUp({
+        // Sign up the user
+        const { data: { user }, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -142,10 +143,37 @@ export default function AuthPage() {
             emailRedirectTo: window.location.origin,
           },
         })
-        if (error) throw error
+        if (signUpError) throw signUpError
+        
+        // Create profile in your profiles table
+        if (user) {
+          // Wait a moment for the auth user to be fully created
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([
+              {
+                id: user.id, // This links to auth.users id
+                email: email,
+                full_name: name,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                // Add any other fields your profiles table has with default values
+              }
+            ])
+          
+          if (profileError) {
+            console.error('Error creating profile:', profileError)
+            // Optionally handle this error - you might want to delete the auth user
+            // or just notify the user that profile creation failed
+            toast.error('Account created but profile setup failed. Please contact support.')
+          } else {
+            toast.success('Account created successfully! Check your email to confirm.')
+          }
+        }
         
         if (isMounted.current) {
-          toast.success('Check your email to confirm your account!')
           setEmail('')
           setPassword('')
           setName('')
@@ -168,9 +196,7 @@ export default function AuthPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { 
-          // Redirect directly back to your landing homepage
           redirectTo: window.location.origin,
-          // Explicitly fallback to implicit flow here in case your client file gets overwritten
           queryParams: {
             access_type: 'offline',
             prompt: 'select_account'
