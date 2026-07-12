@@ -1,5 +1,5 @@
 {
-  "name": "your-worker-name",
+  "name": "joyful-design-theme",
   "main": "src/index.ts", // or index.js depending on your setup
   "compatibility_date": "2024-01-01"
 }
