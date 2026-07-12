@@ -145,28 +145,22 @@ export default function AuthPage() {
         })
         if (signUpError) throw signUpError
         
-        // Create profile in your profiles table
+        // Create profile in profiles table
         if (user) {
-          // Wait a moment for the auth user to be fully created
-          await new Promise(resolve => setTimeout(resolve, 1000))
-          
           const { error: profileError } = await supabase
             .from('profiles')
             .insert([
               {
-                id: user.id, // This links to auth.users id
+                user_id: user.id,
+                display_name: name,
                 email: email,
-                full_name: name,
                 created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                // Add any other fields your profiles table has with default values
+                updated_at: new Date().toISOString()
               }
             ])
           
           if (profileError) {
             console.error('Error creating profile:', profileError)
-            // Optionally handle this error - you might want to delete the auth user
-            // or just notify the user that profile creation failed
             toast.error('Account created but profile setup failed. Please contact support.')
           } else {
             toast.success('Account created successfully! Check your email to confirm.')
