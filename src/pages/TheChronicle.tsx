@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import lindaPortrait from '@/assets/linda-portrait.jpg'
-import artisanWorking from '@/assets/artisan-working.jpg'
 import { supabase } from '@/integrations/supabase/client'
 import { useSEO } from '@/hooks/useSEO'
 import { Loader2 } from 'lucide-react'
@@ -16,13 +14,13 @@ interface SectionContent {
 const fallbackOrigin: SectionContent = {
   title: 'Where It All Began',
   body: "In 2018, Linda received a single beaded necklace on her graduation day. It wasn't just a gift - it was a spark. That one bead carried the weight of centuries of African craftsmanship, the stories of hands that wove it, and the promise of something greater.\n\nFrom that moment, Linda began learning the art herself - studying under Maasai artisans, understanding the language of beads, colors, and patterns that had been passed down through generations.\n\nUshanga Chronicles was born from that passion. Every piece is handcrafted in Nairobi, Kenya, rooted in African heritage but designed for modern life. Each creation carries a story - not just of the artisan who made it, but of the person who wears it.\n\nToday, the Ushanga Tribe spans the globe. What started with one bead has become a thousand stories, and counting.",
-  image_url: null,
+  image_url: null, // Fetched dynamically via admin panel uploads
 }
 
 const fallbackCraft: SectionContent = {
   title: 'The Craft',
   body: "Every piece begins with intention. The beads are carefully selected - each color holding meaning, each pattern telling a different chapter.\n\nOur artisans work by hand, using techniques that have been refined over generations. There are no machines, no shortcuts. Just skilled hands, quality materials, and the patience to create something extraordinary.\n\nFrom sisal to leather, cowrie shells to glass beads - every material is sourced with care, ensuring that each piece is not just beautiful, but built to last.",
-  image_url: null,
+  image_url: null, // Fetched dynamically via admin panel uploads
 }
 
 export default function TheChronicle() {
@@ -39,7 +37,6 @@ export default function TheChronicle() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
-  // Use useMemo to anchor a single cache-busting timestamp per component mount lifecycle
   const cacheBustTimestamp = useMemo(() => Date.now(), [])
 
   useEffect(() => {
@@ -54,8 +51,8 @@ export default function TheChronicle() {
         timeoutId = setTimeout(() => {
           if (isMounted) {
             setLoading(false)
-            setError('Loading took too long. Showing fallback content.')
-            console.warn('Supabase request timed out, using fallback content')
+            setError('Loading took too long. Showing default content.')
+            console.warn('Supabase request timed out, using fallback text content')
           }
         }, 5000)
 
@@ -64,16 +61,19 @@ export default function TheChronicle() {
           .select('section_key, title, body, image_url')
           .in('section_key', ['about_where_it_began', 'about_the_craft'])
 
+        if (fetchError) {
+          clearTimeout(timeoutId)
+          console.error('Error fetching content:', fetchError)
+          if (isMounted) {
+            setError('Failed to load live database updates. Using default text.')
+            setLoading(false)
+          }
+          return
+        }
+
         clearTimeout(timeoutId)
 
         if (!isMounted) return
-
-        if (fetchError) {
-          console.error('Error fetching content:', fetchError)
-          setError('Failed to load content. Using fallback content.')
-          setLoading(false)
-          return
-        }
         
         if (data && data.length > 0) {
           const updatedContent = { ...content }
@@ -83,13 +83,15 @@ export default function TheChronicle() {
               updatedContent.origin = { 
                 title: row.title || fallbackOrigin.title, 
                 body: row.body || fallbackOrigin.body, 
-                image_url: row.image_url || null
+                // Uses the live uploaded dashboard image explicitly
+                image_url: row.image_url || null 
               }
             }
             if (row.section_key === 'about_the_craft') {
               updatedContent.craft = { 
                 title: row.title || fallbackCraft.title, 
                 body: row.body || fallbackCraft.body, 
+                // Uses the live uploaded dashboard image explicitly
                 image_url: row.image_url || null
               }
             }
@@ -98,9 +100,10 @@ export default function TheChronicle() {
           setContent(updatedContent)
         }
       } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId)
         console.error('Unexpected error:', err)
         if (isMounted) {
-          setError('An unexpected error occurred. Using fallback content.')
+          setError('An unexpected database connection error occurred.')
         }
       } finally {
         if (isMounted) {
@@ -126,24 +129,16 @@ export default function TheChronicle() {
     ))
   }
 
-  const getImageUrl = (url: string | null, fallbackSrc: string | { src: string }) => {
-    const fallback = typeof fallbackSrc === 'string' ? fallbackSrc : fallbackSrc.src
-    if (!url) return fallback
+  const getImageUrl = (url: string | null) => {
+    if (!url) return null
     
+    // Cache bust live bucket assets so admin dashboard adjustments reflect immediately
     if (url.includes('supabase.co') || url.includes('storage.googleapis.com')) {
       const separator = url.includes('?') ? '&' : '?'
       return `${url}${separator}t=${cacheBustTimestamp}`
     }
     
     return url
-  }
-
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>, fallbackSrc: string | { src: string }) => {
-    const fallback = typeof fallbackSrc === 'string' ? fallbackSrc : fallbackSrc.src
-    const img = e.currentTarget
-    if (img.src !== fallback) {
-      img.src = fallback
-    }
   }
 
   if (loading) {
@@ -179,13 +174,20 @@ export default function TheChronicle() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto items-center">
             <div className="relative">
-              <img
-                src={getImageUrl(content.origin.image_url, lindaPortrait)}
-                alt="Linda, founder of Ushanga Chronicles"
-                className="w-full max-w-md mx-auto object-cover rounded-lg shadow-lg aspect-[4/3]"
-                loading="lazy"
-                onError={(e) => handleImageError(e, lindaPortrait)}
-              />
+              {getImageUrl(content.origin.image_url) ? (
+                <img
+                  src={getImageUrl(content.origin.image_url)!}
+                  alt="Linda, founder of Ushanga Chronicles"
+                  className="w-full max-w-md mx-auto object-cover rounded-lg shadow-lg aspect-[4/3]"
+                  loading="lazy"
+                />
+              ) : (
+                /* Elegant CSS UI placeholder if no image has been uploaded to the admin panel yet */
+                <div className="w-full max-w-md mx-auto aspect-[4/3] rounded-lg bg-muted flex flex-col items-center justify-center border border-dashed border-border p-6 text-center shadow-inner">
+                  <span className="text-sm font-medium text-muted-foreground font-display">Ushanga Chronicles Story Image</span>
+                  <span className="text-xs text-muted-foreground/60 mt-1">Upload via site content management dashboard</span>
+                </div>
+              )}
               <div className="absolute -bottom-4 -right-4 w-full h-full border-2 border-primary/20 rounded-lg -z-10 hidden md:block" />
             </div>
             <div>
@@ -213,13 +215,20 @@ export default function TheChronicle() {
               </div>
             </div>
             <div className="relative order-1 lg:order-2">
-              <img
-                src={getImageUrl(content.craft.image_url, artisanWorking)}
-                alt="Artisan handcrafting a beaded piece"
-                className="w-full max-w-md mx-auto object-cover rounded-lg shadow-lg aspect-[4/3]"
-                loading="lazy"
-                onError={(e) => handleImageError(e, artisanWorking)}
-              />
+              {getImageUrl(content.craft.image_url) ? (
+                <img
+                  src={getImageUrl(content.craft.image_url)!}
+                  alt="Artisan handcrafting a beaded piece"
+                  className="w-full max-w-md mx-auto object-cover rounded-lg shadow-lg aspect-[4/3]"
+                  loading="lazy"
+                />
+              ) : (
+                /* Elegant CSS UI placeholder if no image has been uploaded to the admin panel yet */
+                <div className="w-full max-w-md mx-auto aspect-[4/3] rounded-lg bg-background flex flex-col items-center justify-center border border-dashed border-border p-6 text-center shadow-inner">
+                  <span className="text-sm font-medium text-muted-foreground font-display">Craftsmanship Image</span>
+                  <span className="text-xs text-muted-foreground/60 mt-1">Upload via site content management dashboard</span>
+                </div>
+              )}
               <div className="absolute -bottom-4 -left-4 w-full h-full border-2 border-primary/20 rounded-lg -z-10 hidden md:block" />
             </div>
           </div>
