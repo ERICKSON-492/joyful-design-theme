@@ -1,20 +1,8 @@
-// Ushanga Chronicles — bot pre-rendering Worker
+// Ushanga Chronicles — bot pre-rendering Worker (Testing Configuration)
 //
-// Sits in front of the site as a Worker Route. For real visitors, every
-// request passes straight through to Cloudflare Pages, completely
-// unchanged — this Worker never affects what a human sees.
-//
-// For known search/social/AI crawler user-agents, it instead:
-//   1. Checks the Cache API for a recently-rendered snapshot of that exact
-//      URL and serves it if still fresh (avoids paying for a Browser Run
-//      render on every single crawl).
-//   2. If nothing cached (or it's stale), asks Browser Run to load the real
-//      page in headless Chrome, wait for it to finish rendering, and
-//      returns that fully-rendered HTML — so crawlers see actual headings,
-//      nav, prices, and products instead of an empty <div id="root">.
-//   3. Caches the result for CACHE_TTL_SECONDS before rendering again.
-//
-// Deployment/config notes are in cloudflare/prerender-worker/README.md.
+// Standalone Direct Link Test Mode:
+// Bypasses UA/Hostname restrictions so you can view the output directly 
+// inside your standard browser by navigating to your .workers.dev link.
 
 interface Env {
   BROWSER: Fetcher & {
@@ -26,21 +14,16 @@ interface Env {
 }
 
 // How long a rendered snapshot is considered fresh before Browser Run is
-// asked to render that URL again. Raise this if your content changes
-// rarely; lower it if you publish new products/pages very frequently.
+// asked to render that URL again.
 const CACHE_TTL_SECONDS = 60 * 60 * 6 // 6 hours
 
-// Only these hostnames can be rendered through this Worker — prevents it
-// from becoming an open rendering proxy for arbitrary sites.
+// Only these hostnames can be rendered through this Worker in production.
 const ALLOWED_HOSTNAMES = new Set([
   'ushangachronicles.com',
   'www.ushangachronicles.com',
 ])
 
-// Known search engine, social-preview, and AI crawlers. Anything not
-// matching this list is treated as a normal visitor and passed straight
-// through untouched — this list only ever *adds* prerendering, it never
-// blocks or restricts anyone.
+// Known search engine, social-preview, and AI crawlers.
 const BOT_USER_AGENT_PATTERN = new RegExp(
   [
     'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 'yandexbot',
@@ -60,9 +43,6 @@ function isBotRequest(request: Request): boolean {
 }
 
 function isPageRequest(request: Request): boolean {
-  // Only intercept actual page navigations — never static assets (JS, CSS,
-  // images, fonts, etc.), which browsers/crawlers request without this
-  // Accept header, and which should always come straight from Pages.
   const accept = request.headers.get('accept') || ''
   return accept.includes('text/html')
 }
@@ -92,10 +72,18 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
-    // Never touch anything other than a real page request from a known bot.
+    // -------------------------------------------------------------------------
+    // 🛠️ TESTING OVERRIDE: Commented out to allow your browser to see the worker output
+    // -------------------------------------------------------------------------
+    /*
     if (!isBotRequest(request) || !isPageRequest(request) || !ALLOWED_HOSTNAMES.has(url.hostname)) {
       return fetch(request)
     }
+    */
+
+    // Force the worker to fetch and render your actual site for testing
+    // rather than looking up the 'joyful-design-theme' workers.dev domain.
+    const testTargetUrl = new URL("https://ushangachronicles.com")
 
     // Serve a cached snapshot if we rendered this exact URL recently.
     const cache = caches.default
@@ -106,23 +94,24 @@ export default {
     }
 
     try {
-      const html = await renderWithBrowserRun(env, url)
+      // Execute headless rendering via Cloudflare Browser Run
+      const html = await renderWithBrowserRun(env, testTargetUrl)
+      
       const rendered = new Response(html, {
         headers: {
           'content-type': 'text/html; charset=utf-8',
           'cache-control': `public, max-age=${CACHE_TTL_SECONDS}`,
-          'x-prerendered-by': 'browser-run',
+          'x-prerendered-by': 'browser-run-testing',
         },
       })
-      // Cache in the background so this response isn't delayed by it.
+      
+      // Cache in the background so this response isn't delayed
       ctx.waitUntil(cache.put(cacheKey, rendered.clone()))
       return rendered
-    } catch (err) {
-      // If rendering fails for any reason, fall back to the normal SPA
-      // response rather than showing the crawler an error page — worst
-      // case it just sees the same empty shell as before, not worse.
-      console.error('Prerender failed, falling back to origin:', err)
-      return fetch(request)
+    } catch (err: any) {
+      console.error('Prerender failed:', err)
+      // Return the error stack directly to your browser page during testing
+      return new Response(`Prerender Pipeline Error: ${err.message}`, { status: 500 })
     }
   },
 } satisfies ExportedHandler<Env>
