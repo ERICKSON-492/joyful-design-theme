@@ -63,6 +63,39 @@ export default function ProductDetailPage() {
     if (id) trackView(id)
   }, [id, trackView])
 
+  // Inject Product JSON-LD structured data for search engines
+  useEffect(() => {
+    if (!product) return
+    const price = product.sale_price ?? product.price
+    const images = (product.image_urls && product.image_urls.length > 0)
+      ? product.image_urls
+      : (product.image_url ? [product.image_url] : [])
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      description: product.description || undefined,
+      image: images,
+      category: product.category,
+      brand: { '@type': 'Brand', name: 'Ushanga Chronicles' },
+      offers: {
+        '@type': 'Offer',
+        price: price,
+        priceCurrency: 'KES',
+        availability: product.is_preorder
+          ? 'https://schema.org/PreOrder'
+          : (product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'),
+        url: typeof window !== 'undefined' ? window.location.href : undefined,
+      },
+    }
+    const script = document.createElement('script')
+    script.type = 'application/ld+json'
+    script.setAttribute('data-product-jsonld', '')
+    script.text = JSON.stringify(jsonLd)
+    document.head.appendChild(script)
+    return () => { script.remove() }
+  }, [product])
+
   useEffect(() => {
     if (!id) return
     const load = async () => {
