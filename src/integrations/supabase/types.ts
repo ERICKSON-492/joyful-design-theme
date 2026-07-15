@@ -201,11 +201,9 @@ export type Database = {
           delivery_location: string | null
           email: string | null
           id: string
-          inspiration_image_url: string | null
           materials: string | null
           name: string
           phone: string
-          status: string
           vision: string | null
         }
         Insert: {
@@ -215,11 +213,9 @@ export type Database = {
           delivery_location?: string | null
           email?: string | null
           id?: string
-          inspiration_image_url?: string | null
           materials?: string | null
           name: string
           phone: string
-          status?: string
           vision?: string | null
         }
         Update: {
@@ -229,11 +225,9 @@ export type Database = {
           delivery_location?: string | null
           email?: string | null
           id?: string
-          inspiration_image_url?: string | null
           materials?: string | null
           name?: string
           phone?: string
-          status?: string
           vision?: string | null
         }
         Relationships: []
@@ -439,8 +433,6 @@ export type Database = {
           customer_name: string | null
           id: string
           items: Json
-          latitude: number | null
-          longitude: number | null
           mpesa_checkout_request_id: string | null
           mpesa_receipt_number: string | null
           phone: string
@@ -456,8 +448,6 @@ export type Database = {
           customer_name?: string | null
           id?: string
           items?: Json
-          latitude?: number | null
-          longitude?: number | null
           mpesa_checkout_request_id?: string | null
           mpesa_receipt_number?: string | null
           phone: string
@@ -473,8 +463,6 @@ export type Database = {
           customer_name?: string | null
           id?: string
           items?: Json
-          latitude?: number | null
-          longitude?: number | null
           mpesa_checkout_request_id?: string | null
           mpesa_receipt_number?: string | null
           phone?: string
@@ -636,7 +624,6 @@ export type Database = {
           price: number
           price_max: number | null
           price_min: number | null
-          sale_price: number | null
           stock: number
           subcategory: string | null
           updated_at: string
@@ -656,7 +643,6 @@ export type Database = {
           price: number
           price_max?: number | null
           price_min?: number | null
-          sale_price?: number | null
           stock?: number
           subcategory?: string | null
           updated_at?: string
@@ -676,79 +662,9 @@ export type Database = {
           price?: number
           price_max?: number | null
           price_min?: number | null
-          sale_price?: number | null
           stock?: number
           subcategory?: string | null
           updated_at?: string
-        }
-        Relationships: []
-      }
-      coupons: {
-        Row: {
-          id: string
-          code: string
-          discount_type: string
-          discount_value: number
-          min_order_amount: number | null
-          usage_limit: number | null
-          times_used: number
-          is_active: boolean
-          expires_at: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          code: string
-          discount_type: string
-          discount_value: number
-          min_order_amount?: number | null
-          usage_limit?: number | null
-          times_used?: number
-          is_active?: boolean
-          expires_at?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          code?: string
-          discount_type?: string
-          discount_value?: number
-          min_order_amount?: number | null
-          usage_limit?: number | null
-          times_used?: number
-          is_active?: boolean
-          expires_at?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      nairobi_areas: {
-        Row: {
-          id: string
-          name: string
-          doorstep_price: number
-          super_metro_route: string | null
-          super_metro_only: boolean
-          is_active: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          doorstep_price: number
-          super_metro_route?: string | null
-          super_metro_only?: boolean
-          is_active?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          doorstep_price?: number
-          super_metro_route?: string | null
-          super_metro_only?: boolean
-          is_active?: boolean
-          created_at?: string
         }
         Relationships: []
       }
@@ -756,7 +672,6 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string | null
-          email: string | null
           id: string
           phone: string | null
           updated_at: string
@@ -765,7 +680,6 @@ export type Database = {
         Insert: {
           created_at?: string
           display_name?: string | null
-          email?: string | null
           id?: string
           phone?: string | null
           updated_at?: string
@@ -774,7 +688,6 @@ export type Database = {
         Update: {
           created_at?: string
           display_name?: string | null
-          email?: string | null
           id?: string
           phone?: string | null
           updated_at?: string
@@ -1000,6 +913,7 @@ export type Database = {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
       }
+      email_queue_dispatch: { Args: never; Returns: undefined }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
@@ -1030,20 +944,6 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
-      }
-      validate_coupon: {
-        Args: { p_code: string; p_order_amount: number }
-        Returns: {
-          valid: boolean
-          message: string
-          coupon_id: string
-          discount_type: string
-          discount_value: number
-        }[]
-      }
-      redeem_coupon: {
-        Args: { p_coupon_id: string }
-        Returns: undefined
       }
     }
     Enums: {
