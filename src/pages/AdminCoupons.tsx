@@ -38,7 +38,7 @@ export default function AdminCoupons() {
   const fetchCoupons = async () => {
     setLoading(true)
     setLoadError(null)
-    const { data, error } = await supabase.from('coupons').select('*').order('created_at', { ascending: false })
+    const { data, error } = await (supabase as any).from('coupons').select('*').order('created_at', { ascending: false })
     if (error) {
       setLoadError(
         error.message.toLowerCase().includes('does not exist') || error.code === '42P01'
@@ -48,7 +48,7 @@ export default function AdminCoupons() {
       setLoading(false)
       return
     }
-    if (data) setCoupons(data as Coupon[])
+    if (data) setCoupons(data as unknown as Coupon[])
     setLoading(false)
   }
 
@@ -69,7 +69,7 @@ export default function AdminCoupons() {
       return
     }
     setSaving(true)
-    const { error } = await supabase.from('coupons').insert({
+    const { error } = await (supabase as any).from('coupons').insert({
       code: form.code.trim().toUpperCase(),
       discount_type: form.discount_type,
       discount_value: parseFloat(form.discount_value),
@@ -89,14 +89,14 @@ export default function AdminCoupons() {
   }
 
   const toggleActive = async (coupon: Coupon) => {
-    const { error } = await supabase.from('coupons').update({ is_active: !coupon.is_active }).eq('id', coupon.id)
+    const { error } = await (supabase as any).from('coupons').update({ is_active: !coupon.is_active }).eq('id', coupon.id)
     if (error) { toast.error(error.message); return }
     fetchCoupons()
   }
 
   const deleteCoupon = async (id: string) => {
     if (!confirm('Delete this coupon? This cannot be undone.')) return
-    const { error } = await supabase.from('coupons').delete().eq('id', id)
+    const { error } = await (supabase as any).from('coupons').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
     toast.success('Coupon deleted')
     fetchCoupons()

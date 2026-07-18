@@ -46,7 +46,7 @@ export default function AdminCustomOrders() {
   const fetchOrders = async () => {
     setLoading(true)
     setLoadError(null)
-    const { data, error } = await supabase.from('custom_orders').select('*').order('created_at', { ascending: false })
+    const { data, error } = await (supabase as any).from('custom_orders').select('*').order('created_at', { ascending: false })
     if (error) {
       setLoadError(
         error.message.toLowerCase().includes('column') || error.code === '42703'
@@ -57,7 +57,7 @@ export default function AdminCustomOrders() {
       return
     }
     if (data) {
-      setOrders(data as CustomOrder[])
+      setOrders(data as unknown as CustomOrder[])
       // Check which images are broken
       data.forEach(order => {
         if (order.inspiration_image_url) {
@@ -82,7 +82,7 @@ export default function AdminCustomOrders() {
   useEffect(() => { fetchOrders() }, [])
 
   const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from('custom_orders').update({ status }).eq('id', id)
+    const { error } = await (supabase as any).from('custom_orders').update({ status }).eq('id', id)
     if (error) { toast.error(error.message); return }
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
     toast.success('Status updated')

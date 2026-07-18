@@ -42,7 +42,7 @@ export default function AdminUsers() {
         }
         
         if (data) {
-          setProfiles(data as Profile[])
+          setProfiles(data as unknown as Profile[])
         }
 
         // Fetch order counts
