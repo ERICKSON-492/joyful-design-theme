@@ -17,6 +17,58 @@ if (!existsSync(SHELL_PATH)) {
 
 const shell = readFileSync(SHELL_PATH, "utf8");
 
+// Read Supabase creds from .env so we can fetch real products at build time.
+// If unavailable, prerender falls back to static routes only.
+const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL ||
+  (() => {
+    try {
+      const env = readFileSync(resolve(".env"), "utf8");
+      const m = env.match(/VITE_SUPABASE_URL\s*=\s*"?([^"\n]+)"?/);
+      return m ? m[1] : null;
+    } catch { return null; }
+  })();
+const SUPABASE_KEY =
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  (() => {
+    try {
+      const env = readFileSync(resolve(".env"), "utf8");
+      const m = env.match(/VITE_SUPABASE_PUBLISHABLE_KEY\s*=\s*"?([^"\n]+)"?/);
+      return m ? m[1] : null;
+    } catch { return null; }
+  })();
+
+async function fetchProducts() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/products?select=id,name,description,price,sale_price,price_min,price_max,image_url,category,stock,is_preorder&is_active=eq.true&order=created_at.desc&limit=500`;
+    const res = await fetch(url, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!res.ok) {
+      console.warn(`[prerender] products fetch failed: ${res.status}`);
+      return [];
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("[prerender] products fetch error:", err.message);
+    return [];
+  }
+}
+
+function fmtKES(n) {
+  if (n == null) return "";
+  return `KES ${Number(n).toLocaleString("en-KE")}`;
+}
+
+function productPrice(p) {
+  if (p.price_min && p.price_max && p.price_min !== p.price_max) {
+    return `${fmtKES(p.price_min)} - ${fmtKES(p.price_max)}`;
+  }
+  if (p.sale_price && p.sale_price < p.price) return fmtKES(p.sale_price);
+  return fmtKES(p.price);
+}
+
 /** @type {Array<{path: string, title: string, description: string, body: string}>} */
 const routes = [
   {
@@ -191,3 +243,104 @@ for (const route of routes) {
   }
 }
 console.log(`[prerender] wrote ${count} static route(s).`);
+
+// -------------------------------------------------------------
+// Per-product prerender + homepage/shop product enrichment.
+// Non-JS crawlers (Claude, ChatGPT, older bots) get real product
+// names, prices, images, and descriptions in the static HTML.
+// -------------------------------------------------------------
+const products = await fetchProducts();
+console.log(`[prerender] fetched ${products.length} product(s) from backend.`);
+
+function renderProduct(p) {
+  const title = `${p.name} | Ushanga Chronicles`;
+  const desc = (p.description || `${p.name} — handmade in Nairobi, Kenya by Ushanga Chronicles artisans. ${productPrice(p)}.`)
+    .replace(/\s+/g, " ")
+    .slice(0, 300);
+  const canonical = `${SITE}/product/${p.id}`;
+  const img = p.image_url || `${SITE}/logo.jpeg`;
+  const priceNum = (p.sale_price && p.sale_price < p.price) ? p.sale_price : p.price;
+  let html = shell;
+
+  html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${escapeAttr(title)}</title>`);
+  html = html.replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/, `<meta name="description" content="${escapeAttr(desc)}">`);
+  html = html.replace(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${escapeAttr(title)}">`);
+  html = html.replace(/<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${escapeAttr(title)}">`);
+  html = html.replace(/<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${escapeAttr(desc)}">`);
+  html = html.replace(/<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${escapeAttr(desc)}">`);
+  html = html.replace(/<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/, `<meta property="og:image" content="${escapeAttr(img)}">`);
+  html = html.replace(/<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/, `<meta name="twitter:image" content="${escapeAttr(img)}">`);
+  html = html.replace(/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/, `<link rel="canonical" href="${canonical}" />`);
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: p.name,
+    description: desc,
+    image: img,
+    sku: p.id,
+    brand: { "@type": "Brand", name: "Ushanga Chronicles" },
+    offers: {
+      "@type": "Offer",
+      priceCurrency: "KES",
+      price: priceNum,
+      availability: p.is_preorder ? "https://schema.org/PreOrder" : (p.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"),
+      url: canonical,
+    },
+  };
+  const jsonLdTag = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
+  html = html.replace("</head>", `${jsonLdTag}\n</head>`);
+
+  const body = `
+    <article style="max-width:760px;margin:2rem auto;padding:1.5rem;font-family:Georgia,serif;color:#1A1A1A;">
+      <p><a href="/shop">← Back to shop</a></p>
+      <h1>${escapeAttr(p.name)}</h1>
+      ${p.image_url ? `<p><img src="${escapeAttr(p.image_url)}" alt="${escapeAttr(p.name)}" style="max-width:100%;height:auto;" /></p>` : ""}
+      <p><strong>Price:</strong> ${escapeAttr(productPrice(p))}</p>
+      ${p.category ? `<p><strong>Category:</strong> ${escapeAttr(p.category)}</p>` : ""}
+      ${p.is_preorder ? `<p><strong>Pre-order</strong></p>` : ""}
+      ${p.description ? `<p>${escapeAttr(p.description)}</p>` : `<p>Handmade in Nairobi, Kenya by Ushanga Chronicles artisans. Every piece tells a story.</p>`}
+      <p><a href="/shop">Shop more from Ushanga Chronicles</a> · <a href="/custom-order">Create your own custom piece</a></p>
+    </article>
+  `;
+  html = html.replace(/<noscript>[\s\S]*?<\/noscript>/, `<noscript>${body}</noscript>`);
+
+  const outPath = resolve(DIST, "product", p.id, "index.html");
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, html, "utf8");
+}
+
+let productCount = 0;
+for (const p of products) {
+  try { renderProduct(p); productCount++; }
+  catch (err) { console.error(`[prerender] product ${p.id} failed:`, err.message); }
+}
+console.log(`[prerender] wrote ${productCount} product page(s).`);
+
+// Enrich /shop/index.html and / (root) with a real product list so crawlers
+// see actual names + prices, not just navigation.
+if (products.length) {
+  const listItems = products.slice(0, 60).map(p => `
+    <li style="margin-bottom:0.75rem;">
+      <a href="/product/${p.id}"><strong>${escapeAttr(p.name)}</strong></a>
+      — ${escapeAttr(productPrice(p))}
+      ${p.category ? ` <em>(${escapeAttr(p.category)})</em>` : ""}
+    </li>`).join("");
+
+  const injectInto = (filePath, heading) => {
+    if (!existsSync(filePath)) return;
+    let html = readFileSync(filePath, "utf8");
+    const block = `
+      <section style="max-width:760px;margin:2rem auto;padding:1.5rem;font-family:Georgia,serif;color:#1A1A1A;">
+        <h2>${heading}</h2>
+        <ul>${listItems}</ul>
+      </section>
+    </noscript>`;
+    html = html.replace("</noscript>", block);
+    writeFileSync(filePath, html, "utf8");
+  };
+
+  injectInto(resolve(DIST, "shop", "index.html"), "Handmade pieces available now");
+  injectInto(resolve(DIST, "index.html"), "Featured handmade pieces");
+  console.log(`[prerender] enriched shop + homepage with ${Math.min(products.length, 60)} product listings.`);
+}

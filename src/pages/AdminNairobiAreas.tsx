@@ -30,7 +30,7 @@ export default function AdminNairobiAreas() {
   const fetchAreas = async () => {
     setLoading(true)
     setLoadError(null)
-    const { data, error } = await supabase.from('nairobi_areas').select('*').order('name', { ascending: true })
+    const { data, error } = await (supabase as any).from('nairobi_areas').select('*').order('name', { ascending: true })
     if (error) {
       setLoadError(
         error.message.toLowerCase().includes('does not exist') || error.code === '42P01'
@@ -40,7 +40,7 @@ export default function AdminNairobiAreas() {
       setLoading(false)
       return
     }
-    if (data) setAreas(data as Area[])
+    if (data) setAreas(data as unknown as Area[])
     setLoading(false)
   }
 
@@ -56,7 +56,7 @@ export default function AdminNairobiAreas() {
     if (!newArea.name.trim()) { toast.error('Enter an area name'); return }
     if (!newArea.doorstep_price || parseFloat(newArea.doorstep_price) < 0) { toast.error('Enter a valid price'); return }
     setSaving(true)
-    const { error } = await supabase.from('nairobi_areas').insert({
+    const { error } = await (supabase as any).from('nairobi_areas').insert({
       name: newArea.name.trim(),
       doorstep_price: parseFloat(newArea.doorstep_price),
       super_metro_route: newArea.super_metro_route.trim() || null,
@@ -80,7 +80,7 @@ export default function AdminNairobiAreas() {
   const saveEdit = async (id: string) => {
     if (!editForm.name.trim()) { toast.error('Name cannot be empty'); return }
     if (!editForm.doorstep_price || parseFloat(editForm.doorstep_price) < 0) { toast.error('Enter a valid price'); return }
-    const { error } = await supabase.from('nairobi_areas').update({
+    const { error } = await (supabase as any).from('nairobi_areas').update({
       name: editForm.name.trim(),
       doorstep_price: parseFloat(editForm.doorstep_price),
       super_metro_route: editForm.super_metro_route.trim() || null,
@@ -92,14 +92,14 @@ export default function AdminNairobiAreas() {
   }
 
   const toggleActive = async (a: Area) => {
-    const { error } = await supabase.from('nairobi_areas').update({ is_active: !a.is_active }).eq('id', a.id)
+    const { error } = await (supabase as any).from('nairobi_areas').update({ is_active: !a.is_active }).eq('id', a.id)
     if (error) { toast.error(error.message); return }
     fetchAreas()
   }
 
   const deleteArea = async (id: string) => {
     if (!confirm('Delete this delivery area?')) return
-    const { error } = await supabase.from('nairobi_areas').delete().eq('id', id)
+    const { error } = await (supabase as any).from('nairobi_areas').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
     toast.success('Area deleted')
     fetchAreas()
