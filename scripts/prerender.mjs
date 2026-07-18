@@ -17,6 +17,58 @@ if (!existsSync(SHELL_PATH)) {
 
 const shell = readFileSync(SHELL_PATH, "utf8");
 
+// Read Supabase creds from .env so we can fetch real products at build time.
+// If unavailable, prerender falls back to static routes only.
+const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL ||
+  (() => {
+    try {
+      const env = readFileSync(resolve(".env"), "utf8");
+      const m = env.match(/VITE_SUPABASE_URL\s*=\s*"?([^"\n]+)"?/);
+      return m ? m[1] : null;
+    } catch { return null; }
+  })();
+const SUPABASE_KEY =
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  (() => {
+    try {
+      const env = readFileSync(resolve(".env"), "utf8");
+      const m = env.match(/VITE_SUPABASE_PUBLISHABLE_KEY\s*=\s*"?([^"\n]+)"?/);
+      return m ? m[1] : null;
+    } catch { return null; }
+  })();
+
+async function fetchProducts() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/products?select=id,name,description,price,sale_price,price_min,price_max,image_url,category,stock,is_preorder&is_active=eq.true&order=created_at.desc&limit=500`;
+    const res = await fetch(url, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!res.ok) {
+      console.warn(`[prerender] products fetch failed: ${res.status}`);
+      return [];
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("[prerender] products fetch error:", err.message);
+    return [];
+  }
+}
+
+function fmtKES(n) {
+  if (n == null) return "";
+  return `KES ${Number(n).toLocaleString("en-KE")}`;
+}
+
+function productPrice(p) {
+  if (p.price_min && p.price_max && p.price_min !== p.price_max) {
+    return `${fmtKES(p.price_min)} - ${fmtKES(p.price_max)}`;
+  }
+  if (p.sale_price && p.sale_price < p.price) return fmtKES(p.sale_price);
+  return fmtKES(p.price);
+}
+
 /** @type {Array<{path: string, title: string, description: string, body: string}>} */
 const routes = [
   {
