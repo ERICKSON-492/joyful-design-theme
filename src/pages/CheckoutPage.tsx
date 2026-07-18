@@ -345,7 +345,7 @@ export default function CheckoutPage() {
     setCheckingCoupon(true)
     setCouponMessage(null)
     try {
-      const { data, error } = await supabase.rpc('validate_coupon', {
+      const { data, error } = await (supabase as any).rpc('validate_coupon', {
         p_code: couponCode.trim(),
         p_order_amount: totalPrice,
       })
@@ -436,7 +436,7 @@ export default function CheckoutPage() {
           coupon_code: appliedCoupon?.code || null, discount_amount: discountAmount || null,
         }
       }
-      const { data: order, error: orderError } = await supabase.from('orders').insert(orderData).select('id').single()
+      const { data: order, error: orderError } = await (supabase as any).from('orders').insert(orderData).select('id').single()
       if (orderError) throw new Error(orderError.message)
 
       // A coupon (or free pickup + full discount) can bring the total to
@@ -446,7 +446,7 @@ export default function CheckoutPage() {
         if (grandTotal <= 0 && selectedPayment !== 'cod') {
           await supabase.from('orders').update({ status: 'confirmed' }).eq('id', order.id)
         }
-        if (appliedCoupon) supabase.rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
+        if (appliedCoupon) (supabase as any).rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
         await sendOrderEmail(order.id); setStatus('success'); clearCart()
         toast.success(grandTotal <= 0 ? 'Order placed — nothing to pay! 🎉' : 'Order placed! Pay on delivery 🎉')
         return
@@ -467,14 +467,14 @@ export default function CheckoutPage() {
         try {
           const { data: queryData } = await supabase.functions.invoke('mpesa-stk-push', { body: { action: 'query', checkout_request_id: checkoutRequestId } })
           if (queryData?.ResultCode === '0' || queryData?.ResultCode === 0) {
-            if (appliedCoupon) supabase.rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
+            if (appliedCoupon) (supabase as any).rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
             await sendOrderEmail(order.id); setStatus('success'); clearCart(); toast.success('Payment successful! 🎉'); return
           }
         } catch { }
         if (attempts < 15) { setTimeout(poll, 4000) } else {
           const { data: orderCheck } = await supabase.from('orders').select('status').eq('id', order.id).single()
           if (orderCheck?.status === 'paid') {
-            if (appliedCoupon) supabase.rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
+            if (appliedCoupon) (supabase as any).rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
             await sendOrderEmail(order.id); setStatus('success'); clearCart(); toast.success('Payment confirmed! 🎉')
           }
           else { setStatus('failed'); setError('Payment timed out. Contact us on WhatsApp if amount was deducted.') }
