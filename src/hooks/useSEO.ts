@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-export const SITE_URL = 'https://www.ushangachronicles.com'
+export const SITE_URL = 'https://ushangachronicles.com'
 const DEFAULT_DESCRIPTION =
   'Ushanga Chronicles — handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya. Every piece tells a story.'
 
