@@ -34,4 +34,4 @@ Disallow: /*access_token*
 Disallow: /*refresh_token*
 Disallow: /*provider_token*
 
-Sitemap: https://www.ushangachronicles.com/sitemap.xml
+Sitemap: https://ushangachronicles.com/sitemap.xml

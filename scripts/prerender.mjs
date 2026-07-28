@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 
-const SITE = "https://www.ushangachronicles.com";
+const SITE = "https://ushangachronicles.com";
 const DIST = resolve("dist");
 const SHELL_PATH = resolve(DIST, "index.html");
 
