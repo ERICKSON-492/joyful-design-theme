@@ -110,36 +110,58 @@ export default function AuthPage() {
     }
   }
 
-  // Helper function to create/update profile
+  // Helper function to create/update profile with retry logic
   const createOrUpdateProfile = async (user: any, displayName: string, email: string) => {
     try {
-      // Wait a moment for the session to be fully established
-      await new Promise(resolve => setTimeout(resolve, 500))
+      console.log('Starting profile creation for user:', user.id)
       
-      // Get the current session to ensure we have a valid JWT
-      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
+      // Wait for session to be fully established
+      await new Promise(resolve => setTimeout(resolve, 1000))
       
-      if (sessionError) {
-        console.error('Session error:', sessionError)
-        return { success: false, error: sessionError }
+      // Get the current session with retries
+      let session = null
+      let attempts = 0
+      const maxAttempts = 3
+      
+      while (attempts < maxAttempts) {
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          console.error('Session error on attempt', attempts + 1, ':', sessionError)
+        } else if (currentSession) {
+          session = currentSession
+          console.log('Session found on attempt', attempts + 1)
+          break
+        }
+        
+        attempts++
+        if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
       }
-
-      if (!currentSession) {
-        // User needs to confirm email first
+      
+      if (!session) {
+        console.log('No session found - user needs to confirm email first')
         return { success: false, error: 'Email confirmation required' }
       }
 
-      // Create/update the profile
+      console.log('Session found, user is authenticated:', session.user.id)
+
+      // Create/update the profile with correct columns
+      const profileData = {
+        id: user.id,          // Primary key
+        user_id: user.id,     // Foreign key to auth.users
+        display_name: displayName || user.user_metadata?.full_name || email.split('@')[0],
+        email: email,
+        updated_at: new Date().toISOString(),
+      }
+
+      console.log('Attempting to upsert profile:', profileData)
+
       const { data, error: profileError } = await supabase
         .from('profiles')
         .upsert(
-          {
-            id: user.id,          // Primary key
-            user_id: user.id,     // Foreign key to auth.users
-            display_name: displayName,
-            email: email,
-            updated_at: new Date().toISOString(),
-          },
+          profileData,
           { 
             onConflict: 'id',     // Use 'id' as the conflict column
             ignoreDuplicates: false 
@@ -150,9 +172,16 @@ export default function AuthPage() {
 
       if (profileError) {
         console.error('Error creating profile:', profileError)
+        
+        // Check if it's a 401 error
+        if (profileError.code === 'PGRST301' || profileError.message?.includes('JWT')) {
+          return { success: false, error: 'Authentication failed - please refresh and try again' }
+        }
+        
         return { success: false, error: profileError }
       }
 
+      console.log('Profile created/updated successfully:', data)
       return { success: true, data }
     } catch (error) {
       console.error('Unexpected error creating profile:', error)
@@ -167,17 +196,23 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         // SIGN IN
-        const { error } = await supabase.auth.signInWithPassword({ 
+        console.log('Attempting login for:', email)
+        
+        const { data, error } = await supabase.auth.signInWithPassword({ 
           email, 
           password 
         })
+        
         if (error) throw error
         
         if (isMounted.current) {
           toast.success('Welcome back!')
         }
+        // Navigation will be handled by the auth listener
       } else {
         // SIGN UP
+        console.log('Attempting signup for:', email)
+        
         if (!name.trim()) {
           if (isMounted.current) {
             toast.error('Please enter your name')
@@ -186,62 +221,82 @@ export default function AuthPage() {
           return
         }
         
-        // Sign up the user
+        // Sign up the user with email confirmation
         const { data: { user, session }, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { full_name: name },
-            emailRedirectTo: window.location.origin,
+            data: { 
+              full_name: name,
+              display_name: name
+            },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         })
         
-        if (signUpError) throw signUpError
+        if (signUpError) {
+          console.error('Signup error:', signUpError)
+          throw signUpError
+        }
         
         if (user) {
-          // Check if we have a session immediately
-          let currentSession = session
+          console.log('User created:', user.id)
+          console.log('Session exists:', !!session)
           
-          if (!currentSession) {
-            // Wait a moment and check again
-            await new Promise(resolve => setTimeout(resolve, 500))
-            const { data: { session: newSession } } = await supabase.auth.getSession()
-            currentSession = newSession
-          }
-          
-          // Only create profile if user is confirmed (has session)
-          if (currentSession) {
-            // Create the profile
+          // Check if email confirmation is required
+          if (!session) {
+            // Email confirmation is required
+            console.log('Email confirmation required')
+            
+            // Try to create profile anyway (in case auto-confirm is enabled)
             const result = await createOrUpdateProfile(user, name, email)
             
             if (result.success) {
-              toast.success('Account created successfully!')
-              // Clear form
-              setEmail('')
-              setPassword('')
-              setName('')
-            } else if (result.error === 'Email confirmation required') {
-              toast.success('Account created! Please check your email to confirm your account.')
-              setEmail('')
-              setPassword('')
-              setName('')
+              toast.success('Account created successfully! Please check your email to confirm.')
             } else {
-              toast.error('Account created but profile setup failed. Please contact support.')
+              // Profile will be created after email confirmation
+              toast.success('Account created! Please check your email to confirm your account.')
+              console.log('Profile will be created after email confirmation')
             }
-          } else {
-            // Email confirmation required
-            toast.success('Account created! Please check your email to confirm your account.')
+            
             setEmail('')
             setPassword('')
             setName('')
+            setLoading(false)
+            return
+          }
+          
+          // User is already confirmed, create profile now
+          const result = await createOrUpdateProfile(user, name, email)
+          
+          if (result.success) {
+            toast.success('Account created successfully!')
+            setEmail('')
+            setPassword('')
+            setName('')
+          } else {
+            if (result.error === 'Email confirmation required') {
+              toast.success('Account created! Please check your email to confirm your account.')
+            } else if (result.error === 'Authentication failed - please refresh and try again') {
+              toast.error('Authentication error. Please refresh the page and try again.')
+            } else {
+              console.error('Profile creation failed:', result.error)
+              toast.error('Account created but profile setup failed. Please contact support.')
+            }
           }
         }
       }
     } catch (err: any) {
+      console.error('Auth error:', err)
+      
       if (isMounted.current) {
         // Handle specific error cases
         if (err.message?.includes('User already registered')) {
           toast.error('An account with this email already exists. Please sign in instead.')
+        } else if (err.message?.includes('Invalid login credentials')) {
+          toast.error('Invalid email or password. Please try again.')
+        } else if (err.message?.includes('Email not confirmed')) {
+          toast.error('Please confirm your email before signing in.')
         } else {
           toast.error(err.message || 'Authentication failed')
         }
@@ -256,56 +311,28 @@ export default function AuthPage() {
   const handleGoogleLogin = async () => {
     setLoading(true)
     try {
+      console.log('Initiating Google login...')
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { 
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'select_account'
           }
         },
       })
+      
       if (error) throw error
-      // The user will be redirected to Google, and then back to the app
+      
+      // The user will be redirected to Google, and then back to the callback
     } catch (err: any) {
+      console.error('Google login error:', err)
       if (isMounted.current) {
         toast.error(err.message || 'Google sign-in failed')
       }
       setLoading(false)
-    }
-  }
-
-  // This function should be called in your callback route handler
-  // when the user returns from Google OAuth
-  const handleGoogleCallback = async () => {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) throw error
-      
-      if (session?.user) {
-        const user = session.user
-        const displayName = user.user_metadata?.full_name || 
-                           user.user_metadata?.name || 
-                           user.email?.split('@')[0] || 
-                           'User'
-        
-        // Create or update profile
-        const result = await createOrUpdateProfile(
-          user, 
-          displayName, 
-          user.email || ''
-        )
-        
-        if (!result.success) {
-          console.error('Failed to create profile for Google user:', result.error)
-          toast.error('Failed to complete profile setup')
-        }
-      }
-    } catch (error) {
-      console.error('Google callback error:', error)
-      toast.error('Failed to complete Google sign-in')
     }
   }
 
@@ -356,6 +383,7 @@ export default function AuthPage() {
                 placeholder="Your full name"
                 className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 disabled={loading}
+                required={!isLogin}
               />
             </div>
           )}
@@ -377,7 +405,7 @@ export default function AuthPage() {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Password"
+              placeholder="Password (min 6 characters)"
               required
               minLength={6}
               className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
