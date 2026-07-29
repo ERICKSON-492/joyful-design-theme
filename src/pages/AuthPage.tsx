@@ -14,6 +14,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
   const [forgotLoading, setForgotLoading] = useState(false)
+  const [isCallback, setIsCallback] = useState(false)
   
   const navigate = useNavigate()
   const location = useLocation()
@@ -30,85 +31,6 @@ export default function AuthPage() {
       isMounted.current = false
     }
   }, [])
-
-  // Session check & listener
-  useEffect(() => {
-    if (authCheckDone.current) return
-    
-    let isSubscribed = true
-
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session && isSubscribed && !hasNavigated.current) {
-          hasNavigated.current = true
-          navigate(returnTo)
-        }
-        authCheckDone.current = true
-      } catch (error) {
-        console.debug('Session check failed:', error)
-        authCheckDone.current = true
-      }
-    }
-
-    checkSession()
-
-    let timeoutId: NodeJS.Timeout
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        clearTimeout(timeoutId)
-        
-        timeoutId = setTimeout(() => {
-          if (
-            session && 
-            isSubscribed && 
-            !hasNavigated.current &&
-            ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)
-          ) {
-            hasNavigated.current = true
-            navigate(returnTo)
-          }
-        }, 100)
-      }
-    )
-
-    return () => {
-      isSubscribed = false
-      subscription?.unsubscribe()
-      clearTimeout(timeoutId)
-    }
-  }, [navigate, returnTo])
-
-  useEffect(() => {
-    hasNavigated.current = false
-    authCheckDone.current = false
-  }, [location.pathname])
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email.trim()) { 
-      toast.error('Please enter your email')
-      return 
-    }
-    
-    setForgotLoading(true)
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      })
-      if (error) throw error
-      
-      toast.success('Password reset link sent! Check your email.')
-      setShowForgot(false)
-      setEmail('')
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to send reset email')
-    } finally {
-      if (isMounted.current) {
-        setForgotLoading(false)
-      }
-    }
-  }
 
   // Helper function to create/update profile with retry logic
   const createOrUpdateProfile = async (user: any, displayName: string, email: string) => {
@@ -186,6 +108,174 @@ export default function AuthPage() {
     } catch (error) {
       console.error('Unexpected error creating profile:', error)
       return { success: false, error }
+    }
+  }
+
+  // Handle Google OAuth callback
+  const handleGoogleCallback = async () => {
+    try {
+      console.log('Processing Google callback...')
+      setIsCallback(true)
+      
+      // Get the session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError)
+        throw sessionError
+      }
+      
+      if (!session?.user) {
+        console.error('No user in session')
+        throw new Error('No user found')
+      }
+
+      const user = session.user
+      console.log('User authenticated:', user.id)
+
+      // Get display name from Google metadata
+      const displayName = user.user_metadata?.full_name || 
+                         user.user_metadata?.name || 
+                         user.email?.split('@')[0] || 
+                         'User'
+
+      // Wait for session to be stable
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Create or update profile
+      console.log('Creating/updating profile for Google user...')
+      
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: user.id,
+            user_id: user.id,
+            display_name: displayName,
+            email: user.email || '',
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        )
+        .select()
+        .single()
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError)
+        
+        if (profileError.code === 'PGRST301') {
+          throw new Error('Authentication error - please try again')
+        }
+        
+        // Non-critical error, continue
+        toast.warning('Profile setup incomplete, but you can still use the app')
+      } else {
+        console.log('Profile created:', profile)
+      }
+
+      // Navigate to home
+      hasNavigated.current = true
+      navigate('/')
+      toast.success('Welcome to Ushanga Chronicles!')
+      
+    } catch (error: any) {
+      console.error('Google callback error:', error)
+      toast.error(error.message || 'Failed to complete Google sign-in')
+      
+      // Navigate back to auth
+      setTimeout(() => {
+        navigate('/auth')
+      }, 1500)
+    } finally {
+      setIsCallback(false)
+    }
+  }
+
+  // Check if we're on the callback route
+  useEffect(() => {
+    const path = window.location.pathname
+    if (path === '/auth/callback') {
+      handleGoogleCallback()
+    }
+  }, [])
+
+  // Session check & listener
+  useEffect(() => {
+    if (authCheckDone.current) return
+    
+    let isSubscribed = true
+
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session && isSubscribed && !hasNavigated.current && !isCallback) {
+          hasNavigated.current = true
+          navigate(returnTo)
+        }
+        authCheckDone.current = true
+      } catch (error) {
+        console.debug('Session check failed:', error)
+        authCheckDone.current = true
+      }
+    }
+
+    checkSession()
+
+    let timeoutId: NodeJS.Timeout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        clearTimeout(timeoutId)
+        
+        timeoutId = setTimeout(() => {
+          if (
+            session && 
+            isSubscribed && 
+            !hasNavigated.current &&
+            !isCallback &&
+            ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)
+          ) {
+            hasNavigated.current = true
+            navigate(returnTo)
+          }
+        }, 100)
+      }
+    )
+
+    return () => {
+      isSubscribed = false
+      subscription?.unsubscribe()
+      clearTimeout(timeoutId)
+    }
+  }, [navigate, returnTo, isCallback])
+
+  useEffect(() => {
+    hasNavigated.current = false
+    authCheckDone.current = false
+  }, [location.pathname])
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) { 
+      toast.error('Please enter your email')
+      return 
+    }
+    
+    setForgotLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) throw error
+      
+      toast.success('Password reset link sent! Check your email.')
+      setShowForgot(false)
+      setEmail('')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send reset email')
+    } finally {
+      if (isMounted.current) {
+        setForgotLoading(false)
+      }
     }
   }
 
@@ -327,6 +417,7 @@ export default function AuthPage() {
       if (error) throw error
       
       // The user will be redirected to Google, and then back to the callback
+      // The useEffect at the top will handle the callback
     } catch (err: any) {
       console.error('Google login error:', err)
       if (isMounted.current) {
@@ -334,6 +425,19 @@ export default function AuthPage() {
       }
       setLoading(false)
     }
+  }
+
+  // If we're processing the callback, show loading state
+  if (isCallback) {
+    return (
+      <div className="bg-background min-h-screen flex items-center justify-center px-4">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+          <h2 className="text-xl font-bold mb-2">Completing sign in...</h2>
+          <p className="text-muted-foreground">Please wait while we set up your account</p>
+        </div>
+      </div>
+    )
   }
 
   return (
