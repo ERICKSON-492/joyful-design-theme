@@ -14,7 +14,6 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
   const [forgotLoading, setForgotLoading] = useState(false)
-  const [isCallback, setIsCallback] = useState(false)
   
   const navigate = useNavigate()
   const location = useLocation()
@@ -24,7 +23,7 @@ export default function AuthPage() {
   const isMounted = useRef(true)
   const authCheckDone = useRef(false)
 
-  // Track component mount state
+  // Cleanup on unmount
   useEffect(() => {
     isMounted.current = true
     return () => {
@@ -32,145 +31,58 @@ export default function AuthPage() {
     }
   }, [])
 
-  // Helper function to create/update profile with retry logic
-  const createOrUpdateProfile = async (user: any, displayName: string, emailAddr: string) => {
-    try {
-      await new Promise(resolve => setTimeout(resolve, 800))
-      
-      let session = null
-      let attempts = 0
-      const maxAttempts = 3
-      
-      while (attempts < maxAttempts) {
-        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
-        
-        if (!sessionError && currentSession) {
-          session = currentSession
-          break
-        }
-        
-        attempts++
-        if (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-      }
-      
-      if (!session) {
-        return { success: false, error: 'Email confirmation required' }
-      }
-
-      const profileData = {
-        id: user.id,
-        user_id: user.id,
-        display_name: displayName || user.user_metadata?.full_name || emailAddr.split('@')[0],
-        email: emailAddr,
-        updated_at: new Date().toISOString(),
-      }
-
-      const { data, error: profileError } = await supabase
-        .from('profiles')
-        .upsert(profileData, { onConflict: 'id', ignoreDuplicates: false })
-        .select()
-        .single()
-
-      if (profileError) {
-        if (profileError.code === 'PGRST301' || profileError.message?.includes('JWT')) {
-          return { success: false, error: 'Authentication failed - please refresh and try again' }
-        }
-        return { success: false, error: profileError }
-      }
-
-      return { success: true, data }
-    } catch (error) {
-      return { success: false, error }
-    }
-  }
-
-  // Handle Google OAuth callback
-  const handleGoogleCallback = async () => {
-    try {
-      setIsCallback(true)
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      
-      if (sessionError || !session?.user) {
-        throw sessionError || new Error('No user found')
-      }
-
-      const user = session.user
-      const displayName = user.user_metadata?.full_name || 
-                          user.user_metadata?.name || 
-                          user.email?.split('@')[0] || 
-                          'User'
-
-      await supabase
-        .from('profiles')
-        .upsert(
-          {
-            id: user.id,
-            user_id: user.id,
-            display_name: displayName,
-            email: user.email || '',
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
-        )
-
-      if (!hasNavigated.current) {
-        hasNavigated.current = true
-        navigate('/')
-        toast.success('Welcome to Ushanga Chronicles!')
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to complete Google sign-in')
-      setTimeout(() => navigate('/auth'), 1500)
-    } finally {
-      if (isMounted.current) setIsCallback(false)
-    }
-  }
-
-  // Check if we're on the callback route immediately
+  // Session check & listener for automatic token parsing & redirection
   useEffect(() => {
-    if (window.location.pathname === '/auth/callback') {
-      handleGoogleCallback()
-    }
-  }, [])
-
-  // Session check & listener
-  useEffect(() => {
-    if (authCheckDone.current || window.location.pathname === '/auth/callback') return
+    if (authCheckDone.current) return
+    
+    let isSubscribed = true
 
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        if (session && !hasNavigated.current) {
+        if (session && isSubscribed && !hasNavigated.current) {
           hasNavigated.current = true
           navigate(returnTo)
         }
         authCheckDone.current = true
-      } catch {
+      } catch (error) {
+        console.debug('Session check failed:', error)
         authCheckDone.current = true
       }
     }
 
     checkSession()
 
+    let timeoutId: NodeJS.Timeout
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (
-          session && 
-          !hasNavigated.current && 
-          ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)
-        ) {
-          hasNavigated.current = true
-          navigate(returnTo)
-        }
+        clearTimeout(timeoutId)
+        
+        timeoutId = setTimeout(() => {
+          if (
+            session && 
+            isSubscribed && 
+            !hasNavigated.current &&
+            ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)
+          ) {
+            hasNavigated.current = true
+            navigate(returnTo)
+          }
+        }, 100)
       }
     )
 
     return () => {
+      isSubscribed = false
       subscription?.unsubscribe()
+      clearTimeout(timeoutId)
     }
   }, [navigate, returnTo])
+
+  useEffect(() => {
+    hasNavigated.current = false
+    authCheckDone.current = false
+  }, [location.pathname])
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -192,7 +104,9 @@ export default function AuthPage() {
     } catch (err: any) {
       toast.error(err.message || 'Failed to send reset email')
     } finally {
-      if (isMounted.current) setForgotLoading(false)
+      if (isMounted.current) {
+        setForgotLoading(false)
+      }
     }
   }
 
@@ -202,62 +116,71 @@ export default function AuthPage() {
     
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        const { error } = await supabase.auth.signInWithPassword({ 
+          email, 
+          password 
+        })
         if (error) throw error
-        if (isMounted.current) toast.success('Welcome back!')
+        
+        if (isMounted.current) {
+          toast.success('Welcome back!')
+        }
       } else {
         if (!name.trim()) {
-          toast.error('Please enter your name')
+          if (isMounted.current) {
+            toast.error('Please enter your name')
+          }
           setLoading(false)
           return
         }
         
-        const { data: { user, session }, error: signUpError } = await supabase.auth.signUp({
+        // Sign up the user
+        const { data: { user }, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { full_name: name, display_name: name },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            data: { full_name: name },
+            emailRedirectTo: window.location.origin,
           },
         })
-        
         if (signUpError) throw signUpError
         
+        // Create/update the profile row if a user object is returned immediately
         if (user) {
-          if (!session) {
-            await createOrUpdateProfile(user, name, email)
-            toast.success('Account created! Please check your email to confirm.')
-            setEmail('')
-            setPassword('')
-            setName('')
-            return
-          }
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert(
+              {
+                user_id: user.id,
+                display_name: name,
+                email: email,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id' }
+            )
           
-          const result = await createOrUpdateProfile(user, name, email)
-          if (result.success) {
-            toast.success('Account created successfully!')
-            setEmail('')
-            setPassword('')
-            setName('')
+          if (profileError) {
+            console.error('Error creating profile:', profileError)
+            toast.error('Account created but profile setup failed. Please contact support.')
           } else {
-            toast.success('Account created! Please check your email to confirm your account.')
+            toast.success('Account created successfully! Check your email to confirm.')
           }
+        }
+        
+        if (isMounted.current) {
+          setEmail('')
+          setPassword('')
+          setName('')
         }
       }
     } catch (err: any) {
       if (isMounted.current) {
-        if (err.message?.includes('User already registered')) {
-          toast.error('An account with this email already exists. Please sign in instead.')
-        } else if (err.message?.includes('Invalid login credentials')) {
-          toast.error('Invalid email or password. Please try again.')
-        } else if (err.message?.includes('Email not confirmed')) {
-          toast.error('Please confirm your email before signing in.')
-        } else {
-          toast.error(err.message || 'Authentication failed')
-        }
+        toast.error(err.message || 'Authentication failed')
       }
     } finally {
-      if (isMounted.current) setLoading(false)
+      if (isMounted.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -267,27 +190,20 @@ export default function AuthPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { 
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: { access_type: 'offline', prompt: 'select_account' }
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account'
+          }
         },
       })
       if (error) throw error
     } catch (err: any) {
-      if (isMounted.current) toast.error(err.message || 'Google sign-in failed')
+      if (isMounted.current) {
+        toast.error(err.message || 'Google sign-in failed')
+      }
       setLoading(false)
     }
-  }
-
-  if (isCallback || window.location.pathname === '/auth/callback') {
-    return (
-      <div className="bg-background min-h-screen flex items-center justify-center px-4">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-          <h2 className="text-xl font-bold mb-2">Completing sign in...</h2>
-          <p className="text-muted-foreground">Please wait while we set up your account</p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -307,7 +223,7 @@ export default function AuthPage() {
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 border border-border bg-card hover:bg-accent text-foreground py-3.5 rounded-lg font-medium text-sm transition-colors mb-6 disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-3 border border-border bg-card hover:bg-accent text-foreground py-3.5 rounded-lg font-medium text-sm transition-colors mb-6"
           style={{ minHeight: '48px' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24">
@@ -336,8 +252,6 @@ export default function AuthPage() {
                 onChange={e => setName(e.target.value)}
                 placeholder="Your full name"
                 className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                disabled={loading}
-                required={!isLogin}
               />
             </div>
           )}
@@ -350,7 +264,6 @@ export default function AuthPage() {
               placeholder="Email address"
               required
               className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              disabled={loading}
             />
           </div>
           <div className="relative">
@@ -359,11 +272,10 @@ export default function AuthPage() {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Password (min 6 characters)"
+              placeholder="Password"
               required
               minLength={6}
               className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              disabled={loading}
             />
           </div>
 
@@ -373,7 +285,6 @@ export default function AuthPage() {
                 type="button" 
                 onClick={() => setShowForgot(true)} 
                 className="text-xs text-primary hover:underline"
-                disabled={loading}
               >
                 Forgot password?
               </button>
@@ -409,7 +320,6 @@ export default function AuthPage() {
                     placeholder="Email address"
                     required
                     className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    disabled={forgotLoading}
                   />
                 </div>
                 <button
@@ -436,7 +346,6 @@ export default function AuthPage() {
           <button
             onClick={() => setIsLogin(!isLogin)}
             className="text-primary font-semibold hover:underline"
-            disabled={loading}
           >
             {isLogin ? 'Sign up' : 'Sign in'}
           </button>
