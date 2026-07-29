@@ -1,183 +1,360 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
-import { Search, Users, Mail, Phone } from 'lucide-react'
+import { toast } from 'sonner'
+import { Mail, Lock, User, Loader2 } from 'lucide-react'
+import { useSEO } from '@/hooks/useSEO'
 
-interface Profile {
-  id: string
-  user_id: string
-  display_name: string | null
-  email: string | null
-  phone: string | null
-  created_at: string
-}
+export default function AuthPage() {
+  useSEO('Sign In', undefined, undefined, true)
+  const [isLogin, setIsLogin] = useState(true)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [showForgot, setShowForgot] = useState(false)
+  const [forgotLoading, setForgotLoading] = useState(false)
+  
+  const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = (location.state as any)?.returnTo || '/'
+  
+  const hasNavigated = useRef(false)
+  const isMounted = useRef(true)
+  const authCheckDone = useRef(false)
 
-export default function AdminUsers() {
-  const [profiles, setProfiles] = useState<Profile[]>([])
-  const [orderCounts, setOrderCounts] = useState<Record<string, number>>({})
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
+  // Cleanup on unmount
+  useEffect(() => {
+    isMounted.current = true
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
+
+  // Session check & listener
+  useEffect(() => {
+    if (authCheckDone.current) return
+    
+    let isSubscribed = true
+
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session && isSubscribed && !hasNavigated.current) {
+          hasNavigated.current = true
+          navigate(returnTo)
+        }
+        authCheckDone.current = true
+      } catch (error) {
+        console.debug('Session check failed:', error)
+        authCheckDone.current = true
+      }
+    }
+
+    checkSession()
+
+    let timeoutId: NodeJS.Timeout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        clearTimeout(timeoutId)
+        
+        timeoutId = setTimeout(() => {
+          if (
+            session && 
+            isSubscribed && 
+            !hasNavigated.current &&
+            ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)
+          ) {
+            hasNavigated.current = true
+            navigate(returnTo)
+          }
+        }, 100)
+      }
+    )
+
+    return () => {
+      isSubscribed = false
+      subscription?.unsubscribe()
+      clearTimeout(timeoutId)
+    }
+  }, [navigate, returnTo])
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      setLoadError(null)
+    hasNavigated.current = false
+    authCheckDone.current = false
+  }, [location.pathname])
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) { 
+      toast.error('Please enter your email')
+      return 
+    }
+    
+    setForgotLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) throw error
       
-      try {
-        // Fetch from profiles table (not users)
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false })
+      toast.success('Password reset link sent! Check your email.')
+      setShowForgot(false)
+      setEmail('')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send reset email')
+    } finally {
+      if (isMounted.current) {
+        setForgotLoading(false)
+      }
+    }
+  }
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    
+    try {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({ 
+          email, 
+          password 
+        })
+        if (error) throw error
         
-        if (error) {
-          console.error('Supabase error:', error)
-          setLoadError(
-            error.message.toLowerCase().includes('permission') 
-              ? 'Permission denied. Please check your Row Level Security policies.'
-              : error.message
-          )
+        if (isMounted.current) {
+          toast.success('Welcome back!')
+        }
+      } else {
+        if (!name.trim()) {
+          if (isMounted.current) {
+            toast.error('Please enter your name')
+          }
           setLoading(false)
           return
         }
         
-        if (data) {
-          setProfiles(data as unknown as Profile[])
-        }
-
-        // Fetch order counts
-        const { data: orders, error: ordersError } = await supabase
-          .from('orders')
-          .select('user_id')
+        // Sign up the user
+        const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: name },
+            emailRedirectTo: window.location.origin,
+          },
+        })
+        if (signUpError) throw signUpError
         
-        if (ordersError) {
-          console.warn('Could not fetch order counts:', ordersError)
-          // Don't set error here - just continue without order counts
+        // Create/update the profile row for this user. Using upsert (not
+        // insert) here deliberately: a database trigger may have already
+        // created this row the instant auth.signUp() ran, and this just
+        // needs to make sure name/email end up on it either way, rather
+        // than failing with a duplicate-key error if the trigger won.
+        if (user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert(
+              {
+                user_id: user.id,
+                display_name: name,
+                email: email,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id' }
+            )
+          
+          if (profileError) {
+            console.error('Error creating profile:', profileError)
+            toast.error('Account created but profile setup failed. Please contact support.')
+          } else {
+            toast.success('Account created successfully! Check your email to confirm.')
+          }
         }
         
-        if (orders) {
-          const counts: Record<string, number> = {}
-          orders.forEach(o => {
-            if (o.user_id) {
-              counts[o.user_id] = (counts[o.user_id] || 0) + 1
-            }
-          })
-          setOrderCounts(counts)
+        if (isMounted.current) {
+          setEmail('')
+          setPassword('')
+          setName('')
         }
-      } catch (err: any) {
-        console.error('Load error:', err)
-        setLoadError(err.message || 'Failed to load customers')
-      } finally {
+      }
+    } catch (err: any) {
+      if (isMounted.current) {
+        toast.error(err.message || 'Authentication failed')
+      }
+    } finally {
+      if (isMounted.current) {
         setLoading(false)
       }
     }
-    
-    load()
-  }, [])
+  }
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return profiles
-    return profiles.filter(p =>
-      (p.display_name || '').toLowerCase().includes(q) ||
-      (p.email || '').toLowerCase().includes(q) ||
-      (p.phone || '').toLowerCase().includes(q)
-    )
-  }, [profiles, search])
+  const handleGoogleLogin = async () => {
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { 
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account'
+          }
+        },
+      })
+      if (error) throw error
+    } catch (err: any) {
+      if (isMounted.current) {
+        toast.error(err.message || 'Google sign-in failed')
+      }
+      setLoading(false)
+    }
+  }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
-        <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Customers</h1>
-        <span className="text-xs text-muted-foreground">{profiles.length} registered</span>
-      </div>
-      <p className="text-xs text-muted-foreground mb-6 max-w-2xl">
-        Everyone who's created an account on the site. This doesn't include guest checkouts —
-        those are only visible in Orders.
-      </p>
-
-      {loadError && (
-        <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-lg p-4 mb-6 text-sm">
-          <p className="font-semibold mb-1">Couldn't load customers</p>
-          <p>{loadError}</p>
-          <p className="mt-2 text-xs opacity-70">
-            Make sure you have proper Row Level Security policies set up for the profiles table.
+    <div className="bg-background min-h-screen pt-24 pb-16 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-16 w-auto mx-auto mb-4 rounded-md" />
+          <h1 className="font-display text-3xl font-bold text-foreground">
+            {isLogin ? 'Welcome Back' : 'Join the Tribe'}
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            {isLogin ? 'Sign in to track your orders' : 'Create an account to start shopping'}
           </p>
         </div>
-      )}
 
-      <div className="relative max-w-sm mb-4">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search name, email, or phone..."
-          className="w-full border border-border bg-background rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
+        {/* Google Sign In */}
+        <button
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-3 border border-border bg-card hover:bg-accent text-foreground py-3.5 rounded-lg font-medium text-sm transition-colors mb-6"
+          style={{ minHeight: '48px' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Continue with Google
+        </button>
+
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs text-muted-foreground uppercase tracking-wider">or</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        {/* Email Form */}
+        <form onSubmit={handleEmailAuth} className="space-y-4">
+          {!isLogin && (
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your full name"
+                className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          )}
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="Email address"
+              required
+              className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+              required
+              minLength={6}
+              className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          {isLogin && (
+            <div className="text-right">
+              <button 
+                type="button" 
+                onClick={() => setShowForgot(true)} 
+                className="text-xs text-primary hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3.5 font-bold text-sm tracking-wider uppercase rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            style={{ minHeight: '48px' }}
+          >
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLogin ? 'Sign In' : 'Create Account')}
+          </button>
+        </form>
+
+        {/* Forgot Password Modal */}
+        {showForgot && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4" 
+            onClick={() => setShowForgot(false)}
+          >
+            <div className="bg-card rounded-xl p-6 w-full max-w-sm shadow-lg" onClick={e => e.stopPropagation()}>
+              <h2 className="font-display text-xl font-bold text-foreground mb-2">Reset Password</h2>
+              <p className="text-sm text-muted-foreground mb-4">Enter your email and we'll send you a reset link.</p>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="Email address"
+                    required
+                    className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 font-bold text-sm tracking-wider uppercase rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {forgotLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Send Reset Link'}
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setShowForgot(false)} 
+                  className="w-full text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          {isLogin ? "Don't have an account? " : 'Already have an account? '}
+          <button
+            onClick={() => setIsLogin(!isLogin)}
+            className="text-primary font-semibold hover:underline"
+          >
+            {isLogin ? 'Sign up' : 'Sign in'}
+          </button>
+        </p>
       </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : loadError ? null : filtered.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>{search ? 'No customers match your search.' : 'No registered customers yet.'}</p>
-        </div>
-      ) : (
-        <div className="bg-card border border-border rounded-lg overflow-hidden overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Email</th>
-                <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 font-medium">Orders</th>
-                <th className="px-4 py-3 font-medium">Joined</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(p => (
-                <tr key={p.id} className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">
-                    {p.display_name || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-foreground">
-                    {p.email ? (
-                      <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 hover:text-primary transition-colors">
-                        <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> 
-                        <span className="truncate max-w-[150px]">{p.email}</span>
-                      </a>
-                    ) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-foreground whitespace-nowrap">
-                    {p.phone ? (
-                      <a href={`tel:${p.phone}`} className="flex items-center gap-1.5 hover:text-primary transition-colors">
-                        <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> 
-                        {p.phone}
-                      </a>
-                    ) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-foreground text-center">
-                    <span className="inline-flex items-center justify-center bg-primary/10 text-primary px-3 py-0.5 rounded-full text-xs font-medium">
-                      {orderCounts[p.user_id] || 0}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">
-                    {new Date(p.created_at).toLocaleDateString('en-US', { 
-                      year: 'numeric', 
-                      month: 'short', 
-                      day: 'numeric' 
-                    })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   )
 }
