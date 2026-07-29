@@ -110,12 +110,63 @@ export default function AuthPage() {
     }
   }
 
+  // Helper function to create/update profile
+  const createOrUpdateProfile = async (user: any, displayName: string, email: string) => {
+    try {
+      // Wait a moment for the session to be fully established
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Get the current session to ensure we have a valid JWT
+      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError)
+        return { success: false, error: sessionError }
+      }
+
+      if (!currentSession) {
+        // User needs to confirm email first
+        return { success: false, error: 'Email confirmation required' }
+      }
+
+      // Create/update the profile
+      const { data, error: profileError } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: user.id,          // Primary key
+            user_id: user.id,     // Foreign key to auth.users
+            display_name: displayName,
+            email: email,
+            updated_at: new Date().toISOString(),
+          },
+          { 
+            onConflict: 'id',     // Use 'id' as the conflict column
+            ignoreDuplicates: false 
+          }
+        )
+        .select()
+        .single()
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError)
+        return { success: false, error: profileError }
+      }
+
+      return { success: true, data }
+    } catch (error) {
+      console.error('Unexpected error creating profile:', error)
+      return { success: false, error }
+    }
+  }
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     
     try {
       if (isLogin) {
+        // SIGN IN
         const { error } = await supabase.auth.signInWithPassword({ 
           email, 
           password 
@@ -126,6 +177,7 @@ export default function AuthPage() {
           toast.success('Welcome back!')
         }
       } else {
+        // SIGN UP
         if (!name.trim()) {
           if (isMounted.current) {
             toast.error('Please enter your name')
@@ -135,7 +187,7 @@ export default function AuthPage() {
         }
         
         // Sign up the user
-        const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        const { data: { user, session }, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -143,43 +195,56 @@ export default function AuthPage() {
             emailRedirectTo: window.location.origin,
           },
         })
+        
         if (signUpError) throw signUpError
         
-        // Create/update the profile row for this user. Using upsert (not
-        // insert) here deliberately: a database trigger may have already
-        // created this row the instant auth.signUp() ran, and this just
-        // needs to make sure name/email end up on it either way, rather
-        // than failing with a duplicate-key error if the trigger won.
         if (user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert(
-              {
-                user_id: user.id,
-                display_name: name,
-                email: email,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: 'user_id' }
-            )
+          // Check if we have a session immediately
+          let currentSession = session
           
-          if (profileError) {
-            console.error('Error creating profile:', profileError)
-            toast.error('Account created but profile setup failed. Please contact support.')
-          } else {
-            toast.success('Account created successfully! Check your email to confirm.')
+          if (!currentSession) {
+            // Wait a moment and check again
+            await new Promise(resolve => setTimeout(resolve, 500))
+            const { data: { session: newSession } } = await supabase.auth.getSession()
+            currentSession = newSession
           }
-        }
-        
-        if (isMounted.current) {
-          setEmail('')
-          setPassword('')
-          setName('')
+          
+          // Only create profile if user is confirmed (has session)
+          if (currentSession) {
+            // Create the profile
+            const result = await createOrUpdateProfile(user, name, email)
+            
+            if (result.success) {
+              toast.success('Account created successfully!')
+              // Clear form
+              setEmail('')
+              setPassword('')
+              setName('')
+            } else if (result.error === 'Email confirmation required') {
+              toast.success('Account created! Please check your email to confirm your account.')
+              setEmail('')
+              setPassword('')
+              setName('')
+            } else {
+              toast.error('Account created but profile setup failed. Please contact support.')
+            }
+          } else {
+            // Email confirmation required
+            toast.success('Account created! Please check your email to confirm your account.')
+            setEmail('')
+            setPassword('')
+            setName('')
+          }
         }
       }
     } catch (err: any) {
       if (isMounted.current) {
-        toast.error(err.message || 'Authentication failed')
+        // Handle specific error cases
+        if (err.message?.includes('User already registered')) {
+          toast.error('An account with this email already exists. Please sign in instead.')
+        } else {
+          toast.error(err.message || 'Authentication failed')
+        }
       }
     } finally {
       if (isMounted.current) {
@@ -202,11 +267,45 @@ export default function AuthPage() {
         },
       })
       if (error) throw error
+      // The user will be redirected to Google, and then back to the app
     } catch (err: any) {
       if (isMounted.current) {
         toast.error(err.message || 'Google sign-in failed')
       }
       setLoading(false)
+    }
+  }
+
+  // This function should be called in your callback route handler
+  // when the user returns from Google OAuth
+  const handleGoogleCallback = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) throw error
+      
+      if (session?.user) {
+        const user = session.user
+        const displayName = user.user_metadata?.full_name || 
+                           user.user_metadata?.name || 
+                           user.email?.split('@')[0] || 
+                           'User'
+        
+        // Create or update profile
+        const result = await createOrUpdateProfile(
+          user, 
+          displayName, 
+          user.email || ''
+        )
+        
+        if (!result.success) {
+          console.error('Failed to create profile for Google user:', result.error)
+          toast.error('Failed to complete profile setup')
+        }
+      }
+    } catch (error) {
+      console.error('Google callback error:', error)
+      toast.error('Failed to complete Google sign-in')
     }
   }
 
@@ -227,7 +326,7 @@ export default function AuthPage() {
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 border border-border bg-card hover:bg-accent text-foreground py-3.5 rounded-lg font-medium text-sm transition-colors mb-6"
+          className="w-full flex items-center justify-center gap-3 border border-border bg-card hover:bg-accent text-foreground py-3.5 rounded-lg font-medium text-sm transition-colors mb-6 disabled:opacity-60"
           style={{ minHeight: '48px' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24">
@@ -256,6 +355,7 @@ export default function AuthPage() {
                 onChange={e => setName(e.target.value)}
                 placeholder="Your full name"
                 className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={loading}
               />
             </div>
           )}
@@ -268,6 +368,7 @@ export default function AuthPage() {
               placeholder="Email address"
               required
               className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              disabled={loading}
             />
           </div>
           <div className="relative">
@@ -280,6 +381,7 @@ export default function AuthPage() {
               required
               minLength={6}
               className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              disabled={loading}
             />
           </div>
 
@@ -289,6 +391,7 @@ export default function AuthPage() {
                 type="button" 
                 onClick={() => setShowForgot(true)} 
                 className="text-xs text-primary hover:underline"
+                disabled={loading}
               >
                 Forgot password?
               </button>
@@ -324,6 +427,7 @@ export default function AuthPage() {
                     placeholder="Email address"
                     required
                     className="w-full pl-10 pr-4 py-3 border border-border bg-background rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled={forgotLoading}
                   />
                 </div>
                 <button
@@ -350,6 +454,7 @@ export default function AuthPage() {
           <button
             onClick={() => setIsLogin(!isLogin)}
             className="text-primary font-semibold hover:underline"
+            disabled={loading}
           >
             {isLogin ? 'Sign up' : 'Sign in'}
           </button>
