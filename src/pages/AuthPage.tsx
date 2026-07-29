@@ -145,19 +145,23 @@ export default function AuthPage() {
         })
         if (signUpError) throw signUpError
         
-        // Create profile in profiles table
+        // Create/update the profile row for this user. Using upsert (not
+        // insert) here deliberately: a database trigger may have already
+        // created this row the instant auth.signUp() ran, and this just
+        // needs to make sure name/email end up on it either way, rather
+        // than failing with a duplicate-key error if the trigger won.
         if (user) {
           const { error: profileError } = await supabase
             .from('profiles')
-            .insert([
+            .upsert(
               {
                 user_id: user.id,
                 display_name: name,
                 email: email,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }
-            ])
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id' }
+            )
           
           if (profileError) {
             console.error('Error creating profile:', profileError)
