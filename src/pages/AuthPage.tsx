@@ -57,7 +57,30 @@ export default function AuthPage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         clearTimeout(timeoutId)
-        
+
+        // Make sure a profile row exists the moment ANY sign-in method
+        // succeeds — Google OAuth never goes through the manual insert in
+        // handleEmailAuth below, so without this it depends entirely on a
+        // database trigger that may not exist/may not be working. This
+        // covers both cases uniformly, for every auth method.
+        if (event === 'SIGNED_IN' && session?.user) {
+          const user = session.user
+          supabase
+            .from('profiles')
+            .upsert(
+              {
+                user_id: user.id,
+                email: user.email || null,
+                display_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'user_id', ignoreDuplicates: false }
+            )
+            .then(({ error }) => {
+              if (error) console.error('Profile sync failed:', error)
+            })
+        }
+
         timeoutId = setTimeout(() => {
           if (
             session && 
