@@ -9,6 +9,7 @@ import { CurrencyProvider } from './contexts/CurrencyContext'
 import { CartDrawer } from './components/CartDrawer'
 import { InstallAppPrompt } from './components/InstallAppPrompt'
 import { BackButton } from './components/BackButton'
+import { useProfileSync } from './hooks/useProfileSync'
 
 // ⚡ 1. Inline Scroll Restoration Helper
 // This resets the scroll tracking instantly when navigating between pages.
@@ -25,6 +26,7 @@ function ScrollToTop() {
 function AppContent() {
   const location = useLocation()
   const isAdmin = location.pathname.startsWith('/admin')
+  useProfileSync()
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col isolation-isolate">
