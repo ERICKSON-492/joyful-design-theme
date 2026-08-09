@@ -6,6 +6,7 @@ import { fetchPublicTable } from '@/lib/publicContent'
 import { ProductCardVariants } from '@/components/ProductCardVariants'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { upsertMeta, upsertCanonical, SITE_URL } from '@/hooks/useSEO'
+import { productThumb, productSrcSet, GRID_SIZES } from '@/lib/imageUrl'
 
 interface Product {
   id: string

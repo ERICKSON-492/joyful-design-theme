@@ -27,8 +27,8 @@ export function useProfileSync() {
             email: user.email || null,
             display_name: user.user_metadata?.full_name || user.user_metadata?.name || null,
             updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'user_id', ignoreDuplicates: false }
+          } as never,
+          { onConflict: 'user_id', ignoreDuplicates: false } as never
         )
         .then(({ error }) => {
           if (error) console.error('Profile sync failed:', error)
