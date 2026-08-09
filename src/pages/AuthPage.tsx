@@ -155,7 +155,7 @@ export default function AuthPage() {
                 display_name: name,
                 email: email,
                 updated_at: new Date().toISOString(),
-              },
+              } as never,
               { onConflict: 'user_id' }
             )
           

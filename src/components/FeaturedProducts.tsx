@@ -5,6 +5,7 @@ import { ShoppingBag } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
+import { productThumb, productSrcSet, GRID_SIZES } from '@/lib/imageUrl'
 
 interface Product {
   id: string
@@ -38,7 +39,7 @@ export function FeaturedProducts() {
       preloadedRef.current.add(url)
       const img = new Image()
       img.decoding = 'async'
-      img.src = url
+      img.src = productThumb(url) as string
     })
   }
 
@@ -117,7 +118,11 @@ export function FeaturedProducts() {
                   <Link to={`/product/${product.id}`} className="product-image-frame block mb-3">
                     {product.image_url ? (
                       <img
-                        src={product.image_url}
+                        src={productThumb(product.image_url)}
+                        srcSet={productSrcSet(product.image_url)}
+                        sizes={GRID_SIZES}
+                        width={400}
+                        height={400}
                         alt={product.name}
                         className="product-image product-image-loaded"
                         loading="eager"

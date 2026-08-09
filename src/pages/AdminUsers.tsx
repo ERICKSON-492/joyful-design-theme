@@ -32,7 +32,7 @@ export default function AdminUsers() {
         setLoading(false)
         return
       }
-      if (data) setProfiles(data as Profile[])
+      if (data) setProfiles(data as unknown as Profile[])
 
       // Best-effort order counts per user — if this fails for any reason,
       // we still show the customer list without it.

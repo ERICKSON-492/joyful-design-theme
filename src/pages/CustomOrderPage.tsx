@@ -124,7 +124,7 @@ export default function CustomOrderPage() {
       // 3. Insert into the database
       const { data: order, error: insertError } = await supabase
         .from('custom_orders')
-        .insert(orderData)
+        .insert(orderData as never)
         .select('*')
         .single()
 
@@ -143,7 +143,7 @@ export default function CustomOrderPage() {
         ${formData.colors.length ? `<p><strong>Colors:</strong> ${formData.colors.join(', ')}</p>` : ''}
         ${formData.materials ? `<p><strong>Materials:</strong> ${formData.materials}</p>` : ''}
         ${formData.location ? `<p><strong>Delivery location:</strong> ${formData.location}</p>` : ''}
-        ${order.inspiration_image_url ? `<p><strong>Inspiration photo:</strong> <a href="${order.inspiration_image_url}">View photo</a></p>` : '<p><em>No inspiration photo uploaded</em></p>'}
+        ${(order as any).inspiration_image_url ? `<p><strong>Inspiration photo:</strong> <a href="${(order as any).inspiration_image_url}">View photo</a></p>` : '<p><em>No inspiration photo uploaded</em></p>'}
         <p><strong>Name:</strong> ${formData.name}</p>
         <p><strong>Phone:</strong> ${formData.phone}</p>
         ${formData.email ? `<p><strong>Email:</strong> ${formData.email}</p>` : ''}
