@@ -147,8 +147,11 @@ html {
     display: block;
     transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1), filter 400ms ease;
     filter: brightness(1.1) contrast(1.12) saturate(1.22) hue-rotate(-2deg);
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
+    /* High-quality downscaling: crisp-edges/optimize-contrast uses a
+       nearest-neighbour style resample which creates moire on detailed
+       beadwork photos. */
+    image-rendering: auto;
+    image-rendering: high-quality;
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
     -webkit-transform: translateZ(0);
