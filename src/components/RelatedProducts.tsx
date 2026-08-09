@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
+import { productThumb, productSrcSet, GRID_SIZES } from '@/lib/imageUrl'
 
 interface Product {
   id: string
@@ -34,7 +35,9 @@ export function RelatedProducts({ productId, category }: { productId: string; ca
           <Link key={p.id} to={`/product/${p.id}`} className="group">
             <div className="product-image-frame mb-2">
               {p.image_url ? (
-                <img src={p.image_url} alt={p.name} loading="lazy" className="product-image"
+                <img src={productThumb(p.image_url)} alt={p.name} loading="lazy" decoding="async"
+                  srcSet={productSrcSet(p.image_url)} sizes={GRID_SIZES}
+                  width={400} height={400} className="product-image"
                   onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
               ) : (
                 <div className="w-full aspect-square bg-muted" />
