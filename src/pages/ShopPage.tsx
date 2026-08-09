@@ -185,8 +185,11 @@ export default function ShopPage() {
                 <div key={product.id} className="group">
                   <Link to={`/product/${product.id}`} className="product-image-frame block mb-4">
                     {product.image_url ? (
-                      <img src={product.image_url} alt={product.name}
-                        className="product-image" loading="lazy"
+                      <img src={productThumb(product.image_url)} alt={product.name}
+                        srcSet={productSrcSet(product.image_url)}
+                        sizes={GRID_SIZES}
+                        width={400} height={400}
+                        className="product-image" loading="lazy" decoding="async"
                         onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
                     ) : (
                       <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
