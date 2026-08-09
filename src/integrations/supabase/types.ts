@@ -201,11 +201,9 @@ export type Database = {
           delivery_location: string | null
           email: string | null
           id: string
-          inspiration_image_url: string | null
           materials: string | null
           name: string
           phone: string
-          status: string
           vision: string | null
         }
         Insert: {
@@ -215,11 +213,9 @@ export type Database = {
           delivery_location?: string | null
           email?: string | null
           id?: string
-          inspiration_image_url?: string | null
           materials?: string | null
           name: string
           phone: string
-          status?: string
           vision?: string | null
         }
         Update: {
@@ -229,11 +225,9 @@ export type Database = {
           delivery_location?: string | null
           email?: string | null
           id?: string
-          inspiration_image_url?: string | null
           materials?: string | null
           name?: string
           phone?: string
-          status?: string
           vision?: string | null
         }
         Relationships: []
@@ -678,7 +672,6 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string | null
-          email: string | null
           id: string
           phone: string | null
           updated_at: string
@@ -687,7 +680,6 @@ export type Database = {
         Insert: {
           created_at?: string
           display_name?: string | null
-          email?: string | null
           id?: string
           phone?: string | null
           updated_at?: string
@@ -696,7 +688,6 @@ export type Database = {
         Update: {
           created_at?: string
           display_name?: string | null
-          email?: string | null
           id?: string
           phone?: string | null
           updated_at?: string
