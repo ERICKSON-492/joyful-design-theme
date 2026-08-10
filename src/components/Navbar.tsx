@@ -387,9 +387,6 @@ export function Navbar() {
                   { label: 'Home', href: '/', icon: Home },
                   { label: 'The Chronicle', href: '/about-us', icon: BookOpen },
                   { label: 'Shop — All', href: '/shop', icon: Store },
-                  { label: 'Jewelry & Apparel', href: '/shop?cat=wear-it', icon: Gem },
-                  { label: 'Home Decor & Tableware', href: '/shop?cat=live-with-it', icon: Sofa },
-                  { label: 'Pet Accessories', href: '/shop?cat=for-your-pet', icon: PawPrint },
                   { label: 'Create Yours', href: '/custom-order', icon: Palette },
                   { label: 'Tribe Looks', href: '/tribe-looks', icon: Users },
                   { label: 'Wholesale', href: '/wholesale-gifting', icon: Truck },
@@ -412,6 +409,40 @@ export function Navbar() {
                     </Link>
                   )
                 })}
+
+                {/* Direct links to every category and subcategory */}
+                {categories.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-border">
+                    <p className="px-5 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Shop by category</p>
+                    {categories.map(cat => {
+                      const subs = subcategories.filter(s => s.category_id === cat.id)
+                      return (
+                        <div key={cat.id}>
+                          <Link
+                            to={`/shop?cat=${slugify(cat.name)}`}
+                            onClick={() => setIsOpen(false)}
+                            className="flex items-center gap-3 px-5 py-3 text-base font-medium text-foreground hover:bg-accent transition-colors"
+                            style={{ minHeight: '44px' }}
+                          >
+                            <Gem className="w-5 h-5 flex-shrink-0 text-primary" />
+                            {cat.name}
+                          </Link>
+                          {subs.map(s => (
+                            <Link
+                              key={s.id}
+                              to={`/shop?cat=${slugify(cat.name)}&sub=${slugify(s.name)}`}
+                              onClick={() => setIsOpen(false)}
+                              className="block pl-13 pr-5 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-primary transition-colors"
+                              style={{ minHeight: '44px', paddingLeft: '3.25rem' }}
+                            >
+                              {s.name}
+                            </Link>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
 
                 <div className="my-3 mx-5 border-t border-border" />
 
