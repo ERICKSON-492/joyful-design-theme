@@ -117,15 +117,22 @@ export default function ProductDetailPage() {
   const sizes = [...new Set(variants.filter(v => v.size).map(v => v.size!))]
   const colors = [...new Set(variants.filter(v => v.color).map(v => v.color!))]
 
-  // Auto-select variant when size/color chosen
+  // Never auto-pick a variation: the shopper must explicitly choose every
+  // dimension (size and/or color) the product offers before it counts.
   useEffect(() => {
     if (variants.length === 0) return
+    const sizeChosen = sizes.length === 0 || !!selectedSize
+    const colorChosen = colors.length === 0 || !!selectedColor
+    if (!sizeChosen || !colorChosen) {
+      setSelectedVariant(null)
+      return
+    }
     const match = variants.find(v =>
       (!selectedSize || v.size === selectedSize) &&
       (!selectedColor || v.color === selectedColor)
     )
     setSelectedVariant(match || null)
-  }, [selectedSize, selectedColor, variants])
+  }, [selectedSize, selectedColor, variants, sizes.length, colors.length])
 
   // Reset quantity to 1 when variant changes to avoid carrying over an invalid quantity
   useEffect(() => {
@@ -203,7 +210,13 @@ export default function ProductDetailPage() {
   }
 
   const getButtonLabel = () => {
-    if (needsVariant) return 'Select Options'
+    if (needsVariant) {
+      const missing = [
+        sizes.length > 0 && !selectedSize ? 'Size' : null,
+        colors.length > 0 && !selectedColor ? 'Color' : null,
+      ].filter(Boolean)
+      return missing.length ? `Select ${missing.join(' & ')}` : 'Select Options'
+    }
     if (product.is_preorder) return 'Pre-Order Now'
     if (currentStock === 0) return 'Sold Out'
     return 'Add to Cart'
