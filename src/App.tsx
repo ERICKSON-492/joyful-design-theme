@@ -9,6 +9,7 @@ import { CurrencyProvider } from './contexts/CurrencyContext'
 import { CartDrawer } from './components/CartDrawer'
 import { InstallAppPrompt } from './components/InstallAppPrompt'
 import { BackButton } from './components/BackButton'
+import { CartReminder } from './components/CartReminder'
 import { useProfileSync } from './hooks/useProfileSync'
 
 // ⚡ 1. Inline Scroll Restoration Helper
@@ -47,6 +48,7 @@ function AppContent() {
       {!isAdmin && <CartDrawer />}
       {!isAdmin && <InstallAppPrompt />}
       {!isAdmin && <BackButton />}
+      {!isAdmin && <CartReminder />}
     </div>
   )
 }

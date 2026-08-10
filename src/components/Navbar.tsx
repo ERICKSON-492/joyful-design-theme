@@ -1,17 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package, Home, BookOpen, Store, Palette, Users, Truck, ChevronDown, Sparkles, Gem, Sofa, PawPrint } from 'lucide-react'
+import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package, Home, BookOpen, Store, Palette, Users, Truck, ChevronDown, Sparkles, Gem } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
 import { CurrencySwitcher } from './CurrencySwitcher'
+import { fetchPublicTable } from '@/lib/publicContent'
+import { slugify } from '@/lib/slug'
 
-const shopCategories = [
-  { label: 'All Products', href: '/shop', icon: Store },
-  { label: 'Jewelry & Apparel', href: '/shop?cat=wear-it', icon: Gem },
-  { label: 'Home Decor & Tableware', href: '/shop?cat=live-with-it', icon: Sofa },
-  { label: 'Pet Accessories', href: '/shop?cat=for-your-pet', icon: PawPrint },
-]
+interface NavCategory { id: string; name: string }
+interface NavSubcategory { id: string; category_id: string; name: string }
 
 const navLinks = [
   { label: 'Home', href: '/' },
@@ -28,6 +26,8 @@ export function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [shopOpen, setShopOpen] = useState(false)
+  const [categories, setCategories] = useState<NavCategory[]>([])
+  const [subcategories, setSubcategories] = useState<NavSubcategory[]>([])
   const shopRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
   const navigate = useNavigate()
@@ -47,6 +47,15 @@ export function Navbar() {
     checkAuth()
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => checkAuth())
     return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    Promise.all([
+      fetchPublicTable<NavCategory>('categories', 'select=id,name&is_active=eq.true&order=display_order.asc'),
+      fetchPublicTable<NavSubcategory>('subcategories', 'select=id,category_id,name&is_active=eq.true&order=display_order.asc'),
+    ])
+      .then(([cats, subs]) => { setCategories(cats || []); setSubcategories(subs || []) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -138,15 +147,37 @@ export function Navbar() {
                             exit={{ opacity: 0, y: -6 }}
                             transition={{ duration: 0.15 }}
                             onMouseLeave={() => setShopOpen(false)}
-                            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-background border border-border shadow-xl rounded-md overflow-hidden z-50"
+                            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-72 max-h-[70vh] overflow-y-auto bg-background border border-border shadow-xl rounded-md z-50 py-1"
                           >
-                            {shopCategories.map(c => {
-                              const Icon = c.icon
+                            <Link to="/shop" className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-foreground hover:bg-accent hover:text-primary transition-colors">
+                              <Store className="w-4 h-4 text-primary" />
+                              All Products
+                            </Link>
+                            {categories.map(cat => {
+                              const subs = subcategories.filter(s => s.category_id === cat.id)
                               return (
-                                <Link key={c.label} to={c.href} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground hover:bg-accent hover:text-primary transition-colors">
-                                  <Icon className="w-4 h-4 text-primary" />
-                                  {c.label}
-                                </Link>
+                                <div key={cat.id} className="border-t border-border/60">
+                                  <Link
+                                    to={`/shop?cat=${slugify(cat.name)}`}
+                                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent hover:text-primary transition-colors"
+                                  >
+                                    <Gem className="w-4 h-4 text-primary" />
+                                    {cat.name}
+                                  </Link>
+                                  {subs.length > 0 && (
+                                    <div className="pb-1">
+                                      {subs.map(s => (
+                                        <Link
+                                          key={s.id}
+                                          to={`/shop?cat=${slugify(cat.name)}&sub=${slugify(s.name)}`}
+                                          className="block pl-11 pr-4 py-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-primary transition-colors"
+                                        >
+                                          {s.name}
+                                        </Link>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                               )
                             })}
                           </motion.div>
@@ -356,9 +387,6 @@ export function Navbar() {
                   { label: 'Home', href: '/', icon: Home },
                   { label: 'The Chronicle', href: '/about-us', icon: BookOpen },
                   { label: 'Shop — All', href: '/shop', icon: Store },
-                  { label: 'Jewelry & Apparel', href: '/shop?cat=wear-it', icon: Gem },
-                  { label: 'Home Decor & Tableware', href: '/shop?cat=live-with-it', icon: Sofa },
-                  { label: 'Pet Accessories', href: '/shop?cat=for-your-pet', icon: PawPrint },
                   { label: 'Create Yours', href: '/custom-order', icon: Palette },
                   { label: 'Tribe Looks', href: '/tribe-looks', icon: Users },
                   { label: 'Wholesale', href: '/wholesale-gifting', icon: Truck },
@@ -381,6 +409,40 @@ export function Navbar() {
                     </Link>
                   )
                 })}
+
+                {/* Direct links to every category and subcategory */}
+                {categories.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-border">
+                    <p className="px-5 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Shop by category</p>
+                    {categories.map(cat => {
+                      const subs = subcategories.filter(s => s.category_id === cat.id)
+                      return (
+                        <div key={cat.id}>
+                          <Link
+                            to={`/shop?cat=${slugify(cat.name)}`}
+                            onClick={() => setIsOpen(false)}
+                            className="flex items-center gap-3 px-5 py-3 text-base font-medium text-foreground hover:bg-accent transition-colors"
+                            style={{ minHeight: '44px' }}
+                          >
+                            <Gem className="w-5 h-5 flex-shrink-0 text-primary" />
+                            {cat.name}
+                          </Link>
+                          {subs.map(s => (
+                            <Link
+                              key={s.id}
+                              to={`/shop?cat=${slugify(cat.name)}&sub=${slugify(s.name)}`}
+                              onClick={() => setIsOpen(false)}
+                              className="block pl-13 pr-5 py-2.5 text-sm text-muted-foreground hover:bg-accent hover:text-primary transition-colors"
+                              style={{ minHeight: '44px', paddingLeft: '3.25rem' }}
+                            >
+                              {s.name}
+                            </Link>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
 
                 <div className="my-3 mx-5 border-t border-border" />
 

@@ -7,6 +7,7 @@ import { ProductCardVariants } from '@/components/ProductCardVariants'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { upsertMeta, upsertCanonical, SITE_URL } from '@/hooks/useSEO'
 import { productThumb, productSrcSet, GRID_SIZES } from '@/lib/imageUrl'
+import { slugify, legacySlug } from '@/lib/slug'
 
 interface Product {
   id: string
@@ -38,6 +39,7 @@ export default function ShopPage() {
   const [searchParams] = useSearchParams()
   const searchQuery = searchParams.get('search') || ''
   const catParam = searchParams.get('cat')
+  const subParam = searchParams.get('sub')
   const { addToCart } = useCart()
   const { format } = useCurrency()
   const navigate = useNavigate()
@@ -73,13 +75,24 @@ export default function ShopPage() {
 
   useEffect(() => {
     if (catParam) {
-      const match = categoryList.find(c => c.toLowerCase().replace(/\s+/g, '-') === catParam.toLowerCase())
+      const target = catParam.toLowerCase()
+      const match = categoryList.find(c => slugify(c) === target || legacySlug(c) === target)
       if (match) setActiveCategory(match)
+    } else {
+      setActiveCategory('All')
     }
   }, [catParam, categoryList])
 
   // Reset subcategory when category changes
   useEffect(() => { setActiveSub('All') }, [activeCategory])
+
+  // Deep-link straight into a subcategory via ?sub=
+  useEffect(() => {
+    if (!subParam) return
+    const target = subParam.toLowerCase()
+    const match = subcategories.find(s => slugify(s.name) === target || legacySlug(s.name) === target)
+    if (match) setActiveSub(match.name)
+  }, [subParam, subcategories, activeCategory])
 
   useEffect(() => {
     let mounted = true

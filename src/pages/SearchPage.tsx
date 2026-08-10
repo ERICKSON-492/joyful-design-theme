@@ -4,6 +4,7 @@ import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
+import { expandQuery } from '@/lib/searchTerms'
 
 const categoryList = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
 
@@ -67,8 +68,15 @@ export default function SearchPage() {
       try {
         let q = 'select=id,name,price,price_min,price_max,image_url,stock,category,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
         if (activeQuery) {
-          const escaped = activeQuery.replace(/[%_*]/g, ' ').trim()
-          q += `&or=(name.ilike.*${encodeURIComponent(escaped)}*,description.ilike.*${encodeURIComponent(escaped)}*,category.ilike.*${encodeURIComponent(escaped)}*)`
+          // Match singular/plural variants too, so "belts" finds "belt".
+          const variants = expandQuery(activeQuery)
+          if (variants.length) {
+            const clauses = variants.flatMap(v => {
+              const t = encodeURIComponent(v)
+              return [`name.ilike.*${t}*`, `description.ilike.*${t}*`, `category.ilike.*${t}*`, `subcategory.ilike.*${t}*`]
+            })
+            q += `&or=(${clauses.join(',')})`
+          }
         }
         if (selectedCats.length) {
           const list = selectedCats.map(c => `"${c}"`).join(',')
