@@ -5,13 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/integrations/supabase/client'
 import { CurrencySwitcher } from './CurrencySwitcher'
+import { fetchPublicTable } from '@/lib/publicContent'
+import { slugify } from '@/lib/slug'
 
-const shopCategories = [
-  { label: 'All Products', href: '/shop', icon: Store },
-  { label: 'Jewelry & Apparel', href: '/shop?cat=wear-it', icon: Gem },
-  { label: 'Home Decor & Tableware', href: '/shop?cat=live-with-it', icon: Sofa },
-  { label: 'Pet Accessories', href: '/shop?cat=for-your-pet', icon: PawPrint },
-]
+interface NavCategory { id: string; name: string }
+interface NavSubcategory { id: string; category_id: string; name: string }
 
 const navLinks = [
   { label: 'Home', href: '/' },
@@ -28,6 +26,8 @@ export function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [shopOpen, setShopOpen] = useState(false)
+  const [categories, setCategories] = useState<NavCategory[]>([])
+  const [subcategories, setSubcategories] = useState<NavSubcategory[]>([])
   const shopRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
   const navigate = useNavigate()
@@ -47,6 +47,15 @@ export function Navbar() {
     checkAuth()
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => checkAuth())
     return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    Promise.all([
+      fetchPublicTable<NavCategory>('categories', 'select=id,name&is_active=eq.true&order=display_order.asc'),
+      fetchPublicTable<NavSubcategory>('subcategories', 'select=id,category_id,name&is_active=eq.true&order=display_order.asc'),
+    ])
+      .then(([cats, subs]) => { setCategories(cats || []); setSubcategories(subs || []) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
