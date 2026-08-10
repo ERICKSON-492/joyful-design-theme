@@ -147,15 +147,37 @@ export function Navbar() {
                             exit={{ opacity: 0, y: -6 }}
                             transition={{ duration: 0.15 }}
                             onMouseLeave={() => setShopOpen(false)}
-                            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-background border border-border shadow-xl rounded-md overflow-hidden z-50"
+                            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-72 max-h-[70vh] overflow-y-auto bg-background border border-border shadow-xl rounded-md z-50 py-1"
                           >
-                            {shopCategories.map(c => {
-                              const Icon = c.icon
+                            <Link to="/shop" className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-foreground hover:bg-accent hover:text-primary transition-colors">
+                              <Store className="w-4 h-4 text-primary" />
+                              All Products
+                            </Link>
+                            {categories.map(cat => {
+                              const subs = subcategories.filter(s => s.category_id === cat.id)
                               return (
-                                <Link key={c.label} to={c.href} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground hover:bg-accent hover:text-primary transition-colors">
-                                  <Icon className="w-4 h-4 text-primary" />
-                                  {c.label}
-                                </Link>
+                                <div key={cat.id} className="border-t border-border/60">
+                                  <Link
+                                    to={`/shop?cat=${slugify(cat.name)}`}
+                                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent hover:text-primary transition-colors"
+                                  >
+                                    <Gem className="w-4 h-4 text-primary" />
+                                    {cat.name}
+                                  </Link>
+                                  {subs.length > 0 && (
+                                    <div className="pb-1">
+                                      {subs.map(s => (
+                                        <Link
+                                          key={s.id}
+                                          to={`/shop?cat=${slugify(cat.name)}&sub=${slugify(s.name)}`}
+                                          className="block pl-11 pr-4 py-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-primary transition-colors"
+                                        >
+                                          {s.name}
+                                        </Link>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                               )
                             })}
                           </motion.div>
