@@ -6,7 +6,7 @@ import { fetchPublicTable } from '@/lib/publicContent'
 import { ProductCardVariants } from '@/components/ProductCardVariants'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { upsertMeta, upsertCanonical, SITE_URL } from '@/hooks/useSEO'
-import { productThumb, productSrcSet, GRID_SIZES } from '@/lib/imageUrl'
+import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
 import { slugify, legacySlug } from '@/lib/slug'
 
 interface Product {
@@ -35,6 +35,7 @@ export default function ShopPage() {
   const [activeCategory, setActiveCategory] = useState('All')
   const [activeSub, setActiveSub] = useState<string>('All')
   const [loading, setLoading] = useState(true)
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const [variantState, setVariantState] = useState<Record<string, { price: number; canOrder: boolean; label: string | null; selected: boolean; hasVariants: boolean }>>({})
   const [searchParams] = useSearchParams()
   const searchQuery = searchParams.get('search') || ''
@@ -198,13 +199,19 @@ export default function ShopPage() {
               {products.map((product) => (
                 <div key={product.id} className="group">
                   <Link to={`/product/${product.id}`} className="product-image-frame block mb-4">
-                    {product.image_url ? (
+                    {product.image_url && !failedImages.has(product.id) ? (
                       <img src={productThumb(product.image_url)} alt={product.name}
                         srcSet={productSrcSet(product.image_url)}
                         sizes={GRID_SIZES}
                         width={400} height={400}
                         className="product-image" loading="lazy" decoding="async"
-                        onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
+                        onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')}
+                        onError={(e) => {
+                          handleImageFallback(e, product.image_url)
+                          if (e.currentTarget.dataset.fallbackFailed) {
+                            setFailedImages(prev => new Set(prev).add(product.id))
+                          }
+                        }} />
                     ) : (
                       <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
                     )}
