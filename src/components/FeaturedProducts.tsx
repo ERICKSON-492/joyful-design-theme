@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
-import { ShoppingBag } from 'lucide-react'
+import { ShoppingBag, ImageOff } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
-import { productThumb, productSrcSet, GRID_SIZES } from '@/lib/imageUrl'
+import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
 
 interface Product {
   id: string
@@ -28,20 +28,9 @@ export function FeaturedProducts() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [offset, setOffset] = useState(0)
   const [hasLoaded, setHasLoaded] = useState(false)
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const { addToCart } = useCart()
   const { format } = useCurrency()
-  const preloadedRef = useRef<Set<string>>(new Set())
-
-  // Preload a list of image URLs into the browser cache
-  const preloadImages = (urls: (string | null)[]) => {
-    urls.forEach(url => {
-      if (!url || preloadedRef.current.has(url)) return
-      preloadedRef.current.add(url)
-      const img = new Image()
-      img.decoding = 'async'
-      img.src = productThumb(url) as string
-    })
-  }
 
   useEffect(() => {
     let mounted = true
@@ -55,9 +44,10 @@ export function FeaturedProducts() {
 
         if (!mounted) return
         setAllProducts(shuffle(data || []))
-        // Warm the browser cache with EVERY product image up-front so
-        // subsequent rotations swap instantly with no flash/blank state.
-        preloadImages((data || []).map(p => p.image_url))
+        // Deliberately NOT preloading every fetched product's image up
+        // front — this section only ever shows 4 at a time, so preloading
+        // all 24 just meant hammering the image endpoint 24x on every page
+        // load for images nobody may ever see.
       } catch (err) {
         console.error('FeaturedProducts fetch error:', err)
         if (!mounted) return
@@ -116,7 +106,7 @@ export function FeaturedProducts() {
               >
                 <div className="group">
                   <Link to={`/product/${product.id}`} className="product-image-frame block mb-3">
-                    {product.image_url ? (
+                    {product.image_url && !failedImages.has(product.id) ? (
                       <img
                         src={productThumb(product.image_url)}
                         srcSet={productSrcSet(product.image_url)}
@@ -127,9 +117,18 @@ export function FeaturedProducts() {
                         className="product-image product-image-loaded"
                         loading="eager"
                         decoding="async"
+                        onError={(e) => {
+                          handleImageFallback(e, product.image_url)
+                          if (e.currentTarget.dataset.fallbackFailed) {
+                            setFailedImages(prev => new Set(prev).add(product.id))
+                          }
+                        }}
                       />
                     ) : (
-                      <div className="w-full aspect-square bg-muted flex items-center justify-center text-muted-foreground text-sm">No image</div>
+                      <div className="w-full aspect-square bg-muted flex flex-col items-center justify-center text-muted-foreground text-xs gap-1.5">
+                        <ImageOff className="w-5 h-5 opacity-50" />
+                        No image
+                      </div>
                     )}
                   </Link>
                 <Link to={`/product/${product.id}`}>
