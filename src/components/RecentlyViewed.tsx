@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 import { useCurrency } from '@/contexts/CurrencyContext'
-import { productThumb, productSrcSet, GRID_SIZES } from '@/lib/imageUrl'
+import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
 
 interface Product {
   id: string
@@ -16,6 +16,7 @@ interface Product {
 export function RecentlyViewed({ excludeId }: { excludeId?: string }) {
   const { ids } = useRecentlyViewed()
   const [products, setProducts] = useState<Product[]>([])
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const { format } = useCurrency()
 
   useEffect(() => {
@@ -40,11 +41,17 @@ export function RecentlyViewed({ excludeId }: { excludeId?: string }) {
         {products.map(p => (
           <Link key={p.id} to={`/product/${p.id}`} className="group">
             <div className="product-image-frame mb-2">
-              {p.image_url ? (
+              {p.image_url && !failedImages.has(p.id) ? (
                 <img src={productThumb(p.image_url)} alt={p.name} loading="lazy" decoding="async"
                   srcSet={productSrcSet(p.image_url)} sizes={GRID_SIZES}
                   width={400} height={400} className="product-image"
-                  onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')} />
+                  onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')}
+                  onError={(e) => {
+                    handleImageFallback(e, p.image_url)
+                    if (e.currentTarget.dataset.fallbackFailed) {
+                      setFailedImages(prev => new Set(prev).add(p.id))
+                    }
+                  }} />
               ) : (
                 <div className="w-full aspect-square bg-muted" />
               )}
