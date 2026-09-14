@@ -14,9 +14,10 @@ export async function fetchPublicTable<T>(table: string, query: string, timeoutM
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    const isNeonTable = table === 'products' || table === 'product_variants';
+    const response = await fetch(isNeonTable ? `/api/${table}?${query}` : `${SUPABASE_URL}/rest/v1/${table}?${query}`, {
       method: 'GET',
-      headers: getPublicHeaders(),
+      headers: isNeonTable ? { Accept: 'application/json' } : getPublicHeaders(),
       signal: controller.signal,
     });
 

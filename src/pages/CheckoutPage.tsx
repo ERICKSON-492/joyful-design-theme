@@ -436,25 +436,33 @@ export default function CheckoutPage() {
           coupon_code: appliedCoupon?.code || null, discount_amount: discountAmount || null,
         }
       }
-      const { data: order, error: orderError } = await (supabase as any).from('orders').insert(orderData).select('id').single()
-      if (orderError) throw new Error(orderError.message)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const orderResponse = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {}) },
+        body: JSON.stringify(orderData),
+      })
+      const orderPayload = await orderResponse.json().catch(() => ({}))
+      if (!orderResponse.ok) throw new Error(orderPayload.error || 'Unable to create order')
+      const order = orderPayload.order
+      const serverTotal = Number(orderPayload.total ?? order.total_amount)
 
       // A coupon (or free pickup + full discount) can bring the total to
       // zero — M-Pesa can't process a KSh 0 charge, so treat it like a
       // completed free order instead of attempting STK push.
-      if (selectedPayment === 'cod' || grandTotal <= 0) {
-        if (grandTotal <= 0 && selectedPayment !== 'cod') {
+      if (selectedPayment === 'cod' || serverTotal <= 0) {
+        if (serverTotal <= 0 && selectedPayment !== 'cod') {
           await supabase.from('orders').update({ status: 'confirmed' }).eq('id', order.id)
         }
         if (appliedCoupon) (supabase as any).rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
         await sendOrderEmail(order.id); setStatus('success'); clearCart()
-        toast.success(grandTotal <= 0 ? 'Order placed — nothing to pay! 🎉' : 'Order placed! Pay on delivery 🎉')
+        toast.success(serverTotal <= 0 ? 'Order placed — nothing to pay! 🎉' : 'Order placed! Pay on delivery 🎉')
         return
       }
 
       setStatus('pushing')
       const { data: responsePayload, error: stkError } = await supabase.functions.invoke(
-        'mpesa-stk-push', { body: { phone, amount: grandTotal, orderId: order.id } }
+        'mpesa-stk-push', { body: { phone, amount: serverTotal, orderId: order.id } }
       )
       if (stkError) throw new Error(stkError.message)
       if (!responsePayload?.success) throw new Error(responsePayload?.error || 'M-Pesa request failed.')
