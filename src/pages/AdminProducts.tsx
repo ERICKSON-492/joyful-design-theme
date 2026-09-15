@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { Plus, Trash2, Edit, X, Upload, Layers, GripVertical } from 'lucide-react'
+import { apiUrl } from '@/lib/apiBase'
 
 interface Product {
   id: string
@@ -37,7 +38,7 @@ interface Category { id: string; name: string }
 interface Subcategory { id: string; category_id: string; name: string }
 
 async function adminApi(path: string, init: RequestInit = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     ...init,
     credentials: 'include',
     headers: { 'content-type': 'application/json', ...(init.headers || {}) },

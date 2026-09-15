@@ -436,7 +436,7 @@ export default function CheckoutPage() {
           coupon_code: appliedCoupon?.code || null, discount_amount: discountAmount || null,
         }
       }
-      const orderResponse = await fetch('/api/orders', {
+      const orderResponse = await fetch(apiUrl('/api/orders'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
