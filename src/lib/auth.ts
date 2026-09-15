@@ -1,3 +1,5 @@
+import { apiUrl } from './apiBase'
+
 export interface AuthUser {
   id: string
   email: string
@@ -6,7 +8,7 @@ export interface AuthUser {
 }
 
 export async function authRequest<T = { user: AuthUser | null }>(path: string, payload?: unknown): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     method: payload === undefined ? 'GET' : 'POST',
     credentials: 'include',
     headers: payload === undefined ? undefined : { 'content-type': 'application/json' },

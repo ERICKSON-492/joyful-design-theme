@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import { ShoppingBag, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation, Search } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { apiUrl } from '@/lib/apiBase'
 import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 import { useSEO } from '@/hooks/useSEO'
 
@@ -436,7 +437,7 @@ export default function CheckoutPage() {
           coupon_code: appliedCoupon?.code || null, discount_amount: discountAmount || null,
         }
       }
-      const orderResponse = await fetch('/api/orders', {
+      const orderResponse = await fetch(apiUrl('/api/orders'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
