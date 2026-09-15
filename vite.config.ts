@@ -8,7 +8,16 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    proxy: { "/api": "http://localhost:3001" },
+    // In development the API is proxied through the dev server so browser
+    // requests stay same-origin (no CORS, cookies just work). Point
+    // API_PROXY_TARGET at http://localhost:3001 to run the API locally.
+    proxy: {
+      "/api": {
+        target: process.env.API_PROXY_TARGET || "https://joyful-design-theme.onrender.com",
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
