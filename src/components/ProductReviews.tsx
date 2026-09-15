@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { getCurrentUser, type AuthUser } from '@/lib/auth'
 import { Star, BadgeCheck, Upload, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Link } from 'react-router-dom'
-import type { User } from '@supabase/supabase-js'
 
 interface Review {
   id: string
@@ -46,7 +46,7 @@ function StarRating({ value, onChange, size = 20 }: { value: number; onChange?: 
 export function ProductReviews({ productId }: { productId: string }) {
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [hasReviewed, setHasReviewed] = useState(false)
 
@@ -59,7 +59,7 @@ export function ProductReviews({ productId }: { productId: string }) {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user))
+    getCurrentUser().then(({ user }) => setUser(user)).catch(() => setUser(null))
   }, [])
 
   useEffect(() => {

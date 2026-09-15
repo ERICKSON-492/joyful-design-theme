@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package, Home, BookOpen, Store, Palette, Users, Truck, ChevronDown, Sparkles, Gem } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
-import { supabase } from '@/integrations/supabase/client'
+import { getCurrentUser, logout } from '@/lib/auth'
 import { CurrencySwitcher } from './CurrencySwitcher'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { slugify } from '@/lib/slug'
@@ -35,18 +35,11 @@ export function Navbar() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        const { data } = await supabase.from('admin_users').select('id').eq('user_id', session.user.id).maybeSingle()
-        setIsAdmin(!!data)
-      } else {
-        setIsAdmin(false)
-      }
+      const { user } = await getCurrentUser()
+      setUser(user)
+      setIsAdmin(user?.role === 'admin')
     }
-    checkAuth()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => checkAuth())
-    return () => subscription.unsubscribe()
+    checkAuth().catch(() => { setUser(null); setIsAdmin(false) })
   }, [])
 
   useEffect(() => {
@@ -268,7 +261,7 @@ export function Navbar() {
                     <Package className="w-5 h-5" />
                   </Link>
                   <button
-                    onClick={async () => { await supabase.auth.signOut(); setUser(null); setIsAdmin(false) }}
+                    onClick={async () => { await logout(); setUser(null); setIsAdmin(false) }}
                     className="p-2.5 hover:bg-accent rounded-full transition-colors text-muted-foreground"
                     aria-label="Sign Out"
                     title="Sign Out"
@@ -461,7 +454,7 @@ export function Navbar() {
                       My Orders
                     </Link>
                     <button
-                      onClick={async () => { await supabase.auth.signOut(); setUser(null); setIsOpen(false) }}
+                      onClick={async () => { await logout(); setUser(null); setIsOpen(false) }}
                       className="flex items-center gap-3 px-5 py-3.5 text-base font-medium text-muted-foreground hover:bg-accent w-full text-left transition-colors"
                       style={{ minHeight: '44px' }}
                     >

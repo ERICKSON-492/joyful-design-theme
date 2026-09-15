@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { getCurrentUser } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Check, X, Trash2, Upload, Loader2, Plus, Download } from 'lucide-react'
@@ -132,7 +133,7 @@ export default function AdminTribeLooks() {
     if (!newLook.image_url) { toast.error('Please upload an image'); return }
     if (!newLook.name.trim()) { toast.error('Please enter a name'); return }
     
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getCurrentUser()
     const { error } = await supabase.from('tribe_looks').insert({
       user_id: user?.id,
       image_url: newLook.image_url,
@@ -154,7 +155,7 @@ export default function AdminTribeLooks() {
   const importDefaults = async () => {
     setImporting(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getCurrentUser()
       let importedCount = 0
 
       for (const def of defaultLooks) {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
+import { getCurrentUser, login, signup, authRequest } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Mail, Lock, User, Loader2 } from 'lucide-react'
 import { useSEO } from '@/hooks/useSEO'
@@ -39,8 +39,8 @@ export default function AuthPage() {
 
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session && isSubscribed && !hasNavigated.current) {
+        const { user } = await getCurrentUser()
+        if (user && isSubscribed && !hasNavigated.current) {
           hasNavigated.current = true
           navigate(returnTo)
         }
@@ -54,27 +54,8 @@ export default function AuthPage() {
     checkSession()
 
     let timeoutId: NodeJS.Timeout
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        clearTimeout(timeoutId)
-
-        timeoutId = setTimeout(() => {
-          if (
-            session && 
-            isSubscribed && 
-            !hasNavigated.current &&
-            ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)
-          ) {
-            hasNavigated.current = true
-            navigate(returnTo)
-          }
-        }, 100)
-      }
-    )
-
     return () => {
       isSubscribed = false
-      subscription?.unsubscribe()
       clearTimeout(timeoutId)
     }
   }, [navigate, returnTo])
@@ -93,10 +74,7 @@ export default function AuthPage() {
     
     setForgotLoading(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      })
-      if (error) throw error
+      await authRequest('/api/auth/forgot-password', { email })
       
       toast.success('Password reset link sent! Check your email.')
       setShowForgot(false)
@@ -116,11 +94,7 @@ export default function AuthPage() {
     
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ 
-          email, 
-          password 
-        })
-        if (error) throw error
+        await login(email, password)
         
         if (isMounted.current) {
           toast.success('Welcome back!')
@@ -135,37 +109,10 @@ export default function AuthPage() {
         }
         
         // Sign up the user
-        const { data: { user }, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: name },
-            emailRedirectTo: window.location.origin,
-          },
-        })
-        if (signUpError) throw signUpError
+        const { user } = await signup(email, password, name)
         
         // Create/update the profile row if a user object is returned immediately
-        if (user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert(
-              {
-                user_id: user.id,
-                display_name: name,
-                email: email,
-                updated_at: new Date().toISOString(),
-              } as never,
-              { onConflict: 'user_id' }
-            )
-          
-          if (profileError) {
-            console.error('Error creating profile:', profileError)
-            toast.error('Account created but profile setup failed. Please contact support.')
-          } else {
-            toast.success('Account created successfully! Check your email to confirm.')
-          }
-        }
+        if (user) toast.success('Account created successfully!')
         
         if (isMounted.current) {
           setEmail('')
@@ -185,25 +132,7 @@ export default function AuthPage() {
   }
 
   const handleGoogleLogin = async () => {
-    setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { 
-          redirectTo: window.location.origin,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'select_account'
-          }
-        },
-      })
-      if (error) throw error
-    } catch (err: any) {
-      if (isMounted.current) {
-        toast.error(err.message || 'Google sign-in failed')
-      }
-      setLoading(false)
-    }
+    toast.info('Google sign-in will be available after the authentication migration is complete.')
   }
 
   return (

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
+import { login } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
@@ -16,27 +16,18 @@ export default function AdminLogin() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (error) {
-      toast.error(error.message)
-    } else {
+    try {
+      await login(email, password)
       toast.success('Welcome back!')
       navigate('/admin')
-    }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Sign-in failed')
+    } finally { setLoading(false) }
   }
 
   const handleGoogleLogin = async () => {
-    setLoading(true)
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-    if (error) {
-      toast.error(error.message || 'Google sign-in failed')
-      setLoading(false)
-      return
-    }
+    setLoading(false)
+    toast.info('Google sign-in will be available after the authentication migration is complete.')
   }
 
   return (

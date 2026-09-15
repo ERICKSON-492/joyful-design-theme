@@ -3,7 +3,7 @@ import { useCart } from '@/contexts/CartContext';
 import { X, Plus, Minus, Trash2, ShoppingBag, LogIn, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { getCurrentUser } from '@/lib/auth';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
 
@@ -24,17 +24,7 @@ export function CartDrawer() {
   const { format, currency } = useCurrency();
 
   useEffect(() => {
-    const check = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsLoggedIn(!!session);
-    };
-    check();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setIsLoggedIn(!!session);
-    });
-    
-    return () => subscription.unsubscribe();
+    getCurrentUser().then(({ user }) => setIsLoggedIn(!!user)).catch(() => setIsLoggedIn(false));
   }, []);
 
   const handleUpdateQuantity = async (id: string, newQuantity: number) => {

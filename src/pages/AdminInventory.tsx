@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { getCurrentUser } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
@@ -123,7 +124,7 @@ export default function AdminInventory() {
     if (upd.error) { setSaving(false); return toast.error(upd.error.message) }
 
     // Log adjustment
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getCurrentUser()
     const { error: logErr } = await supabase.from('stock_adjustments').insert({
       product_id: product.id,
       variant_id: variant?.id || null,

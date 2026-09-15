@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
+import { getCurrentUser, logout } from '@/lib/auth'
 import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText, Camera, Truck, CreditCard, Star, Boxes, Mail, BookOpen, Tag, MapPin, Palette, Users, BarChart3 } from 'lucide-react'
-import type { User } from '@supabase/supabase-js'
+import type { AuthUser } from '@/lib/auth'
 import { useSEO } from '@/hooks/useSEO'
 
 const navItems = [
@@ -29,20 +29,16 @@ const navItems = [
 
 export default function AdminLayout() {
   useSEO('Admin', undefined, undefined, true)
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const location = useLocation()
 
   useEffect(() => {
     const checkAccess = async () => {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) { navigate('/admin/login'); setLoading(false); return }
-      
-      // Check if user is in admin_users table
-      const { data: adminRecord } = await supabase.from('admin_users').select('id').eq('user_id', authUser.id).maybeSingle()
-      if (!adminRecord) {
-        await supabase.auth.signOut()
+      const { user: authUser } = await getCurrentUser()
+      if (!authUser || authUser.role !== 'admin') {
+        await logout().catch(() => {})
         navigate('/admin/login')
         setLoading(false)
         return
@@ -54,7 +50,7 @@ export default function AdminLayout() {
   }, [navigate])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await logout()
     navigate('/admin/login')
   }
 

@@ -2,6 +2,7 @@ import http from 'node:http'
 import crypto from 'node:crypto'
 import pg from 'pg'
 import { createClient } from '@supabase/supabase-js'
+import bcrypt from 'bcryptjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -9,12 +10,33 @@ const supabaseAdmin = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_R
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
   : null
 const port = Number(process.env.PORT || 3001)
+const sessionTtlSeconds = Number(process.env.SESSION_TTL_SECONDS || 2592000)
+const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'ushanga_session'
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(body === undefined ? '' : JSON.stringify(body)) }
 const body = async (req) => { let raw = ''; for await (const chunk of req) raw += chunk; return raw ? JSON.parse(raw) : {} }
 const productFields = 'id,name,description,price,price_min,price_max,category,subcategory,image_url,image_urls,stock,is_active,is_preorder,preorder_label,low_stock_threshold,sale_price,created_at,updated_at'
 const variantFields = 'id,product_id,variant_label,size,color,price,stock,is_active,created_at,updated_at'
 const productDto = (p) => ({ ...p, price: Number(p.price), price_min: p.price_min == null ? null : Number(p.price_min), price_max: p.price_max == null ? null : Number(p.price_max), sale_price: p.sale_price == null ? null : Number(p.sale_price) })
 const variantDto = (v) => ({ ...v, price: Number(v.price) })
+
+const parseCookies = (header = '') => Object.fromEntries(header.split(';').map(v => v.trim().split('=').map(decodeURIComponent)).filter(v => v.length === 2))
+const tokenHash = (token) => crypto.createHash('sha256').update(token).digest('hex')
+const safeUser = (u) => ({ id: u.id, email: u.email, displayName: u.display_name, role: u.role })
+const cookie = (token, maxAge = sessionTtlSeconds) => `${sessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`
+async function neonUser(req) {
+  const token = parseCookies(req.headers.cookie || '')[sessionCookieName]
+  if (!token) return null
+  const r = await pool.query('SELECT u.id,u.email,u.display_name,u.role,u.is_active FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.is_active=true', [tokenHash(token)])
+  if (!r.rowCount) return null
+  await pool.query('UPDATE auth_sessions SET last_seen_at=now() WHERE token_hash=$1', [tokenHash(token)])
+  return r.rows[0]
+}
+async function createSession(req, userId) {
+  const raw = crypto.randomBytes(32).toString('base64url')
+  await pool.query('INSERT INTO auth_sessions (user_id,token_hash,expires_at,user_agent,ip_address) VALUES ($1,$2,now()+($3 * interval \'1 second\'),$4,$5)', [userId, tokenHash(raw), sessionTtlSeconds, req.headers['user-agent'] || null, req.socket.remoteAddress || null])
+  return raw
+}
+const authJson = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)) }
 
 async function authUser(req) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
@@ -23,6 +45,8 @@ async function authUser(req) {
   return data.user || null
 }
 async function requireAdmin(req) {
+  const sessionUser = await neonUser(req)
+  if (sessionUser?.role === 'admin') return sessionUser
   const user = await authUser(req)
   if (!user) return null
   const { rowCount } = await pool.query('SELECT 1 FROM public.admin_users WHERE user_id=$1', [user.id])
@@ -42,6 +66,21 @@ function queryFilters(url) {
 }
 async function handle(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true })
+  if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user = await neonUser(req); return authJson(res, 200, { user: user ? safeUser(user) : null }) }
+  if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
+    const b = await body(req); const email = String(b.email || '').trim().toLowerCase(); const password = String(b.password || ''); const displayName = String(b.displayName || b.name || '').trim()
+    if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 10 || password.length > 128) return authJson(res, 400, { error: 'Use a valid email and a password between 10 and 128 characters.' })
+    const passwordHash = await bcrypt.hash(password, 12)
+    try { const r = await pool.query('INSERT INTO auth_users (email,password_hash,display_name) VALUES ($1,$2,$3) RETURNING id,email,display_name,role', [email, passwordHash, displayName || null]); const session = await createSession(req, r.rows[0].id); return authJson(res, 201, { user: safeUser(r.rows[0]) }, { 'set-cookie': cookie(session) }) }
+    catch (e) { if (e.code === '23505') return authJson(res, 409, { error: 'An account with that email already exists.' }); throw e }
+  }
+  if (req.method === 'POST' && url.pathname === '/api/auth/login') {
+    const b = await body(req); const email = String(b.email || '').trim().toLowerCase(); const password = String(b.password || ''); const r = await pool.query('SELECT id,email,password_hash,display_name,role,is_active FROM auth_users WHERE email=$1', [email]); const user = r.rows[0]
+    if (!user || !user.is_active || !(await bcrypt.compare(password, user.password_hash))) return authJson(res, 401, { error: 'Invalid email or password.' })
+    const session = await createSession(req, user.id); return authJson(res, 200, { user: safeUser(user) }, { 'set-cookie': cookie(session) })
+  }
+  if (req.method === 'POST' && url.pathname === '/api/auth/logout') { const token = parseCookies(req.headers.cookie || '')[sessionCookieName]; if (token) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1', [tokenHash(token)]); return authJson(res, 200, { ok: true }, { 'set-cookie': cookie('', 0) }) }
+  if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password') return authJson(res, 200, { ok: true, message: 'If that email exists, a reset link will be sent.' })
   if (req.method === 'GET' && url.pathname === '/api/products') {
     const f = queryFilters(url); const r = await pool.query(`SELECT ${productFields} FROM public.products ${f.where} ORDER BY ${f.order} LIMIT ${f.limit}`, f.values); return json(res, 200, r.rows.map(productDto))
   }

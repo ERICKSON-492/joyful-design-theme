@@ -37,10 +37,10 @@ interface Category { id: string; name: string }
 interface Subcategory { id: string; category_id: string; name: string }
 
 async function adminApi(path: string, init: RequestInit = {}) {
-  const { data } = await supabase.auth.getSession()
   const response = await fetch(path, {
     ...init,
-    headers: { 'content-type': 'application/json', ...(data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {}), ...(init.headers || {}) },
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', ...(init.headers || {}) },
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload.error || 'Admin request failed')

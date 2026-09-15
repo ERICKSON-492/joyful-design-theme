@@ -436,10 +436,10 @@ export default function CheckoutPage() {
           coupon_code: appliedCoupon?.code || null, discount_amount: discountAmount || null,
         }
       }
-      const { data: sessionData } = await supabase.auth.getSession()
       const orderResponse = await fetch('/api/orders', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...(sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {}) },
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify(orderData),
       })
       const orderPayload = await orderResponse.json().catch(() => ({}))
