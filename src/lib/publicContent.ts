@@ -16,8 +16,11 @@ export async function fetchPublicTable<T>(table: string, query: string, timeoutM
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const isNeonTable = table === 'products' || table === 'product_variants';
-    const response = await fetch(isNeonTable ? apiUrl(`/api/${table}?${query}`) : `${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    // Tables already living on the Neon API, mapped to their route names.
+    const neonRoutes: Record<string, string> = { products: 'products', product_variants: 'product-variants' };
+    const neonRoute = neonRoutes[table];
+    const isNeonTable = Boolean(neonRoute);
+    const response = await fetch(isNeonTable ? apiUrl(`/api/${neonRoute}?${query}`) : `${SUPABASE_URL}/rest/v1/${table}?${query}`, {
       method: 'GET',
       headers: isNeonTable ? { Accept: 'application/json' } : getPublicHeaders(),
       signal: controller.signal,
