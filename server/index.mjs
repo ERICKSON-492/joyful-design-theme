@@ -22,7 +22,31 @@ const variantDto = (v) => ({ ...v, price: Number(v.price) })
 const parseCookies = (header = '') => Object.fromEntries(header.split(';').map(v => v.trim().split('=').map(decodeURIComponent)).filter(v => v.length === 2))
 const tokenHash = (token) => crypto.createHash('sha256').update(token).digest('hex')
 const safeUser = (u) => ({ id: u.id, email: u.email, displayName: u.display_name, role: u.role })
-const cookie = (token, maxAge = sessionTtlSeconds) => `${sessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`
+// The browser app is served from a different origin than this API, so the
+// session cookie must be SameSite=None (which requires Secure).
+const cookie = (token, maxAge = sessionTtlSeconds) => `${sessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=None; Partitioned; Path=/; Max-Age=${maxAge}`
+
+const extraOrigins = String(process.env.ALLOWED_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean)
+function allowedOrigin(origin) {
+  if (!origin) return null
+  if (extraOrigins.includes(origin)) return origin
+  let host
+  try { host = new URL(origin).hostname } catch { return null }
+  if (host === 'localhost' || host === '127.0.0.1') return origin
+  if (host.endsWith('.lovable.app') || host.endsWith('.lovableproject.com')) return origin
+  if (host === 'ushangachronicles.com' || host.endsWith('.ushangachronicles.com')) return origin
+  return null
+}
+function applyCors(req, res) {
+  const origin = allowedOrigin(req.headers.origin)
+  if (!origin) return
+  res.setHeader('access-control-allow-origin', origin)
+  res.setHeader('access-control-allow-credentials', 'true')
+  res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,DELETE,OPTIONS')
+  res.setHeader('access-control-allow-headers', 'content-type,authorization')
+  res.setHeader('access-control-max-age', '86400')
+  res.setHeader('vary', 'Origin')
+}
 async function neonUser(req) {
   const token = parseCookies(req.headers.cookie || '')[sessionCookieName]
   if (!token) return null
@@ -109,5 +133,5 @@ async function handle(req, res, url) {
   }
   return json(res,404,{error:'Not found'})
 }
-const server=http.createServer(async(req,res)=>{try{await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
+const server=http.createServer(async(req,res)=>{try{applyCors(req,res);if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
 server.listen(port,'0.0.0.0',()=>console.log(`Neon API listening on ${port}`))
