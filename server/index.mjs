@@ -3,6 +3,10 @@ import crypto from 'node:crypto'
 import pg from 'pg'
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
