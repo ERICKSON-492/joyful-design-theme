@@ -34,7 +34,7 @@ class Query implements PromiseLike<Result<any>> {
   private limitValue: number | null = null
   private mode: 'select' | 'insert' | 'update' | 'delete' = 'select'
   private payload: unknown = null
-  private single = false
+  private singleRow = false
   private maybe = false
 
   constructor(private table: string) {}
@@ -63,9 +63,9 @@ class Query implements PromiseLike<Result<any>> {
   }
   limit(count: number) { this.limitValue = count; return this }
   range(from: number, to: number) { this.limitValue = to - from + 1; return this }
-  maybeSingle() { this.single = true; this.maybe = true; return this }
+  maybeSingle() { this.singleRow = true; this.maybe = true; return this }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  single(): any { this.single = true; return this }
+  single(): any { this.singleRow = true; return this }
 
   private queryString() {
     const parts = [...this.filters]
@@ -86,9 +86,9 @@ class Query implements PromiseLike<Result<any>> {
     else if (this.mode === 'update') result = await request(path, { method: 'PATCH', headers: jsonHeaders, body: JSON.stringify(this.payload) })
     else result = await request(path, { method: 'DELETE' })
 
-    if (result.error) return { data: this.single ? null : [], error: result.error, count: null }
+    if (result.error) return { data: this.singleRow ? null : [], error: result.error, count: null }
     const rows = result.data || []
-    if (this.single) {
+    if (this.singleRow) {
       if (!rows.length && !this.maybe) return { data: null, error: { message: 'No rows found', code: 'PGRST116' } }
       return { data: rows[0] ?? null, error: null }
     }
