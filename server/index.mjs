@@ -135,7 +135,39 @@ async function handle(req, res, url) {
     const subtotal=authoritative.reduce((s,i)=>s+i.price*i.quantity,0); const shipping=Number(b.shipping_cost||0); const discount=Math.max(0,Number(b.discount_amount||0)); const total=Math.max(0,subtotal+shipping-discount)
     const client=await pool.connect(); try{await client.query('BEGIN'); for(const i of authoritative) await client.query('UPDATE products SET stock=stock-$1,updated_at=now() WHERE id=$2',[i.quantity,i.id]); const o=await client.query(`INSERT INTO joyful_orders (phone,customer_name,total_amount,status,items,user_id,shipping_address,email,shipping_method,shipping_cost,latitude,longitude,stock_decremented) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true) RETURNING id,total_amount`,[b.phone,b.customer_name,total,b.status||'pending',JSON.stringify(authoritative),b.user_id||null,b.shipping_address||{},b.email||null,b.shipping_method||null,shipping,b.latitude??null,b.longitude??null]); await client.query('COMMIT'); return json(res,201,{order:o.rows[0],subtotal,shipping_cost:shipping,discount_amount:discount,total})}catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
   }
+  // Generic data access (replaces PostgREST), file storage, signed links and
+  // the polling channel that replaces realtime broadcast.
+  if (url.pathname.startsWith('/api/db/')) {
+    const user = await neonUser(req)
+    const isAdmin = user?.role === 'admin' ? true : Boolean(await requireAdmin(req))
+    return handleDb({ pool, req, res, url, json, body, user, isAdmin })
+  }
+  if (url.pathname.startsWith('/api/files/')) {
+    const user = await neonUser(req)
+    const isAdmin = user?.role === 'admin'
+    return handleFiles({ pool, req, res, url, json, user, isAdmin })
+  }
+  if (url.pathname === '/api/storage/sign') {
+    if (!(await requireAdmin(req)) && !(await neonUser(req))) return json(res, 403, { error: 'Sign in required' })
+    return handleSignedUrl({ res, url, json })
+  }
+  if (url.pathname.startsWith('/api/realtime/')) return handleRealtime({ req, res, url, json, body })
   return json(res,404,{error:'Not found'})
 }
+
+// Schema and data bootstrap: both SQL files are idempotent, so running them at
+// boot keeps a fresh Neon database in step with the code without a manual step.
+async function bootstrap() {
+  const dir = path.dirname(fileURLToPath(import.meta.url))
+  const files = ['neon-schema.sql', 'auth-schema.sql', 'neon-migration-schema.sql', 'neon-seed.sql']
+  for (const file of files) {
+    const full = path.join(dir, file)
+    if (!fs.existsSync(full)) continue
+    try { await pool.query(fs.readFileSync(full, 'utf8')); console.log(`bootstrap: applied ${file}`) }
+    catch (e) { console.error(`bootstrap: ${file} failed: ${e.message}`) }
+  }
+}
+
 const server=http.createServer(async(req,res)=>{try{applyCors(req,res);if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
+if (process.env.SKIP_BOOTSTRAP !== 'true') await bootstrap()
 server.listen(port,'0.0.0.0',()=>console.log(`Neon API listening on ${port}`))
