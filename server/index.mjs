@@ -3,10 +3,8 @@ import crypto from 'node:crypto'
 import pg from 'pg'
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
+import { S3Client, DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -16,6 +14,10 @@ const supabaseAdmin = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_R
 const port = Number(process.env.PORT || 3001)
 const sessionTtlSeconds = Number(process.env.SESSION_TTL_SECONDS || 2592000)
 const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'ushanga_session'
+const r2 = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME
+  ? new S3Client({ region: 'auto', endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY } })
+  : null
+const r2PublicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || '').replace(/\/$/, '')
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(body === undefined ? '' : JSON.stringify(body)) }
 const body = async (req) => { let raw = ''; for await (const chunk of req) raw += chunk; return raw ? JSON.parse(raw) : {} }
 const productFields = 'id,name,description,price,price_min,price_max,category,subcategory,image_url,image_urls,stock,is_active,is_preorder,preorder_label,low_stock_threshold,sale_price,created_at,updated_at'
@@ -26,31 +28,7 @@ const variantDto = (v) => ({ ...v, price: Number(v.price) })
 const parseCookies = (header = '') => Object.fromEntries(header.split(';').map(v => v.trim().split('=').map(decodeURIComponent)).filter(v => v.length === 2))
 const tokenHash = (token) => crypto.createHash('sha256').update(token).digest('hex')
 const safeUser = (u) => ({ id: u.id, email: u.email, displayName: u.display_name, role: u.role })
-// The browser app is served from a different origin than this API, so the
-// session cookie must be SameSite=None (which requires Secure).
-const cookie = (token, maxAge = sessionTtlSeconds) => `${sessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=None; Partitioned; Path=/; Max-Age=${maxAge}`
-
-const extraOrigins = String(process.env.ALLOWED_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean)
-function allowedOrigin(origin) {
-  if (!origin) return null
-  if (extraOrigins.includes(origin)) return origin
-  let host
-  try { host = new URL(origin).hostname } catch { return null }
-  if (host === 'localhost' || host === '127.0.0.1') return origin
-  if (host.endsWith('.lovable.app') || host.endsWith('.lovableproject.com')) return origin
-  if (host === 'ushangachronicles.com' || host.endsWith('.ushangachronicles.com')) return origin
-  return null
-}
-function applyCors(req, res) {
-  const origin = allowedOrigin(req.headers.origin)
-  if (!origin) return
-  res.setHeader('access-control-allow-origin', origin)
-  res.setHeader('access-control-allow-credentials', 'true')
-  res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,DELETE,OPTIONS')
-  res.setHeader('access-control-allow-headers', 'content-type,authorization')
-  res.setHeader('access-control-max-age', '86400')
-  res.setHeader('vary', 'Origin')
-}
+const cookie = (token, maxAge = sessionTtlSeconds) => `${sessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`
 async function neonUser(req) {
   const token = parseCookies(req.headers.cookie || '')[sessionCookieName]
   if (!token) return null
@@ -65,6 +43,14 @@ async function createSession(req, userId) {
   return raw
 }
 const authJson = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)) }
+const allowedStorageFolders = new Set(['product-images', 'site-images', 'review-photos', 'custom-orders', 'tribe-looks', 'order-receipts'])
+const safeStorageKey = (value) => String(value || '').replace(/^\/+/, '').replace(/\.\./g, '').replace(/[^a-zA-Z0-9_./-]/g, '-').slice(0, 240)
+async function storageUser(req, folder) {
+  const user = await neonUser(req)
+  if (!user) return null
+  if (['product-images', 'site-images', 'custom-orders', 'tribe-looks', 'order-receipts'].includes(folder) && user.role !== 'admin') return null
+  return user
+}
 
 async function authUser(req) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
@@ -109,6 +95,26 @@ async function handle(req, res, url) {
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/logout') { const token = parseCookies(req.headers.cookie || '')[sessionCookieName]; if (token) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1', [tokenHash(token)]); return authJson(res, 200, { ok: true }, { 'set-cookie': cookie('', 0) }) }
   if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password') return authJson(res, 200, { ok: true, message: 'If that email exists, a reset link will be sent.' })
+  if (req.method === 'POST' && url.pathname === '/api/storage/upload-url') {
+    if (!r2 || !r2PublicBaseUrl) return authJson(res, 503, { error: 'R2 storage is not configured on the API.' })
+    const b = await body(req); const folder = String(b.folder || ''); const user = await storageUser(req, folder)
+    if (!allowedStorageFolders.has(folder)) return authJson(res, 400, { error: 'Unsupported storage folder.' })
+    if (!user) return authJson(res, 403, { error: 'Authentication or admin access required.' })
+    const key = safeStorageKey(`${folder}/${b.key || ''}`)
+    const contentType = String(b.contentType || 'application/octet-stream').slice(0, 120)
+    const size = Number(b.size || 0)
+    if (!key.startsWith(`${folder}/`) || key.length <= folder.length + 1 || size < 1 || size > 15 * 1024 * 1024) return authJson(res, 400, { error: 'Invalid file key or size.' })
+    const uploadUrl = await getSignedUrl(r2, new PutObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key, ContentType: contentType }), { expiresIn: 600 })
+    return authJson(res, 200, { key, uploadUrl, publicUrl: `${r2PublicBaseUrl}/${key}` })
+  }
+  if (req.method === 'POST' && url.pathname === '/api/storage/delete') {
+    if (!r2) return authJson(res, 503, { error: 'R2 storage is not configured on the API.' })
+    const b = await body(req); const key = safeStorageKey(b.key); const folder = key.split('/')[0]; const user = await storageUser(req, folder)
+    if (!allowedStorageFolders.has(folder)) return authJson(res, 400, { error: 'Unsupported storage folder.' })
+    if (!user) return authJson(res, 403, { error: 'Authentication or admin access required.' })
+    await r2.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }))
+    return authJson(res, 200, { ok: true })
+  }
   if (req.method === 'GET' && url.pathname === '/api/products') {
     const f = queryFilters(url); const r = await pool.query(`SELECT ${productFields} FROM public.products ${f.where} ORDER BY ${f.order} LIMIT ${f.limit}`, f.values); return json(res, 200, r.rows.map(productDto))
   }
@@ -135,39 +141,7 @@ async function handle(req, res, url) {
     const subtotal=authoritative.reduce((s,i)=>s+i.price*i.quantity,0); const shipping=Number(b.shipping_cost||0); const discount=Math.max(0,Number(b.discount_amount||0)); const total=Math.max(0,subtotal+shipping-discount)
     const client=await pool.connect(); try{await client.query('BEGIN'); for(const i of authoritative) await client.query('UPDATE products SET stock=stock-$1,updated_at=now() WHERE id=$2',[i.quantity,i.id]); const o=await client.query(`INSERT INTO joyful_orders (phone,customer_name,total_amount,status,items,user_id,shipping_address,email,shipping_method,shipping_cost,latitude,longitude,stock_decremented) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true) RETURNING id,total_amount`,[b.phone,b.customer_name,total,b.status||'pending',JSON.stringify(authoritative),b.user_id||null,b.shipping_address||{},b.email||null,b.shipping_method||null,shipping,b.latitude??null,b.longitude??null]); await client.query('COMMIT'); return json(res,201,{order:o.rows[0],subtotal,shipping_cost:shipping,discount_amount:discount,total})}catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
   }
-  // Generic data access (replaces PostgREST), file storage, signed links and
-  // the polling channel that replaces realtime broadcast.
-  if (url.pathname.startsWith('/api/db/')) {
-    const user = await neonUser(req)
-    const isAdmin = user?.role === 'admin' ? true : Boolean(await requireAdmin(req))
-    return handleDb({ pool, req, res, url, json, body, user, isAdmin })
-  }
-  if (url.pathname.startsWith('/api/files/')) {
-    const user = await neonUser(req)
-    const isAdmin = user?.role === 'admin'
-    return handleFiles({ pool, req, res, url, json, user, isAdmin })
-  }
-  if (url.pathname === '/api/storage/sign') {
-    if (!(await requireAdmin(req)) && !(await neonUser(req))) return json(res, 403, { error: 'Sign in required' })
-    return handleSignedUrl({ res, url, json })
-  }
-  if (url.pathname.startsWith('/api/realtime/')) return handleRealtime({ req, res, url, json, body })
   return json(res,404,{error:'Not found'})
 }
-
-// Schema and data bootstrap: both SQL files are idempotent, so running them at
-// boot keeps a fresh Neon database in step with the code without a manual step.
-async function bootstrap() {
-  const dir = path.dirname(fileURLToPath(import.meta.url))
-  const files = ['neon-schema.sql', 'auth-schema.sql', 'neon-migration-schema.sql', 'neon-seed.sql']
-  for (const file of files) {
-    const full = path.join(dir, file)
-    if (!fs.existsSync(full)) continue
-    try { await pool.query(fs.readFileSync(full, 'utf8')); console.log(`bootstrap: applied ${file}`) }
-    catch (e) { console.error(`bootstrap: ${file} failed: ${e.message}`) }
-  }
-}
-
-const server=http.createServer(async(req,res)=>{try{applyCors(req,res);if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
-if (process.env.SKIP_BOOTSTRAP !== 'true') await bootstrap()
+const server=http.createServer(async(req,res)=>{try{await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
 server.listen(port,'0.0.0.0',()=>console.log(`Neon API listening on ${port}`))

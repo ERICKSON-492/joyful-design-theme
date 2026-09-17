@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import { uploadToR2 } from '@/lib/storage'
 import { Plus, Trash2, Edit, X, Upload, Layers, GripVertical } from 'lucide-react'
 import { apiUrl } from '@/lib/apiBase'
 
@@ -101,10 +102,8 @@ export default function AdminProducts() {
     for (const file of files) {
       const ext = file.name.split('.').pop()
       const path = `${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`
-      const { error } = await supabase.storage.from('product-images').upload(path, file)
-      if (error) { toast.error('Upload failed: ' + error.message); continue }
-      const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-      uploaded.push(publicUrl)
+      try { uploaded.push((await uploadToR2('product-images', file, path)).publicUrl) }
+      catch (error) { toast.error(error instanceof Error ? error.message : 'Upload failed'); continue }
     }
     setForm(prev => ({ ...prev, image_urls: [...prev.image_urls, ...uploaded] }))
     setUploading(false)

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import { uploadToR2 } from '@/lib/storage'
 import { Plus, Trash2, Edit, X, Upload, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface HeroSlide {
@@ -45,10 +46,8 @@ export default function AdminHeroSlides() {
     setUploading(true)
     const ext = file.name.split('.').pop()
     const path = `hero/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) { toast.error('Upload failed'); setUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-    setForm(prev => ({ ...prev, image_url: publicUrl }))
+    try { const { publicUrl } = await uploadToR2('product-images', file, path); setForm(prev => ({ ...prev, image_url: publicUrl })) }
+    catch { toast.error('Upload failed'); setUploading(false); return }
     setUploading(false)
     toast.success('Image uploaded!')
   }

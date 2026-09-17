@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import { uploadToR2 } from '@/lib/storage'
 import { Upload, Plus, Trash2, Edit, X, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Category {
@@ -106,9 +107,9 @@ export default function AdminCategories() {
     setUploading(catName)
     const ext = file.name.split('.').pop()
     const path = `categories/${slugify(catName)}-${Date.now()}.${ext}`
-    const { error: upErr } = await supabase.storage.from('product-images').upload(path, file)
-    if (upErr) { toast.error('Upload failed: ' + upErr.message); setUploading(null); return }
-    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
+    let publicUrl: string
+    try { publicUrl = (await uploadToR2('product-images', file, path)).publicUrl }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'Upload failed'); setUploading(null); return }
     const existing = images[catName]
     if (existing) {
       await supabase.from('category_images').update({ image_url: publicUrl }).eq('id', existing.id)

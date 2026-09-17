@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { getCurrentUser, type AuthUser } from '@/lib/auth'
+import { uploadToR2 } from '@/lib/storage'
 import { Star, BadgeCheck, Upload, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -103,10 +104,8 @@ export function ProductReviews({ productId }: { productId: string }) {
     for (const file of files) {
       const ext = file.name.split('.').pop()
       const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage.from('review-photos').upload(path, file)
-      if (error) { toast.error('Photo upload failed'); continue }
-      const { data: urlData } = supabase.storage.from('review-photos').getPublicUrl(path)
-      newUrls.push(urlData.publicUrl)
+      try { newUrls.push((await uploadToR2('review-photos', file, path)).publicUrl) }
+      catch { toast.error('Photo upload failed'); continue }
     }
     setPhotoUrls(prev => [...prev, ...newUrls])
     setUploading(false)
