@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import QRCode from 'qrcode'
-import { supabase } from '@/integrations/supabase/client'
+import { uploadReceiptToR2 } from '@/lib/storage'
 
 export interface ReceiptItem {
   name: string
@@ -150,18 +150,7 @@ async function buildPdf(input: ReceiptInput): Promise<Blob> {
 export async function generateAndUploadReceipt(input: ReceiptInput): Promise<string | null> {
   try {
     const blob = await buildPdf(input)
-    const path = `${input.orderId}/receipt-${Date.now()}.pdf`
-    const { error: upErr } = await supabase.storage
-      .from('order-receipts')
-      .upload(path, blob, { contentType: 'application/pdf', upsert: true })
-    if (upErr) { console.error('Receipt upload failed', upErr); return null }
-
-    // Signed URL valid for ~1 year
-    const { data, error: signErr } = await supabase.storage
-      .from('order-receipts')
-      .createSignedUrl(path, 60 * 60 * 24 * 365)
-    if (signErr || !data) { console.error('Receipt sign URL failed', signErr); return null }
-    return data.signedUrl
+    return await uploadReceiptToR2(input.orderId, blob)
   } catch (err) {
     console.error('Receipt generation crashed', err)
     return null

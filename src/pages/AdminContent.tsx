@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { deleteFromR2, uploadToR2 } from '@/lib/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -182,22 +183,12 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
         setUploading(true)
         const fileExt = selectedFile.name.split('.').pop()
         const fileName = `${config.key}-${Date.now()}.${fileExt}`
-        const filePath = `site-images/${fileName}`
-
-        const { error: uploadError } = await supabase.storage
-          .from('site_images')
-          .upload(filePath, selectedFile, { cacheControl: '3600', upsert: false })
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError)
-          toast.error('Failed to upload image')
-          setSaving(false)
-          setUploading(false)
-          return
+        try { finalImageUrl = (await uploadToR2('site-images', selectedFile, fileName)).publicUrl }
+        catch (error) {
+          console.error('Upload error:', error)
+          toast.error(error instanceof Error ? error.message : 'Failed to upload image')
+          setSaving(false); setUploading(false); return
         }
-
-        const { data: { publicUrl } } = supabase.storage.from('site_images').getPublicUrl(filePath)
-        finalImageUrl = publicUrl
         
         // Clean up preview hooks locally before setting final URL state
         setSelectedFile(null)
@@ -266,13 +257,8 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
     if (!confirm('Are you sure you want to remove this image?')) return
     try {
       const url = new URL(imageUrl)
-      const pathParts = url.pathname.split('/')
-      const bucketIndex = pathParts.indexOf('site_images')
-      if (bucketIndex !== -1) {
-        const filePath = pathParts.slice(bucketIndex + 1).join('/')
-        const { error: deleteError } = await supabase.storage.from('site_images').remove([filePath])
-        if (deleteError) { console.error('Delete error:', deleteError); toast.error('Failed to delete image from storage') }
-      }
+      const key = url.pathname.replace(/^\//, '')
+      if (key.startsWith('site-images/')) await deleteFromR2(key)
       const { data, error: updateError } = await supabase.from('site_content').update({ image_url: null }).eq('id', contentId).select('*').single()
       if (updateError) {
         toast.error('Failed to remove image from content')

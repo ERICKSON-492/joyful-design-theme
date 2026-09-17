@@ -24,8 +24,9 @@ The API exposes:
 
 - `POST /api/storage/upload-url` — authenticated users receive a URL valid for 10 minutes.
 - `POST /api/storage/delete` — authenticated users can delete objects they are authorized to manage.
+- `POST /api/storage/receipt-upload-url` — an order owner or admin receives a private upload URL and a seven-day signed download URL for that order's PDF receipt.
 
-Administrative folders (`product-images`, `site-images`, `custom-orders`, `tribe-looks`, and `order-receipts`) require a Neon user with the `admin` role. Review photos require a signed-in user.
+Administrative folders (`product-images`, `site-images`, `custom-orders`, and `tribe-looks`) require a Neon user with the `admin` role. Review photos require a signed-in user. Receipts are restricted to the order owner or an admin.
 
 ## 3. Configure R2 CORS
 
@@ -63,23 +64,16 @@ const { publicUrl } = await uploadToR2(
 
 Store `publicUrl` in Neon. The browser first calls Render for a signed URL, then sends the file directly to R2. No R2 credential is bundled into the Vite frontend.
 
-## 5. Remaining replacements
+## 5. Private receipts
 
-The same helper should replace the remaining Supabase Storage calls in:
-
-- `TribeLooksPage.tsx` and `AdminTribeLooks.tsx`
-- `AdminContent.tsx`
-- `CustomOrderPage.tsx`
-- `src/lib/orderReceipt.ts` (use a private bucket or a signed-download API instead of a public URL)
-
-For private order receipts, do not store a public URL. Add a Render endpoint that checks the order owner/admin role and returns a short-lived signed `GET` URL.
+Order receipts use the private receipt endpoint. They are not placed under the public media hostname and are never exposed as permanent public URLs.
 
 ## 6. Verification checklist
 
 1. Set the five Render variables and redeploy the API.
 2. Confirm `GET /api/health` returns `200`.
 3. Sign in through the site and upload an admin image.
-4. Confirm the browser sends `PUT` directly to the R2 custom domain/API URL and receives `200`.
+4. Confirm the browser sends `PUT` directly to the R2 signed URL and receives `200`.
 5. Confirm the returned `publicUrl` renders in a new browser tab.
 6. Confirm unauthenticated requests to `/api/storage/upload-url` return `403` and that a non-admin cannot request an administrative folder.
-7. After all callers are migrated, remove the Supabase Storage calls and then remove the Supabase client dependency.
+7. All frontend Supabase Storage callers have now been migrated. Remove the Supabase client dependency only after the remaining Supabase database/function calls are migrated as a separate phase.

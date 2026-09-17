@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { getCurrentUser } from '@/lib/auth'
+import { deleteFromR2, uploadToR2 } from '@/lib/storage'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Check, X, Trash2, Upload, Loader2, Plus, Download } from 'lucide-react'
@@ -71,7 +72,9 @@ export default function AdminTribeLooks() {
   const extractPathFromUrl = (url: string): string | null => {
     try {
       const parts = url.split('/storage/v1/object/public/product-images/')
-      return parts.length > 1 ? parts[1] : null
+      if (parts.length > 1) return parts[1]
+      const pathname = new URL(url).pathname.replace(/^\//, '')
+      return pathname.startsWith('tribe-looks/') ? pathname : null
     } catch {
       return null
     }
@@ -89,7 +92,7 @@ export default function AdminTribeLooks() {
     // Try cleaning up old storage media safely
     const storagePath = extractPathFromUrl(look.image_url)
     if (storagePath) {
-      await supabase.storage.from('product-images').remove([storagePath])
+      await deleteFromR2(storagePath)
     }
 
     toast.success('Look deleted')
@@ -98,14 +101,9 @@ export default function AdminTribeLooks() {
 
   const uploadTribeImage = async (file: File): Promise<string | null> => {
     const ext = file.name.split('.').pop()
-    const path = `tribe-looks/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) { 
-      toast.error(`Upload failed: ${error.message}`)
-      return null 
-    }
-    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-    return publicUrl
+    const path = `${Date.now()}.${ext}`
+    try { return (await uploadToR2('tribe-looks', file, path)).publicUrl }
+    catch (error) { toast.error(`Upload failed: ${error instanceof Error ? error.message : 'unknown error'}`); return null }
   }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,11 +164,8 @@ export default function AdminTribeLooks() {
           if (!res.ok) throw new Error('Asset unavailable')
           const blob = await res.blob()
           
-          const path = `tribe-looks/${Date.now()}-${def.name.replace(/\s+/g, '-').toLowerCase()}.jpg`
-          const { error: uploadError } = await supabase.storage.from('product-images').upload(path, blob)
-          if (uploadError) continue
-
-          const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
+          const path = `${Date.now()}-${def.name.replace(/\s+/g, '-').toLowerCase()}.jpg`
+          const { publicUrl } = await uploadToR2('tribe-looks', blob, path, 'image/jpeg')
           
           await supabase.from('tribe_looks').insert({
             user_id: user?.id,
@@ -223,7 +218,7 @@ export default function AdminTribeLooks() {
     if (currentLook.image_url !== editForm.image_url) {
       const oldStoragePath = extractPathFromUrl(currentLook.image_url)
       if (oldStoragePath) {
-        await supabase.storage.from('product-images').remove([oldStoragePath])
+        await deleteFromR2(oldStoragePath)
       }
     }
 

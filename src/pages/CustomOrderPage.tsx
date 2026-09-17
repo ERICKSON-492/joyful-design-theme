@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
+import { uploadToR2 } from '@/lib/storage'
 import { toast } from 'sonner'
 import { useSEO } from '@/hooks/useSEO'
 
@@ -76,26 +77,11 @@ export default function CustomOrderPage() {
           const file = formData.file
           const ext = file.name.split('.').pop()
           const fileName = `${Date.now()}.${ext}`
-          const path = `custom-orders/${fileName}`
+          const path = fileName
           
           console.log('📤 Uploading file to:', path)
           
-          const { error: uploadError } = await supabase.storage
-            .from('product-images')
-            .upload(path, file, {
-              cacheControl: '3600',
-              upsert: false,
-              contentType: file.type
-            })
-            
-          if (uploadError) throw uploadError
-          
-          // Get the public URL mapping string
-          const { data: { publicUrl } } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(path)
-          
-          inspirationImageUrl = publicUrl
+          inspirationImageUrl = (await uploadToR2('custom-orders', file, path, file.type)).publicUrl
           setUploadProgress('Photo uploaded successfully!')
           console.log('🔗 Image URL established:', inspirationImageUrl)
           

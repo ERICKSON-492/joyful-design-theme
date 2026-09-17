@@ -34,3 +34,17 @@ export async function deleteFromR2(key: string): Promise<void> {
     throw new Error(data.error || 'Could not delete the file')
   }
 }
+
+export async function uploadReceiptToR2(orderId: string, file: Blob): Promise<string> {
+  const response = await fetch('/api/storage/receipt-upload-url', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ orderId }),
+  })
+  const signed = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(signed.error || 'Could not prepare the receipt upload')
+  const upload = await fetch(signed.uploadUrl, { method: 'PUT', headers: { 'content-type': 'application/pdf' }, body: file })
+  if (!upload.ok) throw new Error('Cloudflare R2 receipt upload failed')
+  return signed.downloadUrl
+}

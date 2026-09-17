@@ -5,6 +5,8 @@ import { Camera, Upload, Loader2, CheckCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useSEO } from '@/hooks/useSEO'
+import { getCurrentUser } from '@/lib/auth'
+import { uploadToR2 } from '@/lib/storage'
 
 // Static fallback looks
 import tribeTess from '@/assets/tribe-tess.jpeg'
@@ -38,10 +40,10 @@ export default function TribeLooksPage() {
   const [form, setForm] = useState({ name: '', piece_name: '', image_url: '' })
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUserId(session?.user?.id ?? null)
-      if (session?.user) {
-        setForm(f => ({ ...f, name: session.user.user_metadata?.full_name || '' }))
+    getCurrentUser().then(({ user }) => {
+      setUserId(user?.id ?? null)
+      if (user) {
+        setForm(f => ({ ...f, name: user.displayName || '' }))
       }
     })
   }, [])
@@ -62,11 +64,8 @@ export default function TribeLooksPage() {
     if (!file) return
     setUploading(true)
     const ext = file.name.split('.').pop()
-    const path = `tribe-looks/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('product-images').upload(path, file)
-    if (error) { toast.error('Upload failed'); setUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-    setForm(f => ({ ...f, image_url: publicUrl }))
+    try { const { publicUrl } = await uploadToR2('review-photos', file, `${Date.now()}.${ext}`); setForm(f => ({ ...f, image_url: publicUrl })) }
+    catch { toast.error('Upload failed'); setUploading(false); return }
     setUploading(false)
     toast.success('Image uploaded!')
   }

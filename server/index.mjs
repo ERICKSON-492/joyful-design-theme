@@ -3,7 +3,7 @@ import crypto from 'node:crypto'
 import pg from 'pg'
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
-import { S3Client, DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -158,8 +158,8 @@ async function handle(req, res, url) {
     const b = await body(req); const folder = String(b.folder || ''); const user = await neonUser(req)
     const allowed = new Set(['product-images', 'site-images', 'review-photos', 'custom-orders', 'tribe-looks', 'order-receipts'])
     if (!allowed.has(folder)) return authJson(res, 400, { error: 'Unsupported storage folder.' })
-    if (!user) return authJson(res, 403, { error: 'Sign in required.' })
-    if (['product-images', 'site-images', 'custom-orders', 'tribe-looks', 'order-receipts'].includes(folder) && user.role !== 'admin') return authJson(res, 403, { error: 'Admin access required.' })
+    if (!user && folder !== 'custom-orders') return authJson(res, 403, { error: 'Sign in required.' })
+    if (['product-images', 'site-images', 'tribe-looks', 'order-receipts'].includes(folder) && user?.role !== 'admin') return authJson(res, 403, { error: 'Admin access required.' })
     const key = `${folder}/${String(b.key || '').replace(/^\/+/, '').replace(/\.\./g, '').replace(/[^a-zA-Z0-9_./-]/g, '-').slice(0, 220)}`
     const contentType = String(b.contentType || 'application/octet-stream').slice(0, 120); const size = Number(b.size || 0)
     if (key === `${folder}/` || size < 1 || size > 15 * 1024 * 1024) return authJson(res, 400, { error: 'Invalid file key or size.' })
@@ -174,6 +174,17 @@ async function handle(req, res, url) {
     if (folder !== 'review-photos' && user.role !== 'admin') return authJson(res, 403, { error: 'Admin access required.' })
     await r2.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }))
     return authJson(res, 200, { ok: true })
+  }
+  if (req.method === 'POST' && url.pathname === '/api/storage/receipt-upload-url') {
+    if (!r2) return authJson(res, 503, { error: 'R2 storage is not configured on the API.' })
+    const b = await body(req); const user = await neonUser(req); const orderId = String(b.orderId || '')
+    if (!user || !orderId) return authJson(res, 403, { error: 'Sign in required.' })
+    const owner = await pool.query('SELECT 1 FROM joyful_orders WHERE id=$1 AND user_id=$2', [orderId, user.id])
+    if (!owner.rowCount && user.role !== 'admin') return authJson(res, 403, { error: 'You cannot access this receipt.' })
+    const key = `order-receipts/${orderId}/receipt-${Date.now()}.pdf`
+    const uploadUrl = await getSignedUrl(r2, new PutObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key, ContentType: 'application/pdf' }), { expiresIn: 600 })
+    const downloadUrl = await getSignedUrl(r2, new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }), { expiresIn: 60 * 60 * 24 * 7 })
+    return authJson(res, 200, { key, uploadUrl, downloadUrl })
   }
   if (url.pathname === '/api/storage/sign') {
     if (!(await requireAdmin(req)) && !(await neonUser(req))) return json(res, 403, { error: 'Sign in required' })
