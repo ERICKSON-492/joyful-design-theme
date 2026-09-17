@@ -24,6 +24,7 @@ const tables = [
   ['contact_messages', 'contact_messages'],
   ['newsletter_subscribers', 'newsletter_subscribers'],
   ['stock_adjustments', 'stock_adjustments'],
+  ['profiles', 'profiles'],
   ['orders', 'joyful_orders'],
 ]
 
