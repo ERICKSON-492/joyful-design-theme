@@ -208,13 +208,33 @@ async function handle(req, res, url) {
 // boot keeps a fresh Neon database in step with the code without a manual step.
 async function bootstrap() {
   const dir = path.dirname(fileURLToPath(import.meta.url))
-  const files = ['neon-schema.sql', 'auth-schema.sql', 'neon-migration-schema.sql', 'neon-seed.sql']
+  const files = ['neon-schema.sql', 'auth-schema.sql', 'neon-migration-schema.sql']
   for (const file of files) {
     const full = path.join(dir, file)
     if (!fs.existsSync(full)) continue
     try { await pool.query(fs.readFileSync(full, 'utf8')); console.log(`bootstrap: applied ${file}`) }
     catch (e) { console.error(`bootstrap: ${file} failed: ${e.message}`) }
   }
+  await seedData(dir)
+}
+
+// The seed runs one statement at a time (no shared transaction) so a single bad
+// row cannot roll back the whole data load.
+async function seedData(dir) {
+  const full = path.join(dir, 'neon-seed.sql')
+  if (!fs.existsSync(full)) return
+  const statements = fs.readFileSync(full, 'utf8')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => /^(INSERT|UPDATE|SELECT setval)/i.test(l))
+  let ok = 0
+  const failures = []
+  for (const sql of statements) {
+    try { await pool.query(sql); ok++ }
+    catch (e) { failures.push(`${e.message} :: ${sql.slice(0, 120)}`) }
+  }
+  console.log(`bootstrap: seed applied ${ok}/${statements.length} statements`)
+  for (const f of failures.slice(0, 20)) console.error(`seed failed: ${f}`)
 }
 
 const server=http.createServer(async(req,res)=>{try{applyCors(req,res);if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
