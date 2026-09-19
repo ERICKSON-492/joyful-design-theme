@@ -9,6 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
+import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox } from './functions-api.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
