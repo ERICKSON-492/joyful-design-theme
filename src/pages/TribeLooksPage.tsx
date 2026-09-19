@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { toast } from 'sonner'
 import { Camera, Upload, Loader2, CheckCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'

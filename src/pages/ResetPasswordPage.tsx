@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { toast } from 'sonner'
 import { Lock, Loader2, CheckCircle } from 'lucide-react'
 

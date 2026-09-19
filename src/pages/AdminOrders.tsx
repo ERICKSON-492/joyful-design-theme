@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { format } from 'date-fns'
 import { Eye, ChevronDown, ChevronUp, Search, Mail } from 'lucide-react'
 import { toast } from 'sonner'

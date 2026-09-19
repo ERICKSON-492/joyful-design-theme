@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { Package, MessageSquare, Users, TrendingUp, ShoppingBag, ChevronRight } from 'lucide-react'
 
 const MotionLink = motion(Link)

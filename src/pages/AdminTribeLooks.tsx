@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { getCurrentUser } from '@/lib/auth'
 import { deleteFromR2, uploadToR2 } from '@/lib/storage'
 import { Button } from '@/components/ui/button'

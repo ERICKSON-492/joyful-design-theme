@@ -219,4 +219,5 @@ async function bootstrap() {
 
 const server=http.createServer(async(req,res)=>{try{applyCors(req,res);if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
 if (process.env.SKIP_BOOTSTRAP !== 'true') await bootstrap()
+setInterval(() => { drainOutbox(pool).catch(e => console.error('outbox drain failed:', e.message)) }, 60000)
 server.listen(port,'0.0.0.0',()=>console.log(`Neon API listening on ${port}`))

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { getCurrentUser, type AuthUser } from '@/lib/auth'
 import { uploadToR2 } from '@/lib/storage'
 import { Star, BadgeCheck, Upload, X, Loader2 } from 'lucide-react'

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { uploadToR2 } from '@/lib/storage'
 import { toast } from 'sonner'
 import { useSEO } from '@/hooks/useSEO'
