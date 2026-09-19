@@ -39,7 +39,11 @@ class Query implements PromiseLike<Result<any>> {
 
   constructor(private table: string) {}
 
-  select(columns = '*') { this.columns = columns || '*'; return this }
+  select(columns = '*', opts?: { count?: string; head?: boolean }) {
+    this.columns = columns || '*'
+    if (opts?.head) this.headOnly = true
+    return this
+  }
   insert(rows: unknown) { this.mode = 'insert'; this.payload = rows; return this }
   upsert(rows: unknown) { this.mode = 'insert'; this.payload = rows; return this }
   update(values: unknown) { this.mode = 'update'; this.payload = values; return this }
