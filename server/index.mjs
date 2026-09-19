@@ -191,6 +191,15 @@ async function handle(req, res, url) {
     return handleSignedUrl({ res, url, json })
   }
   if (url.pathname.startsWith('/api/realtime/')) return handleRealtime({ req, res, url, json, body })
+  // Background jobs (order emails, newsletter, unsubscribe, M-Pesa) and the
+  // database functions the checkout calls.
+  if (url.pathname.startsWith('/api/functions/')) {
+    const user = await neonUser(req)
+    const isAdmin = user?.role === 'admin' ? true : Boolean(await requireAdmin(req))
+    return handleFunction({ pool, req, res, url, json, body, user, isAdmin })
+  }
+  if (url.pathname === '/api/mpesa/callback') return handleMpesaCallback({ pool, req, res, json, body })
+  if (url.pathname.startsWith('/api/rpc/')) return handleRpc({ pool, req, res, url, json, body })
   return json(res,404,{error:'Not found'})
 }
 
