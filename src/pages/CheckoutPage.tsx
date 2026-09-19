@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCart } from '@/contexts/CartContext'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { Mail, Send, CheckCircle2, XCircle, Loader2, Eye, RefreshCw, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'

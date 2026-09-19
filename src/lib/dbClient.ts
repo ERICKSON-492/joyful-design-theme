@@ -36,10 +36,15 @@ class Query implements PromiseLike<Result<any>> {
   private payload: unknown = null
   private singleRow = false
   private maybe = false
+  private headOnly = false
 
   constructor(private table: string) {}
 
-  select(columns = '*') { this.columns = columns || '*'; return this }
+  select(columns = '*', opts?: { count?: string; head?: boolean }) {
+    this.columns = columns || '*'
+    if (opts?.head) this.headOnly = true
+    return this
+  }
   insert(rows: unknown) { this.mode = 'insert'; this.payload = rows; return this }
   upsert(rows: unknown) { this.mode = 'insert'; this.payload = rows; return this }
   update(values: unknown) { this.mode = 'update'; this.payload = values; return this }
@@ -88,6 +93,7 @@ class Query implements PromiseLike<Result<any>> {
 
     if (result.error) return { data: this.singleRow ? null : [], error: result.error, count: null }
     const rows = result.data || []
+    if (this.headOnly) return { data: null, error: null, count: rows.length }
     if (this.singleRow) {
       if (!rows.length && !this.maybe) return { data: null, error: { message: 'No rows found', code: 'PGRST116' } }
       return { data: rows[0] ?? null, error: null }
@@ -131,33 +137,78 @@ const bucketApi = (bucket: string) => ({
 })
 
 // ------------------------------------------------------------------ channels
-type Handler = (message: { event: string; payload: unknown }) => void
+type Handler = (message: any) => void
+type PgWatch = { event: string; table: string; filter?: string; cb: Handler; seen: Map<string, string>; primed: boolean }
+
+/**
+ * Stands in for the old realtime channels. Broadcast messages (typing
+ * indicators) go through the server's channel endpoint; table subscriptions are
+ * emulated by polling the rows the caller asked about and reporting what
+ * changed.
+ */
 class Channel {
   private handlers: { event: string; cb: Handler }[] = []
+  private watches: PgWatch[] = []
   private timer: ReturnType<typeof setInterval> | null = null
   private cursor = 0
   constructor(private name: string) {}
-  on(_type: string, filter: { event?: string } | Handler, cb?: Handler) {
+
+  on(type: string, filter: any, cb?: Handler) {
+    if (type === 'postgres_changes' && filter && typeof filter === 'object' && cb) {
+      this.watches.push({ event: String(filter.event || '*').toUpperCase(), table: String(filter.table), filter: filter.filter, cb, seen: new Map(), primed: false })
+      return this
+    }
     const handler = (typeof filter === 'function' ? filter : cb) as Handler
     const event = typeof filter === 'function' ? '*' : filter?.event || '*'
     if (handler) this.handlers.push({ event, cb: handler })
     return this
   }
+
+  private async pollBroadcast() {
+    const res = await fetch(apiUrl(`/api/realtime/${encodeURIComponent(this.name)}?since=${this.cursor}`), { credentials: 'include' })
+    if (!res.ok) return
+    const data = await res.json().catch(() => null)
+    if (!data) return
+    this.cursor = data.cursor ?? this.cursor
+    for (const evt of data.events || []) {
+      for (const h of this.handlers) if (h.event === '*' || h.event === evt.event) h.cb(evt)
+    }
+  }
+
+  private async pollWatch(w: PgWatch) {
+    const parts = [w.filter, 'limit=200'].filter(Boolean)
+    const res = await request(`/api/db/${w.table}?${parts.join('&')}`)
+    if (res.error) return
+    const rows = res.data || []
+    const next = new Map<string, string>()
+    for (const row of rows) {
+      const id = String((row as any).id ?? '')
+      const snapshot = JSON.stringify(row)
+      next.set(id, snapshot)
+      if (!w.primed) continue
+      const before = w.seen.get(id)
+      if (before === undefined) { if (w.event === 'INSERT' || w.event === '*') w.cb({ eventType: 'INSERT', new: row, old: {} }) }
+      else if (before !== snapshot) { if (w.event === 'UPDATE' || w.event === '*') w.cb({ eventType: 'UPDATE', new: row, old: JSON.parse(before) }) }
+    }
+    if (w.primed && (w.event === 'DELETE' || w.event === '*')) {
+      for (const [id, snapshot] of w.seen) if (!next.has(id)) w.cb({ eventType: 'DELETE', new: {}, old: JSON.parse(snapshot) })
+    }
+    w.seen = next
+    w.primed = true
+  }
+
   subscribe(cb?: (status: string) => void) {
-    this.timer = setInterval(async () => {
-      const res = await fetch(apiUrl(`/api/realtime/${encodeURIComponent(this.name)}?since=${this.cursor}`), { credentials: 'include' })
-      if (!res.ok) return
-      const data = await res.json().catch(() => null)
-      if (!data) return
-      this.cursor = data.cursor ?? this.cursor
-      for (const evt of data.events || []) {
-        for (const h of this.handlers) if (h.event === '*' || h.event === evt.event) h.cb(evt)
-      }
-    }, 3000)
+    const tick = async () => {
+      if (this.handlers.length) await this.pollBroadcast().catch(() => undefined)
+      for (const w of this.watches) await this.pollWatch(w).catch(() => undefined)
+    }
+    void tick()
+    this.timer = setInterval(tick, 3000)
     cb?.('SUBSCRIBED')
     return this
   }
-  async send(message: { event?: string; payload?: unknown }) {
+
+  async send(message: { type?: string; event?: string; payload?: unknown }) {
     await fetch(apiUrl(`/api/realtime/${encodeURIComponent(this.name)}`), {
       method: 'POST', credentials: 'include',
       headers: { 'content-type': 'application/json' },
@@ -204,8 +255,8 @@ export const supabase = {
     },
     signOut: async () => { await logout().catch(() => null); return { error: null } },
     onAuthStateChange: (_cb: unknown) => ({ data: { subscription: { unsubscribe: () => undefined } } }),
-    setSession: async () => ({ data: { session: null }, error: null }),
-    updateUser: async () => ({ data: { user: null }, error: { message: 'Password changes happen on the account page.' } }),
+    setSession: async (_session?: unknown) => ({ data: { session: null }, error: null }),
+    updateUser: async (_attrs?: unknown) => ({ data: { user: null }, error: { message: 'Password changes happen on the account page.' } }),
     signInWithOAuth: async () => ({ data: null, error: { message: 'Google sign-in is not available yet. Use email and password.' } }),
   },
 }

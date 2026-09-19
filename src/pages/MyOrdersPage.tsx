@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSEO } from '@/hooks/useSEO'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { Package, Truck, CheckCircle, Clock, MapPin, ArrowLeft, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 

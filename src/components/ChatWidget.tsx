@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MessageCircle, X, Send, Check, CheckCheck } from 'lucide-react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 

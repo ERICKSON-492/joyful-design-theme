@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 
 type Status = 'loading' | 'valid' | 'already_unsubscribed' | 'invalid' | 'success' | 'error'
 

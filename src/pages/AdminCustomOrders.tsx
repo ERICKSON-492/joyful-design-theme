@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '@/integrations/supabase/client'
+import { supabase } from '@/lib/dbClient'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Palette, Phone, Mail, MapPin, ChevronDown, ChevronUp, Image, ExternalLink, AlertCircle } from 'lucide-react'

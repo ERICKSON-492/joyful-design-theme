@@ -9,6 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
+import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox } from './functions-api.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -191,6 +192,15 @@ async function handle(req, res, url) {
     return handleSignedUrl({ res, url, json })
   }
   if (url.pathname.startsWith('/api/realtime/')) return handleRealtime({ req, res, url, json, body })
+  // Background jobs (order emails, newsletter, unsubscribe, M-Pesa) and the
+  // database functions the checkout calls.
+  if (url.pathname.startsWith('/api/functions/')) {
+    const user = await neonUser(req)
+    const isAdmin = user?.role === 'admin' ? true : Boolean(await requireAdmin(req))
+    return handleFunction({ pool, req, res, url, json, body, user, isAdmin })
+  }
+  if (url.pathname === '/api/mpesa/callback') return handleMpesaCallback({ pool, req, res, json, body })
+  if (url.pathname.startsWith('/api/rpc/')) return handleRpc({ pool, req, res, url, json, body })
   return json(res,404,{error:'Not found'})
 }
 
@@ -209,4 +219,5 @@ async function bootstrap() {
 
 const server=http.createServer(async(req,res)=>{try{applyCors(req,res);if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
 if (process.env.SKIP_BOOTSTRAP !== 'true') await bootstrap()
+setInterval(() => { drainOutbox(pool).catch(e => console.error('outbox drain failed:', e.message)) }, 60000)
 server.listen(port,'0.0.0.0',()=>console.log(`Neon API listening on ${port}`))
