@@ -217,6 +217,16 @@ async function bootstrap() {
     catch (e) { console.error(`bootstrap: ${file} failed: ${e.message}`) }
   }
   await seedData(dir)
+  // Promote accounts listed in ADMIN_EMAILS (comma-separated) to admin at boot,
+  // so the owner can regain admin access on a fresh database without SQL access.
+  const adminEmails = String(process.env.ADMIN_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean)
+  for (const email of adminEmails) {
+    try {
+      const r = await pool.query(`UPDATE auth_users SET role='admin' WHERE email=$1 RETURNING id`, [email])
+      if (r.rowCount) await pool.query(`INSERT INTO admin_users (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [r.rows[0].id])
+      console.log(`bootstrap: admin ${email} ${r.rowCount ? 'promoted' : 'not found (sign up first)'}`)
+    } catch (e) { console.error(`bootstrap: admin promotion for ${email} failed: ${e.message}`) }
+  }
 }
 
 // The seed runs one statement at a time (no shared transaction) so a single bad
