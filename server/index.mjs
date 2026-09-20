@@ -105,7 +105,7 @@ async function handle(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user = await neonUser(req); return authJson(res, 200, { user: user ? safeUser(user) : null }) }
   if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
     const b = await body(req); const email = String(b.email || '').trim().toLowerCase(); const password = String(b.password || ''); const displayName = String(b.displayName || b.name || '').trim()
-    if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 10 || password.length > 128) return authJson(res, 400, { error: 'Use a valid email and a password between 10 and 128 characters.' })
+    if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 6 || password.length > 128) return authJson(res, 400, { error: 'Use a valid email and a password of at least 6 characters.' })
     const passwordHash = await bcrypt.hash(password, 12)
     try { const r = await pool.query('INSERT INTO auth_users (email,password_hash,display_name) VALUES ($1,$2,$3) RETURNING id,email,display_name,role', [email, passwordHash, displayName || null]); const session = await createSession(req, r.rows[0].id); return authJson(res, 201, { user: safeUser(r.rows[0]) }, { 'set-cookie': cookie(session) }) }
     catch (e) { if (e.code === '23505') return authJson(res, 409, { error: 'An account with that email already exists.' }); throw e }
