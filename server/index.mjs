@@ -45,6 +45,7 @@ function allowedOrigin(origin) {
   try { host = new URL(origin).hostname } catch { return null }
   if (host === 'localhost' || host === '127.0.0.1') return origin
   if (host.endsWith('.lovable.app') || host.endsWith('.lovableproject.com')) return origin
+  if (host.endsWith('.pages.dev')) return origin
   if (host === 'ushangachronicles.com' || host.endsWith('.ushangachronicles.com')) return origin
   return null
 }
