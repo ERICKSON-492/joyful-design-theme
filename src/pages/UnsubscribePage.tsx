@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { supabase } from '@/lib/dbClient'
+import { apiUrl } from '@/lib/apiBase'
+import { invokeFunction } from '@/lib/functions'
 
 type Status = 'loading' | 'valid' | 'already_unsubscribed' | 'invalid' | 'success' | 'error'
 
@@ -15,8 +16,7 @@ export default function UnsubscribePage() {
 
     const validate = async () => {
       try {
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-email-unsubscribe?token=${token}`
-        const res = await fetch(url, { headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY } })
+        const res = await fetch(apiUrl(`/api/functions/handle-email-unsubscribe?token=${encodeURIComponent(token)}`))
         if (!res.ok) { setStatus('invalid'); return }
         const data = await res.json()
         if (data.valid === false && data.reason === 'already_unsubscribed') {
@@ -35,11 +35,8 @@ export default function UnsubscribePage() {
     if (!token) return
     setSubmitting(true)
     try {
-      const { data, error } = await supabase.functions.invoke('handle-email-unsubscribe', {
-        body: { token },
-      })
-      if (error) { setStatus('error'); return }
-      if (data?.success) setStatus('success')
+      const data = await invokeFunction<any>('handle-email-unsubscribe', { token })
+      if (data?.unsubscribed) setStatus('success')
       else if (data?.reason === 'already_unsubscribed') setStatus('already_unsubscribed')
       else setStatus('error')
     } catch { setStatus('error') }

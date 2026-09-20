@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { getCurrentUser, login, signup, authRequest } from '@/lib/auth'
+import { getCurrentUser, login, signup, requestPasswordReset } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Mail, Lock, User, Loader2 } from 'lucide-react'
 import { useSEO } from '@/hooks/useSEO'
@@ -74,7 +74,7 @@ export default function AuthPage() {
     
     setForgotLoading(true)
     try {
-      await authRequest('/api/auth/forgot-password', { email })
+      await requestPasswordReset(email)
       
       toast.success('Password reset link sent! Check your email.')
       setShowForgot(false)

@@ -5,7 +5,7 @@
 const resendKey = () => process.env.RESEND_API_KEY || ''
 const fromAddress = () => process.env.EMAIL_FROM || 'Ushanga Chronicles <orders@ushangachronicles.com>'
 
-async function queueEmail(pool, { to, subject, html, label = 'generic', attachments = [] }) {
+export async function queueEmail(pool, { to, subject, html, label = 'generic', attachments = [] }) {
   const r = await pool.query(
     `INSERT INTO public.email_outbox (recipient_email,subject,html_body,template_label,attachments)
      VALUES ($1,$2,$3,$4,$5) RETURNING id`,
@@ -70,6 +70,13 @@ const digestHtml = (products) => `
 
 export async function handleFunction({ pool, req, res, url, json, body, user, isAdmin }) {
   const name = decodeURIComponent(url.pathname.slice('/api/functions/'.length))
+  if (name === 'handle-email-unsubscribe' && req.method === 'GET') {
+    const token = String(url.searchParams.get('token') || '')
+    const r = await pool.query('SELECT email FROM public.email_unsubscribe_tokens WHERE token=$1 AND (used_at IS NULL OR used_at > now())', [token])
+    if (!r.rowCount) return json(res, 200, { valid: false })
+    const suppressed = await pool.query('SELECT 1 FROM public.suppressed_emails WHERE lower(email)=lower($1)', [r.rows[0].email])
+    return json(res, 200, suppressed.rowCount ? { valid: false, reason: 'already_unsubscribed' } : { valid: true })
+  }
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
   const payload = await body(req)
 

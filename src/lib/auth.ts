@@ -23,3 +23,5 @@ export const getCurrentUser = () => authRequest<{ user: AuthUser | null }>('/api
 export const login = (email: string, password: string) => authRequest<{ user: AuthUser }>('/api/auth/login', { email, password })
 export const signup = (email: string, password: string, displayName: string) => authRequest<{ user: AuthUser }>('/api/auth/signup', { email, password, displayName })
 export const logout = () => authRequest<{ ok: true }>('/api/auth/logout', {})
+export const requestPasswordReset = (email: string) => authRequest<{ ok: true }>('/api/auth/forgot-password', { email })
+export const resetPassword = (token: string, password: string) => authRequest<{ ok: true }>('/api/auth/reset-password', { token, password })

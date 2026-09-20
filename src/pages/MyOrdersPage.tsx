@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSEO } from '@/hooks/useSEO'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/dbClient'
+import { getCurrentUser } from '@/lib/auth'
 import { Package, Truck, CheckCircle, Clock, MapPin, ArrowLeft, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -40,17 +41,17 @@ export default function MyOrdersPage() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
+      const { user: currentUser } = await getCurrentUser().catch(() => ({ user: null }))
+      if (!currentUser) {
         navigate('/auth')
         return
       }
-      setUser(session.user)
+      setUser(currentUser)
 
       const { data } = await supabase
         .from('orders')
         .select('*')
-        .eq('user_id', session.user.id)
+        .eq('user_id', currentUser.id)
         .order('created_at', { ascending: false })
 
       setOrders(data || [])

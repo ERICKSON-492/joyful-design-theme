@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/dbClient'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { resetPassword } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Lock, Loader2, CheckCircle } from 'lucide-react'
 
@@ -10,21 +10,12 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [isRecovery, setIsRecovery] = useState(false)
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setIsRecovery(true)
-      }
-    })
-    // Check hash for recovery token
-    const hash = window.location.hash
-    if (hash.includes('type=recovery')) {
-      setIsRecovery(true)
-    }
-    return () => subscription.unsubscribe()
-  }, [])
+    setIsRecovery(Boolean(searchParams.get('token')))
+  }, [searchParams])
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,8 +29,9 @@ export default function ResetPasswordPage() {
     }
     setLoading(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password })
-      if (error) throw error
+      const token = searchParams.get('token')
+      if (!token) throw new Error('This reset link is invalid or has expired.')
+      await resetPassword(token, password)
       setSuccess(true)
       toast.success('Password updated successfully!')
       setTimeout(() => navigate('/auth'), 2000)

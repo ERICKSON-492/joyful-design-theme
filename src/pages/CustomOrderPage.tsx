@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/dbClient'
 import { uploadToR2 } from '@/lib/storage'
+import { sendEmail } from '@/lib/functions'
 import { toast } from 'sonner'
 import { useSEO } from '@/hooks/useSEO'
 
@@ -135,28 +136,26 @@ export default function CustomOrderPage() {
         ${formData.email ? `<p><strong>Email:</strong> ${formData.email}</p>` : ''}
       `
 
-      supabase.functions.invoke('send-emails', {
-        body: {
-          to: 'admin@ushangachronicles.com',
-          subject: `New Custom Order Request${order?.id ? ` #${order.id.slice(0, 8)}` : ''}`,
-          html: `<h2>New Chronicle request from ${formData.name}</h2>${detailsHtml}`,
-        }
+      sendEmail({
+        to: 'admin@ushangachronicles.com',
+        subject: `New Custom Order Request${order?.id ? ` #${order.id.slice(0, 8)}` : ''}`,
+        html: `<h2>New Chronicle request from ${formData.name}</h2>${detailsHtml}`,
+        label: 'custom-order-admin-alert',
       }).catch(err => console.error('Admin alert dispatch failed:', err))
 
       if (formData.email.trim()) {
-        supabase.functions.invoke('send-emails', {
-          body: {
-            to: formData.email.trim(),
-            subject: 'We received your Chronicle request — Ushanga Chronicles',
-            html: `
+        sendEmail({
+          to: formData.email.trim(),
+          subject: 'We received your Chronicle request — Ushanga Chronicles',
+          html: `
               <h2>Thank you, ${formData.name}!</h2>
               <p>Your Chronicle is in Linda's hands. We'll follow up within 48 hours to confirm details and pricing.</p>
               <hr style="margin:16px 0;" />
               <h3>What you told us</h3>
               ${detailsHtml}
               <p style="margin-top:16px;color:#6B7280;font-size:13px;">If anything above needs correcting, reply to this thread or ping us on WhatsApp.</p>
-            `,
-          }
+          `,
+          label: 'custom-order-confirmation',
         }).catch(err => console.error('Customer confirmation dispatch failed:', err))
       }
 

@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
-import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox } from './functions-api.mjs'
+import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail } from './functions-api.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -116,7 +116,37 @@ async function handle(req, res, url) {
     const session = await createSession(req, user.id); return authJson(res, 200, { user: safeUser(user) }, { 'set-cookie': cookie(session) })
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/logout') { const token = parseCookies(req.headers.cookie || '')[sessionCookieName]; if (token) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1', [tokenHash(token)]); return authJson(res, 200, { ok: true }, { 'set-cookie': cookie('', 0) }) }
-  if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password') return authJson(res, 200, { ok: true, message: 'If that email exists, a reset link will be sent.' })
+  if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password') {
+    const b = await body(req); const email = String(b.email || '').trim().toLowerCase()
+    const user = (await pool.query('SELECT id,email,display_name FROM auth_users WHERE email=$1 AND is_active=true', [email])).rows[0]
+    if (user) {
+      const raw = crypto.randomBytes(32).toString('base64url')
+      await pool.query('DELETE FROM auth_reset_tokens WHERE user_id=$1 OR expires_at<now()', [user.id])
+      await pool.query("INSERT INTO auth_reset_tokens (user_id,token_hash,expires_at) VALUES ($1,$2,now()+interval '1 hour')", [user.id, tokenHash(raw)])
+      const site = String(process.env.PUBLIC_SITE_URL || process.env.ALLOWED_ORIGINS || 'https://ushangachronicles.com').split(',')[0].replace(/\/$/, '')
+      const link = `${site}/reset-password?token=${encodeURIComponent(raw)}`
+      const html = `<p>Hi ${user.display_name || 'there'},</p><p>Use the link below to set a new Ushanga Chronicles password. It expires in one hour.</p><p><a href="${link}">Reset your password</a></p><p>If you did not request this, you can ignore this email.</p>`
+      await queueEmail(pool, { to: user.email, subject: 'Reset your Ushanga Chronicles password', html, label: 'password-reset' })
+      drainOutbox(pool).catch(() => {})
+    }
+    return authJson(res, 200, { ok: true, message: 'If that email exists, a reset link will be sent.' })
+  }
+  if (req.method === 'POST' && url.pathname === '/api/auth/reset-password') {
+    const b = await body(req); const token = String(b.token || ''); const password = String(b.password || '')
+    if (!token || password.length < 6 || password.length > 128) return authJson(res, 400, { error: 'Use a valid reset link and a password between 6 and 128 characters.' })
+    const passwordHash = await bcrypt.hash(password, 12)
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const tokenRow = await client.query('SELECT user_id FROM auth_reset_tokens WHERE token_hash=$1 AND used_at IS NULL AND expires_at>now() FOR UPDATE', [tokenHash(token)])
+      if (!tokenRow.rowCount) { await client.query('ROLLBACK'); return authJson(res, 400, { error: 'This reset link is invalid or has expired.' }) }
+      await client.query('UPDATE auth_users SET password_hash=$1,updated_at=now() WHERE id=$2', [passwordHash, tokenRow.rows[0].user_id])
+      await client.query('UPDATE auth_reset_tokens SET used_at=now() WHERE token_hash=$1', [tokenHash(token)])
+      await client.query('DELETE FROM auth_sessions WHERE user_id=$1', [tokenRow.rows[0].user_id])
+      await client.query('COMMIT')
+      return authJson(res, 200, { ok: true })
+    } catch (error) { await client.query('ROLLBACK'); throw error } finally { client.release() }
+  }
   if (req.method === 'GET' && url.pathname === '/api/products') {
     const f = queryFilters(url); const r = await pool.query(`SELECT ${productFields} FROM public.products ${f.where} ORDER BY ${f.order} LIMIT ${f.limit}`, f.values); return json(res, 200, r.rows.map(productDto))
   }

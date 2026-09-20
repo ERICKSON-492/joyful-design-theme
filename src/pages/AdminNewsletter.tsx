@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
+import { invokeFunction } from '@/lib/functions'
 import { Mail, Send, CheckCircle2, XCircle, Loader2, Eye, RefreshCw, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -61,8 +62,7 @@ export default function AdminNewsletter() {
     setRunning(true)
     setLastResult(null)
     try {
-      const { data, error } = await supabase.functions.invoke('send-newsletter-digest', { body: {} })
-      if (error) throw error
+      const data = await invokeFunction<any>('send-newsletter-digest', {})
       setLastResult(data)
       if (data?.sent > 0) toast.success(`Digest sent to ${data.sent} subscribers`)
       else if (data?.reason === 'no_new_products' && !data?.posts) toast.info('No new content to send today')

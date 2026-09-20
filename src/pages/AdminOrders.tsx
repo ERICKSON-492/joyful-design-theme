@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
+import { sendEmail } from '@/lib/functions'
 import { format } from 'date-fns'
 import { Eye, ChevronDown, ChevronUp, Search, Mail } from 'lucide-react'
 import { toast } from 'sonner'
@@ -140,20 +141,13 @@ export default function AdminOrders() {
       }
 
       try {
-        const { error: emailError } = await supabase.functions.invoke('send-emails', {
-          body: {
-            to: customerEmail,
-            subject: `Order #${id.slice(0, 8)} Status Update - Ushanga Chronicles`,
-            html: generateStatusEmailHtml(order, newStatus, trackingNumber || undefined)
-          }
+        await sendEmail({
+          to: customerEmail,
+          subject: `Order #${id.slice(0, 8)} Status Update - Ushanga Chronicles`,
+          html: generateStatusEmailHtml(order, newStatus, trackingNumber || undefined),
+          label: 'order-status-update',
         })
-
-        if (emailError) {
-          console.error('Email error:', emailError)
-          toast.warning('Status updated, but email notification failed')
-        } else {
-          toast.success('Status updated & email sent!')
-        }
+        toast.success('Status updated & email queued!')
       } catch (emailErr) {
         console.error('Email sending failed:', emailErr)
         toast.warning('Status updated, but email notification failed')

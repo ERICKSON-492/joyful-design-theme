@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useCart } from '@/contexts/CartContext'
 import { supabase } from '@/lib/dbClient'
+import { invokeFunction, sendEmail } from '@/lib/functions'
 import { useCheckoutAuth } from '@/hooks/useCheckoutAuth'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
@@ -409,9 +410,7 @@ export default function CheckoutPage() {
         ${receiptUrl ? `<div style="text-align:center;margin:18px 0;"><a href="${receiptUrl}" style="background:#D4A017;color:#fff;padding:12px 22px;border-radius:8px;font-weight:700;text-decoration:none;">View Invoice Receipt</a></div>` : ''}
       </div>`
     try {
-      await supabase.functions.invoke('send-emails', {
-        body: { to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml }
-      })
+      await sendEmail({ to: targetEmail, subject: `Ushanga Chronicles · Order Receipt #${orderId}`, html: emailHtml, label: 'order-receipt' })
     } catch (err) { console.error('Email send error:', err) }
   }, [email, accountEmail, name, phone, grandTotal, items, selectedShipping, shippingCost, selectedLocation, postalCode, country, buildingName, floorNumber, houseNumber, appliedCoupon, discountAmount])
 
@@ -462,10 +461,7 @@ export default function CheckoutPage() {
       }
 
       setStatus('pushing')
-      const { data: responsePayload, error: stkError } = await supabase.functions.invoke(
-        'mpesa-stk-push', { body: { phone, amount: serverTotal, orderId: order.id } }
-      )
-      if (stkError) throw new Error(stkError.message)
+      const responsePayload = await invokeFunction<any>('mpesa-stk-push', { phone, amount: serverTotal, orderId: order.id })
       if (!responsePayload?.success) throw new Error(responsePayload?.error || 'M-Pesa request failed.')
 
       const checkoutRequestId = responsePayload.mpesa_response?.CheckoutRequestID || responsePayload?.checkoutRequestId
@@ -474,7 +470,7 @@ export default function CheckoutPage() {
       const poll = async () => {
         attempts++
         try {
-          const { data: queryData } = await supabase.functions.invoke('mpesa-stk-push', { body: { action: 'query', checkout_request_id: checkoutRequestId } })
+          const queryData = await invokeFunction<any>('mpesa-stk-push', { action: 'query', checkout_request_id: checkoutRequestId })
           if (queryData?.ResultCode === '0' || queryData?.ResultCode === 0) {
             if (appliedCoupon) (supabase as any).rpc('redeem_coupon', { p_coupon_id: appliedCoupon.id }).then(() => {})
             await sendOrderEmail(order.id); setStatus('success'); clearCart(); toast.success('Payment successful! 🎉'); return
