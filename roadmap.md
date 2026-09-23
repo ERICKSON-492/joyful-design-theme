@@ -11,6 +11,7 @@ API server: https://joyful-design-theme.onrender.com (Node, `server/index.mjs`, 
 - [x] Background jobs wired in: order emails + outbox drain, newsletter digest, unsubscribe, M-Pesa STK push and callback, coupon validate/redeem (`/api/functions/:name`, `/api/rpc/:name`, `/api/mpesa/callback`).
 - [x] Every page in the app now talks to the new server (`src/lib/dbClient.ts`); no page imports the old client any more.
 - [x] Live chat read/typing indicators work over the new server (table polling replaces realtime).
+- [x] Sign-up and sign-in redirect immediately to the requested page; Cloudflare Pages uses its same-origin API proxy so session cookies persist reliably.
 
 ## Blocked on a Render deploy
 The live server is running older code with empty tables, so these only work after
