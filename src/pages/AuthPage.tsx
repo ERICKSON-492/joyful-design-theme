@@ -5,6 +5,10 @@ import { toast } from 'sonner'
 import { Mail, Lock, User, Loader2 } from 'lucide-react'
 import { useSEO } from '@/hooks/useSEO'
 
+function safeReturnPath(value: unknown) {
+  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/'
+}
+
 export default function AuthPage() {
   useSEO('Sign In', undefined, undefined, true)
   const [isLogin, setIsLogin] = useState(true)
@@ -17,7 +21,7 @@ export default function AuthPage() {
   
   const navigate = useNavigate()
   const location = useLocation()
-  const returnTo = (location.state as any)?.returnTo || '/'
+  const returnTo = safeReturnPath((location.state as { returnTo?: unknown } | null)?.returnTo)
   
   const hasNavigated = useRef(false)
   const isMounted = useRef(true)
@@ -94,10 +98,13 @@ export default function AuthPage() {
     
     try {
       if (isLogin) {
-        await login(email, password)
+        const { user } = await login(email, password)
         
-        if (isMounted.current) {
+        if (user && isMounted.current && !hasNavigated.current) {
           toast.success('Welcome back!')
+          hasNavigated.current = true
+          window.dispatchEvent(new CustomEvent('ushanga-auth-changed', { detail: user }))
+          navigate(returnTo, { replace: true })
         }
       } else {
         if (!name.trim()) {
@@ -112,12 +119,14 @@ export default function AuthPage() {
         const { user } = await signup(email, password, name)
         
         // Create/update the profile row if a user object is returned immediately
-        if (user) toast.success('Account created successfully!')
-        
-        if (isMounted.current) {
+        if (user && isMounted.current && !hasNavigated.current) {
+          toast.success('Account created successfully!')
+          hasNavigated.current = true
+          window.dispatchEvent(new CustomEvent('ushanga-auth-changed', { detail: user }))
           setEmail('')
           setPassword('')
           setName('')
+          navigate(returnTo, { replace: true })
         }
       }
     } catch (err: any) {

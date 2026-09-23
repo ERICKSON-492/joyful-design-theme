@@ -3,7 +3,9 @@
 // - In development we use relative paths: the Vite dev server proxies /api to
 //   the API, keeping requests same-origin so cookies and CORS are a non-issue.
 const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
-const fallback = import.meta.env.DEV ? '' : 'https://joyful-design-theme.onrender.com'
+const hostname = typeof window === 'undefined' ? '' : window.location.hostname
+const hasCloudflareProxy = hostname.endsWith('.pages.dev') || hostname === 'ushangachronicles.com' || hostname === 'www.ushangachronicles.com'
+const fallback = import.meta.env.DEV || hasCloudflareProxy ? '' : 'https://joyful-design-theme.onrender.com'
 
 export const API_BASE = (configured ?? fallback).replace(/\/+$/, '')
 
