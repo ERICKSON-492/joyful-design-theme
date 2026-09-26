@@ -425,7 +425,7 @@ export default function CheckoutPage() {
     setError(''); setStatus('creating')
     try {
       const orderData = {
-        phone, customer_name: name, total_amount: grandTotal,
+        phone, customer_name: name, email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost, total_amount: grandTotal,
         items: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
         status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
         user_id: userId, latitude: coordinates.lat, longitude: coordinates.lon,
