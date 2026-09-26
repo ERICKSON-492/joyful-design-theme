@@ -1,6 +1,28 @@
+import { supabase as legacySupabase } from '@/integrations/supabase/client'
+
 export interface R2UploadResult {
   key: string
   publicUrl: string
+}
+
+const LEGACY_BUCKET = 'product-images'
+const TEMPORARY_SUPABASE_IMAGE_FALLBACK = true
+
+function legacyStorageKey(folder: string, key: string) {
+  const prefix = folder === 'site-images' ? 'site-content' : folder
+  return `${prefix.replace(/^\/+|\/+$/g, '')}/${key.replace(/^\/+/, '')}`
+}
+
+async function uploadToLegacySupabase(folder: string, file: Blob, key: string, contentType: string): Promise<R2UploadResult> {
+  const storageKey = legacyStorageKey(folder, key)
+  const { error } = await legacySupabase.storage.from(LEGACY_BUCKET).upload(storageKey, file, {
+    cacheControl: '3600',
+    contentType,
+    upsert: true,
+  })
+  if (error) throw new Error(error.message || 'Supabase image upload failed')
+  const { data } = legacySupabase.storage.from(LEGACY_BUCKET).getPublicUrl(storageKey)
+  return { key: storageKey, publicUrl: data.publicUrl }
 }
 
 export async function uploadToR2(folder: string, file: Blob, key: string, contentType = file.type || 'application/octet-stream'): Promise<R2UploadResult> {
@@ -11,7 +33,15 @@ export async function uploadToR2(folder: string, file: Blob, key: string, conten
     body: JSON.stringify({ folder, key, contentType, size: file.size }),
   })
   const signed = await signResponse.json().catch(() => ({}))
-  if (!signResponse.ok) throw new Error(signed.error || 'Could not prepare the upload')
+  if (!signResponse.ok) {
+    // Temporary bridge: existing image records still use Supabase Storage while
+    // R2 billing and credentials are being configured. Keep receipts private
+    // and never send those through this public image fallback.
+    if (TEMPORARY_SUPABASE_IMAGE_FALLBACK && signResponse.status === 503 && folder !== 'order-receipts') {
+      return uploadToLegacySupabase(folder, file, key, contentType)
+    }
+    throw new Error(signed.error || 'Could not prepare the upload')
+  }
 
   const uploadResponse = await fetch(signed.uploadUrl, {
     method: 'PUT',
@@ -31,6 +61,10 @@ export async function deleteFromR2(key: string): Promise<void> {
   })
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
+    if (TEMPORARY_SUPABASE_IMAGE_FALLBACK && response.status === 503 && !key.includes('order-receipts/')) {
+      const { error } = await legacySupabase.storage.from(LEGACY_BUCKET).remove([key.replace(/^product-images\//, '')])
+      if (!error) return
+    }
     throw new Error(data.error || 'Could not delete the file')
   }
 }
