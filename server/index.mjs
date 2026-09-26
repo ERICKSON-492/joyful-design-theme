@@ -259,15 +259,47 @@ async function bootstrap() {
   }
 }
 
+function splitSqlStatements(source) {
+  const statements = []
+  let start = 0
+  let inSingleQuote = false
+
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i]
+    if (char !== "'") {
+      if (char === ';' && !inSingleQuote) {
+        const statement = source.slice(start, i + 1).split('\n')
+          .filter(line => !line.trim().startsWith('--'))
+          .join('\n')
+          .trim()
+        if (statement) statements.push(statement)
+        start = i + 1
+      }
+      continue
+    }
+
+    if (inSingleQuote && source[i + 1] === "'") {
+      i += 1
+      continue
+    }
+    inSingleQuote = !inSingleQuote
+  }
+
+  const tail = source.slice(start).split('\n')
+    .filter(line => !line.trim().startsWith('--'))
+    .join('\n')
+    .trim()
+  if (tail) statements.push(tail)
+  return statements
+}
+
 // The seed runs one statement at a time (no shared transaction) so a single bad
-// row cannot roll back the whole data load.
+// row cannot roll back the whole data load. Statements may contain newlines inside
+// quoted text, so split on semicolons outside single-quoted strings.
 async function seedData(dir) {
   const full = path.join(dir, 'neon-seed.sql')
   if (!fs.existsSync(full)) return
-  const statements = fs.readFileSync(full, 'utf8')
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => /^(INSERT|UPDATE|SELECT setval)/i.test(l))
+  const statements = splitSqlStatements(fs.readFileSync(full, 'utf8'))
   let ok = 0
   const failures = []
   for (const sql of statements) {
