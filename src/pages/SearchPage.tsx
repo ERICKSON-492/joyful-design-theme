@@ -5,6 +5,7 @@ import { ShoppingBag, Clock, Search as SearchIcon, SlidersHorizontal, X } from '
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { expandQuery } from '@/lib/searchTerms'
+import { getActiveSalePrice } from '@/lib/salePrice'
 
 const categoryList = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
 
@@ -13,6 +14,8 @@ interface Product {
   name: string
   price: number
   sale_price: number | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
   price_min: number | null
   price_max: number | null
   image_url: string | null
@@ -67,7 +70,7 @@ export default function SearchPage() {
     const load = async () => {
       setLoading(true)
       try {
-        let q = 'select=id,name,price,sale_price,price_min,price_max,image_url,stock,category,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
+        let q = 'select=id,name,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,image_url,stock,category,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
         if (activeQuery) {
           // Match singular/plural variants too, so "belts" finds "belt".
           const variants = expandQuery(activeQuery)
@@ -99,15 +102,15 @@ export default function SearchPage() {
     const min = minPrice === '' ? 0 : Number(minPrice)
     const max = maxPrice === '' ? Infinity : Number(maxPrice)
     let list = allProducts.filter(p => {
-      const effective = p.price_min ?? p.price
+      const effective = getActiveSalePrice(p) ?? p.price_min ?? p.price
       const inStock = p.is_preorder || p.stock > 0
       if (inStockOnly && !inStock) return false
       if (effective < min) return false
       if (effective > max) return false
       return true
     })
-    if (sort === 'price-asc') list = [...list].sort((a, b) => (a.price_min ?? a.price) - (b.price_min ?? b.price))
-    else if (sort === 'price-desc') list = [...list].sort((a, b) => (b.price_min ?? b.price) - (a.price_min ?? a.price))
+    if (sort === 'price-asc') list = [...list].sort((a, b) => (getActiveSalePrice(a) ?? a.price_min ?? a.price) - (getActiveSalePrice(b) ?? b.price_min ?? b.price))
+    else if (sort === 'price-desc') list = [...list].sort((a, b) => (getActiveSalePrice(b) ?? b.price_min ?? b.price) - (getActiveSalePrice(a) ?? a.price_min ?? a.price))
     return list
   }, [allProducts, minPrice, maxPrice, inStockOnly, sort])
 
@@ -349,14 +352,14 @@ export default function SearchPage() {
                     <div className="mb-2">
                       {p.price_min && p.price_max ? (
                         <p className="text-foreground font-bold text-sm">{format(p.price_min)} - {format(p.price_max)}</p>
-                      ) : p.sale_price && p.sale_price < p.price ? (
-                        <p className="text-sm"><span className="text-primary font-bold mr-2">{format(p.sale_price)}</span><span className="text-muted-foreground line-through">{format(p.price)}</span></p>
+                      ) : getActiveSalePrice(p) !== null ? (
+                        <p className="text-sm"><span className="text-primary font-bold mr-2">{format(getActiveSalePrice(p)!)}</span><span className="text-muted-foreground line-through">{format(p.price)}</span></p>
                       ) : (
                         <p className="text-foreground font-bold text-sm">{format(p.price)}</p>
                       )}
                     </div>
                     <button
-                      onClick={() => addToCart({ id: p.id, name: p.name, price: p.sale_price && p.sale_price < p.price ? p.sale_price : p.price, image_url: p.image_url, stock: p.stock })}
+                      onClick={() => addToCart({ id: p.id, name: p.name, price: getActiveSalePrice(p) ?? p.price, image_url: p.image_url, stock: p.stock })}
                       className={`w-full py-2.5 text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
                         p.is_preorder
                           ? 'bg-blue-600 hover:bg-blue-700 text-white'

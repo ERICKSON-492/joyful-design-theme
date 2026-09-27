@@ -6,12 +6,15 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
+import { getActiveSalePrice } from '@/lib/salePrice'
 
 interface Product {
   id: string
   name: string
   price: number
   sale_price: number | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
   image_url: string | null
   stock: number
 }
@@ -40,7 +43,7 @@ export function FeaturedProducts() {
       try {
         const data = await fetchPublicTable<Product>(
           'products',
-          'select=id,name,price,sale_price,image_url,stock&is_active=eq.true&order=created_at.desc&limit=24'
+          'select=id,name,price,sale_price,sale_starts_at,sale_ends_at,image_url,stock&is_active=eq.true&order=created_at.desc&limit=24'
         )
 
         if (!mounted) return
@@ -88,7 +91,7 @@ export function FeaturedProducts() {
   if (products.length === 0) return null
 
   const handleAdd = (product: Product) => {
-    const price = product.sale_price && product.sale_price < product.price ? product.sale_price : product.price
+    const price = getActiveSalePrice(product) ?? product.price
     addToCart({ id: product.id, name: product.name, price, image_url: product.image_url, stock: product.stock })
   }
 
@@ -135,8 +138,8 @@ export function FeaturedProducts() {
                   </Link>
                 <Link to={`/product/${product.id}`}>
                   <h3 className="font-display text-xs md:text-sm font-semibold text-foreground mb-1 hover:text-primary transition-colors line-clamp-1">{product.name}</h3>
-                  {product.sale_price && product.sale_price < product.price ? (
-                    <p className="text-xs mb-2"><span className="text-primary font-bold mr-2">{format(product.sale_price)}</span><span className="text-muted-foreground line-through">{format(product.price)}</span></p>
+                  {getActiveSalePrice(product) !== null ? (
+                    <p className="text-xs mb-2"><span className="text-primary font-bold mr-2">{format(getActiveSalePrice(product)!)}</span><span className="text-muted-foreground line-through">{format(product.price)}</span></p>
                   ) : <p className="text-muted-foreground text-xs mb-2">{format(product.price)}</p>}
                 </Link>
                 <button

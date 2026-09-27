@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { uploadToR2 } from '@/lib/storage'
+import { toDatetimeLocal, toIsoTimestamp } from '@/lib/salePrice'
 import { Plus, Trash2, Edit, X, Upload, Layers, GripVertical } from 'lucide-react'
 import { apiUrl } from '@/lib/apiBase'
 
@@ -13,6 +14,8 @@ interface Product {
   description: string | null
   price: number
   sale_price: number | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
   price_min: number | null
   price_max: number | null
   category: string
@@ -59,7 +62,7 @@ export default function AdminProducts() {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [form, setForm] = useState({
-    name: '', description: '', price: '', sale_price: '', price_min: '', price_max: '', category: '', subcategory: '', stock: '', image_urls: [] as string[], is_active: true, is_preorder: false, preorder_label: ''
+    name: '', description: '', price: '', sale_price: '', sale_starts_at: '', sale_ends_at: '', price_min: '', price_max: '', category: '', subcategory: '', stock: '', image_urls: [] as string[], is_active: true, is_preorder: false, preorder_label: ''
   })
 
   // Variant management
@@ -90,7 +93,7 @@ export default function AdminProducts() {
   useEffect(() => { fetchProducts(); fetchTaxonomy() }, [])
 
   const resetForm = () => {
-    setForm({ name: '', description: '', price: '', sale_price: '', price_min: '', price_max: '', category: categories[0]?.name || '', subcategory: '', stock: '', image_urls: [], is_active: true, is_preorder: false, preorder_label: '' })
+    setForm({ name: '', description: '', price: '', sale_price: '', sale_starts_at: '', sale_ends_at: '', price_min: '', price_max: '', category: categories[0]?.name || '', subcategory: '', stock: '', image_urls: [], is_active: true, is_preorder: false, preorder_label: '' })
     setEditId(null)
     setShowForm(false)
   }
@@ -128,10 +131,21 @@ export default function AdminProducts() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const originalPrice = Number(form.price)
+    const salePrice = form.sale_price ? Number(form.sale_price) : null
+    if (salePrice !== null && (!Number.isFinite(salePrice) || salePrice <= 0 || salePrice >= originalPrice)) {
+      toast.error('Sale Price must be greater than 0 and lower than the Original Price')
+      return
+    }
+    if (form.sale_starts_at && form.sale_ends_at && new Date(form.sale_starts_at) >= new Date(form.sale_ends_at)) {
+      toast.error('Sale end must be after sale start')
+      return
+    }
     setLoading(true)
     const payload = {
       name: form.name, description: form.description || null,
       price: parseFloat(form.price), sale_price: form.sale_price ? parseFloat(form.sale_price) : null,
+      sale_starts_at: toIsoTimestamp(form.sale_starts_at), sale_ends_at: toIsoTimestamp(form.sale_ends_at),
       price_min: form.price_min ? parseFloat(form.price_min) : null,
       price_max: form.price_max ? parseFloat(form.price_max) : null, category: form.category,
       subcategory: form.subcategory || null,
@@ -149,6 +163,7 @@ export default function AdminProducts() {
     const urls = (p.image_urls && p.image_urls.length) ? p.image_urls : (p.image_url ? [p.image_url] : [])
     setForm({
       name: p.name, description: p.description || '', price: String(p.price), sale_price: p.sale_price ? String(p.sale_price) : '',
+      sale_starts_at: toDatetimeLocal(p.sale_starts_at), sale_ends_at: toDatetimeLocal(p.sale_ends_at),
       price_min: p.price_min ? String(p.price_min) : '', price_max: p.price_max ? String(p.price_max) : '',
       category: p.category, subcategory: p.subcategory || '',
       stock: String(p.stock), image_urls: urls,
@@ -226,6 +241,11 @@ export default function AdminProducts() {
                 <div><label className="text-sm font-medium block mb-1">Stock</label><Input type="number" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} required /></div>
               </div>
               <p className="text-xs text-muted-foreground -mt-2">Set Original Price to 39 and Sale Price to 20 to show “20” with “39” crossed out. Leave Sale Price blank for no sale.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-sm font-medium block mb-1">Sale Starts <span className="text-muted-foreground text-xs">optional</span></label><Input type="datetime-local" value={form.sale_starts_at} onChange={e => setForm(p => ({ ...p, sale_starts_at: e.target.value }))} /></div>
+                <div><label className="text-sm font-medium block mb-1">Sale Ends <span className="text-muted-foreground text-xs">optional</span></label><Input type="datetime-local" value={form.sale_ends_at} onChange={e => setForm(p => ({ ...p, sale_ends_at: e.target.value }))} /></div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-2">The sale activates and expires automatically using the configured dates. Leave both blank for an immediate sale with no expiry.</p>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="text-sm font-medium block mb-1">Min Price <span className="text-muted-foreground text-xs">optional</span></label><Input type="number" step="0.01" value={form.price_min} onChange={e => setForm(p => ({ ...p, price_min: e.target.value }))} placeholder="e.g. 500" /></div>
                 <div><label className="text-sm font-medium block mb-1">Max Price <span className="text-muted-foreground text-xs">optional</span></label><Input type="number" step="0.01" value={form.price_max} onChange={e => setForm(p => ({ ...p, price_max: e.target.value }))} placeholder="e.g. 2000" /></div>

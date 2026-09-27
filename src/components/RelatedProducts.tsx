@@ -3,12 +3,15 @@ import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
+import { getActiveSalePrice } from '@/lib/salePrice'
 
 interface Product {
   id: string
   name: string
   price: number
   sale_price: number | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
   price_min: number | null
   image_url: string | null
   category: string
@@ -22,7 +25,7 @@ export function RelatedProducts({ productId, category }: { productId: string; ca
   useEffect(() => {
     fetchPublicTable<Product>(
       'products',
-      `select=id,name,price,sale_price,price_min,image_url,category&category=eq.${encodeURIComponent(category)}&id=neq.${productId}&is_active=eq.true&limit=4`
+      `select=id,name,price,sale_price,sale_starts_at,sale_ends_at,price_min,image_url,category&category=eq.${encodeURIComponent(category)}&id=neq.${productId}&is_active=eq.true&limit=4`
     ).then(data => setProducts(data || []))
   }, [productId, category])
 
@@ -53,7 +56,7 @@ export function RelatedProducts({ productId, category }: { productId: string; ca
             </div>
             <h3 className="text-sm font-medium text-foreground line-clamp-1 group-hover:text-primary transition-colors">{p.name}</h3>
             <p className="text-sm text-primary font-semibold mt-0.5">
-              {p.price_min ? `From ${format(p.price_min)}` : p.sale_price && p.sale_price < p.price ? <><span>{format(p.sale_price)}</span> <span className="text-muted-foreground line-through text-xs">{format(p.price)}</span></> : format(p.price)}
+              {p.price_min ? `From ${format(p.price_min)}` : getActiveSalePrice(p) !== null ? <><span>{format(getActiveSalePrice(p)!)}</span> <span className="text-muted-foreground line-through text-xs">{format(p.price)}</span></> : format(p.price)}
             </p>
           </Link>
         ))}

@@ -8,6 +8,7 @@ import { useCurrency } from '@/contexts/CurrencyContext'
 import { upsertMeta, upsertCanonical, SITE_URL } from '@/hooks/useSEO'
 import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
 import { slugify, legacySlug } from '@/lib/slug'
+import { getActiveSalePrice } from '@/lib/salePrice'
 
 interface Product {
   id: string
@@ -100,7 +101,7 @@ export default function ShopPage() {
     const loadProducts = async () => {
       setLoading(true)
       try {
-        let query = 'select=id,name,price,sale_price,price_min,price_max,image_url,stock,category,subcategory,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
+        let query = 'select=id,name,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,image_url,stock,category,subcategory,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
         if (activeCategory !== 'All') query += `&category=eq.${encodeURIComponent(activeCategory)}`
         if (activeSub !== 'All') query += `&subcategory=eq.${encodeURIComponent(activeSub)}`
         if (searchQuery) query += `&name=ilike.*${encodeURIComponent(searchQuery)}*`
@@ -143,7 +144,7 @@ export default function ShopPage() {
       navigate(`/product/${product.id}`)
       return
     }
-    const finalPrice = state?.price ?? (product.sale_price && product.sale_price < product.price ? product.sale_price : product.price)
+    const finalPrice = state?.price ?? (getActiveSalePrice(product) ?? product.price)
     const finalName = state?.label ? `${product.name} (${state.label})` : product.name
     const finalId = state?.label ? `${product.id}::${state.label}` : product.id
     addToCart({ id: finalId, name: finalName, price: finalPrice, image_url: product.image_url, stock: product.stock })
@@ -217,7 +218,7 @@ export default function ShopPage() {
                     )}
                     {/* Badges */}
                     <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
-                      {product.sale_price && product.sale_price < product.price && (
+                      {getActiveSalePrice(product) !== null && (
                         <span className="bg-primary text-primary-foreground text-xs px-2 py-1 font-semibold rounded">
                           Sale
                         </span>
@@ -253,9 +254,9 @@ export default function ShopPage() {
                       <p className="text-foreground font-bold text-sm">
                         {format(product.price_min)} - {format(product.price_max)}
                       </p>
-                    ) : product.sale_price && product.sale_price < product.price ? (
+                    ) : getActiveSalePrice(product) !== null ? (
                       <p className="flex items-center gap-2">
-                        <span className="text-foreground font-bold text-sm">{format(product.sale_price)}</span>
+                        <span className="text-foreground font-bold text-sm">{format(getActiveSalePrice(product)!)}</span>
                         <span className="text-muted-foreground text-xs line-through">{format(product.price)}</span>
                       </p>
                     ) : (

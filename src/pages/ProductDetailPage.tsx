@@ -9,6 +9,7 @@ import { RecentlyViewed } from '@/components/RecentlyViewed'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { useSEO } from '@/hooks/useSEO'
+import { getActiveSalePrice } from '@/lib/salePrice'
 
 interface Product {
   id: string
@@ -16,6 +17,8 @@ interface Product {
   description: string | null
   price: number
   sale_price: number | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
   price_min: number | null
   price_max: number | null
   image_url: string | null
@@ -66,7 +69,7 @@ export default function ProductDetailPage() {
   // Inject Product JSON-LD structured data for search engines
   useEffect(() => {
     if (!product) return
-    const price = product.sale_price ?? product.price
+    const price = getActiveSalePrice(product) ?? product.price
     const images = (product.image_urls && product.image_urls.length > 0)
       ? product.image_urls
       : (product.image_url ? [product.image_url] : [])
@@ -189,8 +192,9 @@ export default function ProductDetailPage() {
   const prevImg = () => setImgIdx(i => (i - 1 + gallery.length) % gallery.length)
   const nextImg = () => setImgIdx(i => (i + 1) % gallery.length)
 
-  const onSale = !selectedVariant && !!product.sale_price && product.sale_price < product.price
-  const currentPrice = selectedVariant ? selectedVariant.price : (onSale ? product.sale_price! : product.price)
+  const activeSalePrice = getActiveSalePrice(product)
+  const onSale = !selectedVariant && activeSalePrice !== null
+  const currentPrice = selectedVariant ? selectedVariant.price : (activeSalePrice ?? product.price)
   const currentStock = selectedVariant ? selectedVariant.stock : product.stock
   const canOrder = product.is_preorder || currentStock > 0
   const needsVariant = variants.length > 0 && !selectedVariant
