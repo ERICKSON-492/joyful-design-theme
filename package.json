@@ -9,6 +9,7 @@
     "api": "node server/index.mjs",
     "dev:api": "node --watch server/index.mjs",
     "start": "node server/index.mjs",
+    "test:scheduled-sale-email": "node scripts/test-scheduled-sale-email.mjs",
     "build": "vite build",
     "postbuild": "node scripts/prerender.mjs",
     "build:dev": "vite build --mode development",
