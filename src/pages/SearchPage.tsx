@@ -12,6 +12,7 @@ interface Product {
   id: string
   name: string
   price: number
+  sale_price: number | null
   price_min: number | null
   price_max: number | null
   image_url: string | null
@@ -66,7 +67,7 @@ export default function SearchPage() {
     const load = async () => {
       setLoading(true)
       try {
-        let q = 'select=id,name,price,price_min,price_max,image_url,stock,category,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
+        let q = 'select=id,name,price,sale_price,price_min,price_max,image_url,stock,category,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
         if (activeQuery) {
           // Match singular/plural variants too, so "belts" finds "belt".
           const variants = expandQuery(activeQuery)
@@ -348,12 +349,14 @@ export default function SearchPage() {
                     <div className="mb-2">
                       {p.price_min && p.price_max ? (
                         <p className="text-foreground font-bold text-sm">{format(p.price_min)} - {format(p.price_max)}</p>
+                      ) : p.sale_price && p.sale_price < p.price ? (
+                        <p className="text-sm"><span className="text-primary font-bold mr-2">{format(p.sale_price)}</span><span className="text-muted-foreground line-through">{format(p.price)}</span></p>
                       ) : (
                         <p className="text-foreground font-bold text-sm">{format(p.price)}</p>
                       )}
                     </div>
                     <button
-                      onClick={() => addToCart({ id: p.id, name: p.name, price: p.price, image_url: p.image_url, stock: p.stock })}
+                      onClick={() => addToCart({ id: p.id, name: p.name, price: p.sale_price && p.sale_price < p.price ? p.sale_price : p.price, image_url: p.image_url, stock: p.stock })}
                       className={`w-full py-2.5 text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg ${
                         p.is_preorder
                           ? 'bg-blue-600 hover:bg-blue-700 text-white'

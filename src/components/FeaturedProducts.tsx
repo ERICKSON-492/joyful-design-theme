@@ -11,6 +11,7 @@ interface Product {
   id: string
   name: string
   price: number
+  sale_price: number | null
   image_url: string | null
   stock: number
 }
@@ -39,7 +40,7 @@ export function FeaturedProducts() {
       try {
         const data = await fetchPublicTable<Product>(
           'products',
-          'select=id,name,price,image_url,stock&is_active=eq.true&order=created_at.desc&limit=24'
+          'select=id,name,price,sale_price,image_url,stock&is_active=eq.true&order=created_at.desc&limit=24'
         )
 
         if (!mounted) return
@@ -87,7 +88,8 @@ export function FeaturedProducts() {
   if (products.length === 0) return null
 
   const handleAdd = (product: Product) => {
-    addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.image_url, stock: product.stock })
+    const price = product.sale_price && product.sale_price < product.price ? product.sale_price : product.price
+    addToCart({ id: product.id, name: product.name, price, image_url: product.image_url, stock: product.stock })
   }
 
   return (
@@ -133,9 +135,9 @@ export function FeaturedProducts() {
                   </Link>
                 <Link to={`/product/${product.id}`}>
                   <h3 className="font-display text-xs md:text-sm font-semibold text-foreground mb-1 hover:text-primary transition-colors line-clamp-1">{product.name}</h3>
-                  <p className="text-muted-foreground text-xs mb-2">
-                    {format(product.price)}
-                  </p>
+                  {product.sale_price && product.sale_price < product.price ? (
+                    <p className="text-xs mb-2"><span className="text-primary font-bold mr-2">{format(product.sale_price)}</span><span className="text-muted-foreground line-through">{format(product.price)}</span></p>
+                  ) : <p className="text-muted-foreground text-xs mb-2">{format(product.price)}</p>}
                 </Link>
                 <button
                   onClick={() => handleAdd(product)}
