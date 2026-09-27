@@ -53,6 +53,8 @@ export default function AdminOrders() {
   }, [])
 
   const getCustomerEmail = (order: Order) => {
+    const directEmail = (order as Order & { email?: string | null }).email
+    if (typeof directEmail === 'string' && directEmail.trim()) return directEmail.trim()
     if (!order.shipping_address || typeof order.shipping_address !== 'object' || Array.isArray(order.shipping_address)) {
       return null
     }

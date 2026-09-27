@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
-import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail } from './functions-api.mjs'
+import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, processScheduledSaleNotifications } from './functions-api.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -189,7 +189,7 @@ async function handle(req, res, url) {
     const byId=new Map(productsResult.rows.map(x=>[x.id,x])); const variantsById=new Map(variantsResult.rows.map(x=>[x.id,x])); const authoritative=[]
     for(const { item, productId, variantId } of requested){ const p=byId.get(productId); const v=variantId ? variantsById.get(variantId) : null; if(!p||!p.is_active||variantId && (!v||v.product_id!==p.id||!v.is_active))return json(res,400,{error:`Product unavailable: ${item.name||item.id}`}); const qty=Number(item.quantity); const stock=v?v.stock:p.stock; if(!Number.isInteger(qty)||qty<1||qty>stock)return json(res,409,{error:`Insufficient stock for ${p.name}`}); authoritative.push({id:p.id,variant_id:v?.id||null,name:v?`${p.name} (${v.variant_label})`:p.name,price:Number(v?.price??activeSalePrice(p)??p.price),quantity:qty}) }
     const subtotal=authoritative.reduce((s,i)=>s+i.price*i.quantity,0); const shipping=Number(b.shipping_cost||0); const discount=Math.max(0,Number(b.discount_amount||0)); const total=Math.max(0,subtotal+shipping-discount)
-    const client=await pool.connect(); try{await client.query('BEGIN'); for(const i of authoritative) { if(i.variant_id) await client.query('UPDATE product_variants SET stock=stock-$1,updated_at=now() WHERE id=$2',[i.quantity,i.variant_id]); else await client.query('UPDATE products SET stock=stock-$1,updated_at=now() WHERE id=$2',[i.quantity,i.id]) } const o=await client.query(`INSERT INTO joyful_orders (phone,customer_name,total_amount,status,items,user_id,shipping_address,email,shipping_method,shipping_cost,latitude,longitude,stock_decremented) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true) RETURNING id,total_amount`,[b.phone,b.customer_name,total,b.status||'pending',JSON.stringify(authoritative),b.user_id||null,b.shipping_address||{},b.email||null,b.shipping_method||null,shipping,b.latitude??null,b.longitude??null]); await client.query('COMMIT'); return json(res,201,{order:o.rows[0],subtotal,shipping_cost:shipping,discount_amount:discount,total})}catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
+    const client=await pool.connect(); try{await client.query('BEGIN'); for(const i of authoritative) { if(i.variant_id) await client.query('UPDATE product_variants SET stock=stock-$1,updated_at=now() WHERE id=$2',[i.quantity,i.variant_id]); else await client.query('UPDATE products SET stock=stock-$1,updated_at=now() WHERE id=$2',[i.quantity,i.id]) } const o=await client.query(`INSERT INTO joyful_orders (phone,customer_name,total_amount,status,items,user_id,shipping_address,email,shipping_method,shipping_cost,latitude,longitude,stock_decremented) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true) RETURNING id,total_amount`,[b.phone,b.customer_name,total,b.status||'pending',JSON.stringify(authoritative),b.user_id||null,b.shipping_address||{},b.email||b.shipping_address?.email||null,b.shipping_method||null,shipping,b.latitude??null,b.longitude??null]); await client.query('COMMIT'); queueOrderConfirmation(pool, { ...o.rows[0], customer_name: b.customer_name, email: b.email || b.shipping_address?.email, items: authoritative }).catch(e => console.error('order confirmation queue failed:', e.message)); return json(res,201,{order:o.rows[0],subtotal,shipping_cost:shipping,discount_amount:discount,total})}catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
   }
   // Generic data access (replaces PostgREST), file storage, signed links and
   // the polling channel that replaces realtime broadcast.
@@ -330,5 +330,6 @@ async function seedData(dir) {
 
 const server=http.createServer(async(req,res)=>{try{applyCors(req,res);if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
 if (process.env.SKIP_BOOTSTRAP !== 'true') await bootstrap()
-setInterval(() => { drainOutbox(pool).catch(e => console.error('outbox drain failed:', e.message)) }, 60000)
+processScheduledSaleNotifications(pool).catch(e => console.error('initial scheduled sale notifications failed:', e.message))
+setInterval(() => { drainOutbox(pool).catch(e => console.error('outbox drain failed:', e.message)); processScheduledSaleNotifications(pool).catch(e => console.error('scheduled sale notifications failed:', e.message)) }, 60000)
 server.listen(port,'0.0.0.0',()=>console.log(`Neon API listening on ${port}`))

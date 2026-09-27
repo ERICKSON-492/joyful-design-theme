@@ -14,6 +14,79 @@ export async function queueEmail(pool, { to, subject, html, label = 'generic', a
   return r.rows[0].id
 }
 
+const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]))
+const money = value => `KSh ${Number(value || 0).toLocaleString('en-KE')}`
+
+export async function queueOrderNotification(pool, { orderId, eventKey, to, subject, html, label }) {
+  if (!to) return false
+  const claim = await pool.query(
+    `INSERT INTO public.order_email_notifications (order_id,event_key,recipient_email)
+     VALUES ($1,$2,$3) ON CONFLICT (order_id,event_key,recipient_email) DO NOTHING RETURNING id`,
+    [orderId, eventKey, to],
+  )
+  if (!claim.rowCount) return false
+  try {
+    await queueEmail(pool, { to, subject, html, label })
+    return true
+  } catch (error) {
+    await pool.query('DELETE FROM public.order_email_notifications WHERE id=$1', [claim.rows[0].id]).catch(() => {})
+    throw error
+  }
+}
+
+export async function queueOrderConfirmation(pool, order) {
+  if (!order?.email) return false
+  const items = Array.isArray(order.items) ? order.items : []
+  const rows = items.map(item => `<tr><td style="padding:6px 0;">${escapeHtml(item.name)} × ${Number(item.quantity || 0)}</td><td style="padding:6px 0;text-align:right;">${money(Number(item.price) * Number(item.quantity || 0))}</td></tr>`).join('')
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a1a"><h2 style="color:#b8860b">Thank you for your order, ${escapeHtml(order.customer_name || 'there')}!</h2><p>We received order <strong>#${escapeHtml(String(order.id).slice(0, 8))}</strong>.</p><table style="width:100%;border-collapse:collapse">${rows}<tr><td style="border-top:1px solid #ddd;padding-top:10px"><strong>Total</strong></td><td style="border-top:1px solid #ddd;padding-top:10px;text-align:right"><strong>${money(order.total_amount)}</strong></td></tr></table><p>We will email you again when your order status changes.</p><p>Questions? Reply to this email or WhatsApp +254 748 207 000.</p></div>`
+  return queueOrderNotification(pool, { orderId: order.id, eventKey: 'order-confirmed', to: order.email, subject: `Order #${String(order.id).slice(0, 8)} received - Ushanga Chronicles`, html, label: 'order-confirmation' })
+}
+
+export async function queuePaymentNotification(pool, order, status) {
+  if (!order?.email) return false
+  const paid = status === 'paid'
+  const failed = status === 'failed'
+  const title = paid ? 'Payment received' : failed ? 'Payment was not completed' : 'Payment prompt sent'
+  const detail = paid ? 'Your M-Pesa payment was received and your order is being processed.' : failed ? 'Your M-Pesa payment was not completed. Please try again or contact us for help.' : 'Check your phone and enter your M-Pesa PIN to complete payment.'
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a1a"><h2 style="color:#b8860b">${title}</h2><p>Order <strong>#${escapeHtml(String(order.id).slice(0, 8))}</strong></p><p>${detail}</p><p>Order total: <strong>${money(order.total_amount)}</strong></p><p>Questions? Reply to this email or WhatsApp +254 748 207 000.</p></div>`
+  return queueOrderNotification(pool, { orderId: order.id, eventKey: `payment-${status}`, to: order.email, subject: `${title} - Order #${String(order.id).slice(0, 8)}`, html, label: `payment-${status}` })
+}
+
+export async function processScheduledSaleNotifications(pool) {
+  const subscribers = (await pool.query('SELECT email FROM public.newsletter_subscribers')).rows
+  if (!subscribers.length) return 0
+  const products = (await pool.query(
+    `SELECT id,name,price,sale_price,sale_starts_at,sale_ends_at
+     FROM public.products
+     WHERE is_active=true AND sale_price IS NOT NULL AND sale_price < price
+       AND ((sale_starts_at IS NOT NULL AND sale_starts_at > now() - interval '2 minutes' AND sale_starts_at <= now())
+         OR (sale_ends_at IS NOT NULL AND sale_ends_at > now() AND sale_ends_at <= now() + interval '24 hours'))`,
+  )).rows
+  let queued = 0
+  for (const product of products) {
+    const windowKey = `${product.sale_starts_at?.toISOString?.() || product.sale_starts_at || ''}|${product.sale_ends_at?.toISOString?.() || product.sale_ends_at || ''}`
+    const events = []
+    if (product.sale_starts_at && new Date(product.sale_starts_at) <= new Date()) events.push(['sale-start', `Sale now live: ${product.name}`])
+    if (product.sale_ends_at && new Date(product.sale_ends_at) > new Date() && new Date(product.sale_ends_at) <= new Date(Date.now() + 24 * 60 * 60 * 1000)) events.push(['sale-ending', `Sale ends soon: ${product.name}`])
+    for (const [eventKey, subject] of events) {
+      const claim = await pool.query(
+        `INSERT INTO public.sale_email_notifications (product_id,event_key,window_key)
+         VALUES ($1,$2,$3) ON CONFLICT (product_id,event_key,window_key) DO NOTHING RETURNING id`,
+        [product.id, eventKey, windowKey],
+      )
+      if (!claim.rowCount) continue
+      const endText = product.sale_ends_at ? new Date(product.sale_ends_at).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'while stocks last'
+      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a1a"><h2 style="color:#b8860b">${escapeHtml(eventKey === 'sale-start' ? 'A special price is now live' : 'Sale ending soon')}</h2><h3>${escapeHtml(product.name)}</h3><p><strong>${money(product.sale_price)}</strong> <span style="text-decoration:line-through;color:#777">${money(product.price)}</span></p><p>${eventKey === 'sale-start' ? 'Enjoy this special price while it lasts.' : `The sale ends ${escapeHtml(endText)}.`}</p><p><a href="https://ushangachronicles.com/shop" style="background:#b8860b;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px">Shop now</a></p></div>`
+      for (const subscriber of subscribers) {
+        await queueEmail(pool, { to: subscriber.email, subject, html, label: `sale-${eventKey}` })
+        queued += 1
+      }
+    }
+  }
+  if (queued) drainOutbox(pool).catch(() => {})
+  return queued
+}
+
 async function deliver(pool, row) {
   if (!resendKey()) throw new Error('Email sending is not configured (RESEND_API_KEY missing)')
   const res = await fetch('https://api.resend.com/emails', {
@@ -153,7 +226,8 @@ async function mpesa({ pool, res, json, payload }) {
       })
       const data = await r.json()
       if (String(data.ResultCode) === '0' && payload.checkout_request_id) {
-        await pool.query("UPDATE public.joyful_orders SET status='paid',updated_at=now() WHERE mpesa_checkout_request_id=$1", [payload.checkout_request_id])
+        const updated = await pool.query("UPDATE public.joyful_orders SET status='paid',updated_at=now() WHERE mpesa_checkout_request_id=$1 RETURNING id,total_amount,email,customer_name", [payload.checkout_request_id])
+        if (updated.rowCount) await queuePaymentNotification(pool, updated.rows[0], 'paid')
       }
       return json(res, 200, data)
     }
@@ -174,7 +248,8 @@ async function mpesa({ pool, res, json, payload }) {
     })
     const data = await r.json()
     if (data.CheckoutRequestID && payload.orderId) {
-      await pool.query('UPDATE public.joyful_orders SET mpesa_checkout_request_id=$1,updated_at=now() WHERE id=$2', [data.CheckoutRequestID, payload.orderId])
+      const updated = await pool.query('UPDATE public.joyful_orders SET mpesa_checkout_request_id=$1,updated_at=now() WHERE id=$2 RETURNING id,total_amount,email,customer_name', [data.CheckoutRequestID, payload.orderId])
+      if (updated.rowCount) await queuePaymentNotification(pool, updated.rows[0], 'initiated')
     }
     if (data.ResponseCode && String(data.ResponseCode) !== '0') return json(res, 400, { success: false, error: data.errorMessage || data.ResponseDescription || 'M-Pesa request failed' })
     return json(res, 200, { success: true, mpesa_response: data, checkoutRequestId: data.CheckoutRequestID })
@@ -190,11 +265,12 @@ export async function handleMpesaCallback({ pool, req, res, json, body }) {
   const items = cb.CallbackMetadata?.Item || []
   const receipt = items.find(i => i.Name === 'MpesaReceiptNumber')?.Value || null
   const paid = String(cb.ResultCode) === '0'
-  await pool.query(
+  const updated = await pool.query(
     `UPDATE public.joyful_orders SET status=$1, mpesa_receipt_number=COALESCE($2,mpesa_receipt_number), updated_at=now()
-     WHERE mpesa_checkout_request_id=$3`,
+     WHERE mpesa_checkout_request_id=$3 RETURNING id,total_amount,email,customer_name`,
     [paid ? 'paid' : 'failed', receipt, cb.CheckoutRequestID],
   )
+  if (updated.rowCount) await queuePaymentNotification(pool, updated.rows[0], paid ? 'paid' : 'failed')
   return json(res, 200, { ok: true })
 }
 

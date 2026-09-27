@@ -174,6 +174,18 @@ CREATE TABLE IF NOT EXISTS public.email_outbox (
 );
 CREATE INDEX IF NOT EXISTS email_outbox_pending_idx ON public.email_outbox (status, created_at);
 
+CREATE TABLE IF NOT EXISTS public.order_email_notifications (
+  id bigserial PRIMARY KEY, order_id uuid NOT NULL, event_key text NOT NULL,
+  recipient_email text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (order_id, event_key, recipient_email)
+);
+
+CREATE TABLE IF NOT EXISTS public.sale_email_notifications (
+  id bigserial PRIMARY KEY, product_id uuid NOT NULL, event_key text NOT NULL,
+  window_key text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (product_id, event_key, window_key)
+);
+
 -- File storage: replaces the Supabase storage buckets.
 CREATE TABLE IF NOT EXISTS public.files (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
