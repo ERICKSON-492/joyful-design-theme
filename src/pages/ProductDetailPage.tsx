@@ -52,6 +52,13 @@ export default function ProductDetailPage() {
   const [selectedSize, setSelectedSize] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
   const [imgIdx, setImgIdx] = useState(0)
+  const [clock, setClock] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!product?.sale_starts_at && !product?.sale_ends_at) return
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [product?.sale_starts_at, product?.sale_ends_at])
 
   useSEO(
     product ? product.name : 'Shop',
@@ -198,6 +205,17 @@ export default function ProductDetailPage() {
   const currentStock = selectedVariant ? selectedVariant.stock : product.stock
   const canOrder = product.is_preorder || currentStock > 0
   const needsVariant = variants.length > 0 && !selectedVariant
+  const saleStartAt = product.sale_starts_at ? Date.parse(product.sale_starts_at) : null
+  const saleEndAt = product.sale_ends_at ? Date.parse(product.sale_ends_at) : null
+  const hasScheduledSale = Number(product.sale_price) > 0 && Number(product.sale_price) < Number(product.price)
+    && (saleStartAt !== null || saleEndAt !== null)
+  const salePhase = hasScheduledSale && saleStartAt !== null && Number.isFinite(saleStartAt) && clock < saleStartAt
+    ? { label: 'Sale starts in', target: saleStartAt, price: Number(product.sale_price) }
+    : hasScheduledSale && saleEndAt !== null && Number.isFinite(saleEndAt) && clock < saleEndAt
+      ? { label: 'Sale ends in', target: saleEndAt, price: Number(product.sale_price) }
+      : null
+  const countdownSeconds = salePhase ? Math.max(0, Math.ceil((salePhase.target - clock) / 1000)) : 0
+  const countdownText = `${Math.floor(countdownSeconds / 86400)}d ${String(Math.floor((countdownSeconds % 86400) / 3600)).padStart(2, '0')}h ${String(Math.floor((countdownSeconds % 3600) / 60)).padStart(2, '0')}m ${String(countdownSeconds % 60).padStart(2, '0')}s`
 
   const handleAddToCart = () => {
     if (needsVariant) return
@@ -306,6 +324,17 @@ export default function ProductDetailPage() {
                 </p>
               )}
             </div>
+
+            {salePhase && (
+              <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-primary" role="status" aria-live="polite">
+                <Clock className="w-5 h-5 shrink-0" />
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider">{salePhase.label}</p>
+                  <p className="text-lg font-bold tabular-nums">{countdownText}</p>
+                  <p className="text-xs">Special price: {format(salePhase.price)}</p>
+                </div>
+              </div>
+            )}
 
             {/* Badges */}
             <div className="flex flex-wrap gap-2">
