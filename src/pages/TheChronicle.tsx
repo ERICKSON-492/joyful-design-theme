@@ -1,14 +1,25 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { supabase } from '@/lib/dbClient'
 import { useSEO } from '@/hooks/useSEO'
 import { Loader2 } from 'lucide-react'
+import { fetchPublicTable } from '@/lib/publicContent'
 
 interface SectionContent {
   title: string
   body: string
   image_url: string | null
+}
+
+interface ChroniclePost {
+  id: string
+  title: string
+  slug: string
+  excerpt: string | null
+  content: string | null
+  cover_image_url: string | null
+  author: string | null
+  published_at: string | null
 }
 
 const fallbackOrigin: SectionContent = {
@@ -36,50 +47,31 @@ export default function TheChronicle() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [posts, setPosts] = useState<ChroniclePost[]>([])
   
   const cacheBustTimestamp = useMemo(() => Date.now(), [])
 
   useEffect(() => {
     let isMounted = true
-    let timeoutId: NodeJS.Timeout
-
     const fetchContent = async () => {
       try {
         setLoading(true)
         setError(null)
-        
-        timeoutId = setTimeout(() => {
-          if (isMounted) {
-            setLoading(false)
-            setError('Loading took too long. Showing default content.')
-            console.warn('Supabase request timed out, using fallback text content')
-          }
-        }, 5000)
-
-        const { data, error: fetchError } = await supabase
-          .from('site_content')
-          .select('section_key, title, body, image_url')
-          .in('section_key', ['about_where_it_began', 'about_the_craft'])
-
-        if (fetchError) {
-          clearTimeout(timeoutId)
-          console.error('Error fetching content:', fetchError)
-          if (isMounted) {
-            setError('Failed to load live database updates. Using default text.')
-            setLoading(false)
-          }
-          return
-        }
-
-        clearTimeout(timeoutId)
-
+        const [data, postData] = await Promise.all([
+          fetchPublicTable<{ section_key: string; title: string; body: string; image_url: string | null }>(
+            'site_content',
+            'select=section_key,title,body,image_url&section_key=in.(the_chronicle_begins,about_where_it_began,about_the_craft)',
+            8000,
+          ),
+          fetchPublicTable<ChroniclePost>('chronicle_posts', 'select=*&is_published=eq.true&order=published_at.desc&limit=12', 8000),
+        ])
         if (!isMounted) return
-        
+        setPosts(postData || [])
         if (data && data.length > 0) {
           const updatedContent = { ...content }
           
           data.forEach(row => {
-            if (row.section_key === 'about_where_it_began') {
+            if (row.section_key === 'about_where_it_began' || row.section_key === 'the_chronicle_begins') {
               updatedContent.origin = { 
                 title: row.title || fallbackOrigin.title, 
                 body: row.body || fallbackOrigin.body, 
@@ -100,10 +92,9 @@ export default function TheChronicle() {
           setContent(updatedContent)
         }
       } catch (err) {
-        if (timeoutId) clearTimeout(timeoutId)
         console.error('Unexpected error:', err)
         if (isMounted) {
-          setError('An unexpected database connection error occurred.')
+          setError('Live story updates are unavailable. Showing the saved story while we reconnect.')
         }
       } finally {
         if (isMounted) {
@@ -116,7 +107,6 @@ export default function TheChronicle() {
 
     return () => {
       isMounted = false
-      if (timeoutId) clearTimeout(timeoutId)
     }
   }, [])
 
@@ -234,6 +224,32 @@ export default function TheChronicle() {
           </div>
         </div>
       </section>
+
+      {posts.length > 0 && (
+        <section className="py-16 md:py-24">
+          <div className="container mx-auto px-4 max-w-6xl">
+            <div className="text-center mb-10">
+              <p className="text-primary uppercase tracking-[0.2em] text-xs font-semibold mb-3">From the journal</p>
+              <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground">Chronicle Stories</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {posts.map(post => {
+                const summary = post.excerpt || post.content || ''
+                return (
+                  <article key={post.id} className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
+                    {post.cover_image_url && <img src={getImageUrl(post.cover_image_url) || undefined} alt="" className="w-full aspect-[16/9] object-cover" loading="lazy" />}
+                    <div className="p-5">
+                      <p className="text-xs text-muted-foreground mb-2">{post.published_at ? new Date(post.published_at).toLocaleDateString() : ''}{post.author ? ` · ${post.author}` : ''}</p>
+                      <h3 className="font-display text-xl font-bold text-foreground mb-2">{post.title}</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{summary.slice(0, 180)}{summary.length > 180 ? '…' : ''}</p>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Call to Action Section */}
       <section className="py-16 md:py-20 bg-primary/5">

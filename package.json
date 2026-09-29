@@ -10,6 +10,7 @@
     "dev:api": "node --watch server/index.mjs",
     "start": "node server/index.mjs",
     "test:scheduled-sale-email": "node scripts/test-scheduled-sale-email.mjs",
+    "migrate:legacy-content": "node scripts/migrate-legacy-content.mjs",
     "build": "vite build",
     "postbuild": "node scripts/prerender.mjs",
     "build:dev": "vite build --mode development",

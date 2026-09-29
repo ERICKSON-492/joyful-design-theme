@@ -64,7 +64,7 @@ export default function TribeLooksPage() {
     if (!file) return
     setUploading(true)
     const ext = file.name.split('.').pop()
-    try { const { publicUrl } = await uploadToR2('review-photos', file, `${Date.now()}.${ext}`); setForm(f => ({ ...f, image_url: publicUrl })) }
+    try { const { publicUrl } = await uploadToR2('tribe-looks', file, `${Date.now()}.${ext}`); setForm(f => ({ ...f, image_url: publicUrl })) }
     catch { toast.error('Upload failed'); setUploading(false); return }
     setUploading(false)
     toast.success('Image uploaded!')
@@ -88,10 +88,9 @@ export default function TribeLooksPage() {
     toast.success('Look submitted! It will appear after approval.')
   }
 
-  const allLooks = [
-    ...looks.map(l => ({ image: l.image_url, name: l.name, piece: l.piece_name })),
-    ...fallbackLooks,
-  ]
+  const allLooks = looks.length > 0
+    ? looks.map(l => ({ image: l.image_url, name: l.name, piece: l.piece_name }))
+    : fallbackLooks
 
   return (
     <div className="bg-background">

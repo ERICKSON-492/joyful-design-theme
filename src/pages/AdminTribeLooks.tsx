@@ -33,7 +33,7 @@ export default function AdminTribeLooks() {
   const [uploading, setUploading] = useState(false)
   const [newLook, setNewLook] = useState({ image_url: '', name: '', piece_name: '' })
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', piece_name: '', image_url: '' })
+  const [editForm, setEditForm] = useState({ name: '', piece_name: '', image_url: '', status: 'pending' })
   const [editUploading, setEditUploading] = useState(false)
   const [importing, setImporting] = useState(false)
 
@@ -195,7 +195,7 @@ export default function AdminTribeLooks() {
 
   const startEdit = (look: TribeLook) => {
     setEditingId(look.id)
-    setEditForm({ name: look.name, piece_name: look.piece_name, image_url: look.image_url })
+    setEditForm({ name: look.name, piece_name: look.piece_name, image_url: look.image_url, status: look.status })
   }
 
   const saveEdit = async (currentLook: TribeLook) => {
@@ -205,7 +205,8 @@ export default function AdminTribeLooks() {
       .update({ 
         name: editForm.name.trim(), 
         piece_name: editForm.piece_name.trim(), 
-        image_url: editForm.image_url 
+        image_url: editForm.image_url,
+        status: editForm.status,
       })
       .eq('id', currentLook.id)
 
@@ -324,6 +325,15 @@ export default function AdminTribeLooks() {
                       className="w-full border border-border bg-background rounded px-2 py-1.5 text-sm"
                       placeholder="Piece"
                     />
+                    <select
+                      value={editForm.status}
+                      onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
+                      className="w-full border border-border bg-background rounded px-2 py-1.5 text-sm"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
                     <div className="flex gap-2">
                       <Button size="sm" onClick={() => saveEdit(look)} disabled={editUploading} className="flex-1">Save</Button>
                       <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
