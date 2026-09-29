@@ -7,6 +7,7 @@ import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
 import { getActiveSalePrice } from '@/lib/salePrice'
+import { productPath } from '@/lib/slug'
 
 interface Product {
   id: string
@@ -110,7 +111,7 @@ export function FeaturedProducts() {
                 transition={{ duration: 0.5, ease: 'easeOut' }}
               >
                 <div className="group">
-                  <Link to={`/product/${product.id}`} className="product-image-frame block mb-3">
+                  <Link to={productPath(product)} className="product-image-frame block mb-3">
                     {product.image_url && !failedImages.has(product.id) ? (
                       <img
                         src={productThumb(product.image_url)}
@@ -136,7 +137,7 @@ export function FeaturedProducts() {
                       </div>
                     )}
                   </Link>
-                <Link to={`/product/${product.id}`}>
+                <Link to={productPath(product)}>
                   <h3 className="font-display text-xs md:text-sm font-semibold text-foreground mb-1 hover:text-primary transition-colors line-clamp-1">{product.name}</h3>
                   {getActiveSalePrice(product) !== null ? (
                     <p className="text-xs mb-2"><span className="text-primary font-bold mr-2">{format(getActiveSalePrice(product)!)}</span><span className="text-muted-foreground line-through">{format(product.price)}</span></p>

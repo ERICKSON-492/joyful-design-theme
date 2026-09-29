@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock, ArrowLeft, Minus, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
@@ -10,6 +10,7 @@ import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { useSEO } from '@/hooks/useSEO'
 import { getActiveSalePrice } from '@/lib/salePrice'
+import { productPath, productSlug } from '@/lib/slug'
 
 interface Product {
   id: string
@@ -40,7 +41,9 @@ interface Variant {
 }
 
 export default function ProductDetailPage() {
-  const { id } = useParams<{ id: string }>()
+  const { id, slug } = useParams<{ id?: string; slug?: string }>()
+  const navigate = useNavigate()
+  const routeKey = slug || id
   const { addToCart } = useCart()
   const { format } = useCurrency()
   const { addProduct: trackView } = useRecentlyViewed()
@@ -65,13 +68,17 @@ export default function ProductDetailPage() {
     product?.description
       ? product.description.replace(/\s+/g, ' ').trim().slice(0, 155)
       : 'Handcrafted African jewelry and decor from Ushanga Chronicles, Nairobi.',
-    id ? `/product/${id}` : undefined,
+    product ? productPath(product) : (routeKey ? `/products/${routeKey}` : undefined),
     !loading && !product // unknown/invalid product id (e.g. old/legacy links) should never be indexed
   )
 
   useEffect(() => {
-    if (id) trackView(id)
-  }, [id, trackView])
+    if (product) trackView(product.id)
+  }, [product, trackView])
+
+  useEffect(() => {
+    if (product && id) navigate(productPath(product), { replace: true })
+  }, [product, id, navigate])
 
   // Inject Product JSON-LD structured data for search engines
   useEffect(() => {
@@ -107,21 +114,25 @@ export default function ProductDetailPage() {
   }, [product])
 
   useEffect(() => {
-    if (!id) return
+    if (!routeKey) return
     const load = async () => {
       setLoading(true)
       try {
-        const [products, variantsData] = await Promise.all([
-          fetchPublicTable<Product>('products', `select=*&id=eq.${id}&is_active=eq.true`),
-          fetchPublicTable<Variant>('product_variants', `select=*&product_id=eq.${id}&is_active=eq.true&order=price.asc`)
-        ])
-        if (products?.[0]) setProduct(products[0])
-        if (variantsData) setVariants(variantsData)
+        const products = await fetchPublicTable<Product>('products', 'select=*&is_active=eq.true&limit=500')
+        const match = products.find(p => p.id === routeKey || productSlug(p) === routeKey)
+        if (match) {
+          const variantsData = await fetchPublicTable<Variant>('product_variants', `select=*&product_id=eq.${match.id}&is_active=eq.true&order=price.asc`)
+          setProduct(match)
+          setVariants(variantsData || [])
+        } else {
+          setProduct(null)
+          setVariants([])
+        }
       } catch { /* ignore */ }
       setLoading(false)
     }
     load()
-  }, [id])
+  }, [routeKey])
 
   // Get unique sizes and colors
   const sizes = [...new Set(variants.filter(v => v.size).map(v => v.size!))]

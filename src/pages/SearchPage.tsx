@@ -6,6 +6,7 @@ import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { expandQuery } from '@/lib/searchTerms'
 import { getActiveSalePrice } from '@/lib/salePrice'
+import { productPath } from '@/lib/slug'
 
 const categoryList = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
 
@@ -319,7 +320,7 @@ export default function SearchPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
                 {products.map(p => (
                   <div key={p.id} className="group">
-                    <Link to={`/product/${p.id}`} className="product-image-frame block mb-3">
+                    <Link to={productPath(p)} className="product-image-frame block mb-3">
                       {p.image_url ? (
                         <img src={p.image_url} alt={p.name}
                           className="product-image" loading="lazy"
@@ -343,7 +344,7 @@ export default function SearchPage() {
                         )}
                       </div>
                     </Link>
-                    <Link to={`/product/${p.id}`}>
+                    <Link to={productPath(p)}>
                       <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1 hover:text-primary transition-colors">
                         {p.name}
                       </h3>

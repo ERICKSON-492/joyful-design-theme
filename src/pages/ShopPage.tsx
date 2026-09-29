@@ -7,7 +7,7 @@ import { ProductCardVariants } from '@/components/ProductCardVariants'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { upsertMeta, upsertCanonical, SITE_URL } from '@/hooks/useSEO'
 import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
-import { slugify, legacySlug } from '@/lib/slug'
+import { slugify, legacySlug, productPath } from '@/lib/slug'
 import { getActiveSalePrice } from '@/lib/salePrice'
 
 interface Product {
@@ -141,7 +141,7 @@ export default function ShopPage() {
   const handleAdd = (product: Product) => {
     const state = variantState[product.id]
     if (state?.hasVariants) {
-      navigate(`/product/${product.id}`)
+      navigate(productPath(product))
       return
     }
     const finalPrice = state?.price ?? (getActiveSalePrice(product) ?? product.price)
@@ -199,7 +199,7 @@ export default function ShopPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
               {products.map((product) => (
                 <div key={product.id} className="group">
-                  <Link to={`/product/${product.id}`} className="product-image-frame block mb-4">
+                  <Link to={productPath(product)} className="product-image-frame block mb-4">
                     {product.image_url && !failedImages.has(product.id) ? (
                       <img src={productThumb(product.image_url)} alt={product.name}
                         srcSet={productSrcSet(product.image_url)}
@@ -240,7 +240,7 @@ export default function ShopPage() {
                       )}
                     </div>
                   </Link>
-                  <Link to={`/product/${product.id}`}>
+                  <Link to={productPath(product)}>
                     <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1 hover:text-primary transition-colors">
                       {product.name}
                     </h3>

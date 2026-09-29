@@ -4,6 +4,7 @@ import { fetchPublicTable } from '@/lib/publicContent'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
+import { productPath } from '@/lib/slug'
 
 interface Product {
   id: string
@@ -39,7 +40,7 @@ export function RecentlyViewed({ excludeId }: { excludeId?: string }) {
       <h2 className="font-display text-xl md:text-2xl font-bold text-foreground mb-4">Recently Viewed</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {products.map(p => (
-          <Link key={p.id} to={`/product/${p.id}`} className="group">
+          <Link key={p.id} to={productPath(p)} className="group">
             <div className="product-image-frame mb-2">
               {p.image_url && !failedImages.has(p.id) ? (
                 <img src={productThumb(p.image_url)} alt={p.name} loading="lazy" decoding="async"

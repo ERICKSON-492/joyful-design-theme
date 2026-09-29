@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Loader2 } from 'lucide-react'
+import { productPath } from '@/lib/slug'
 
 const SITE_URL = window.location.origin
 
@@ -16,7 +17,7 @@ function buildPreviewHtml(products: any[], posts: any[]): string {
     const price = p.price_min && p.price_max && p.price_min !== p.price_max
       ? `KSh ${Number(p.price_min).toLocaleString()} – ${Number(p.price_max).toLocaleString()}`
       : `KSh ${Number(p.price || p.price_min || 0).toLocaleString()}`
-    const link = `${SITE_URL}/product/${p.id}`
+    const link = `${SITE_URL}${productPath(p)}`
     return `
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 20px 0; border:1px solid #ecdfc7; border-radius:8px; overflow:hidden;">
         <tr>

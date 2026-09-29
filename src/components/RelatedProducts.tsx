@@ -4,6 +4,7 @@ import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
 import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
 import { getActiveSalePrice } from '@/lib/salePrice'
+import { productPath } from '@/lib/slug'
 
 interface Product {
   id: string
@@ -37,7 +38,7 @@ export function RelatedProducts({ productId, category }: { productId: string; ca
       <p className="text-muted-foreground text-sm mb-6">More from {category}</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {products.map(p => (
-          <Link key={p.id} to={`/product/${p.id}`} className="group">
+          <Link key={p.id} to={productPath(p)} className="group">
             <div className="product-image-frame mb-2">
               {p.image_url && !failedImages.has(p.id) ? (
                 <img src={productThumb(p.image_url)} alt={p.name} loading="lazy" decoding="async"

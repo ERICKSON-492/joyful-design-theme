@@ -37,8 +37,24 @@ const SUPABASE_KEY =
       return m ? m[1] : null;
     } catch { return null; }
   })();
+const API_BASE =
+  process.env.VITE_API_BASE_URL ||
+  (() => {
+    try {
+      const env = readFileSync(resolve(".env"), "utf8");
+      const m = env.match(/VITE_API_BASE_URL\s*=\s*"?([^"\n]+)"?/);
+      return m ? m[1].replace(/\/+$/, "") : "https://joyful-design-theme.onrender.com";
+    } catch { return "https://joyful-design-theme.onrender.com"; }
+  })();
 
 async function fetchProducts() {
+  try {
+    const neonRes = await fetch(`${API_BASE}/api/products?limit=500`);
+    if (neonRes.ok) return await neonRes.json();
+    console.warn(`[prerender] Neon products fetch failed: ${neonRes.status}; trying legacy source`);
+  } catch (err) {
+    console.warn("[prerender] Neon products fetch error:", err.message);
+  }
   if (!SUPABASE_URL || !SUPABASE_KEY) return [];
   try {
     const url = `${SUPABASE_URL}/rest/v1/products?select=id,name,description,price,sale_price,price_min,price_max,image_url,category,stock,is_preorder&is_active=eq.true&order=created_at.desc&limit=500`;
@@ -67,6 +83,11 @@ function productPrice(p) {
   }
   if (p.sale_price && p.sale_price < p.price) return fmtKES(p.sale_price);
   return fmtKES(p.price);
+}
+
+function productSlug(p) {
+  const slug = String(p.name || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug || p.id;
 }
 
 /** @type {Array<{path: string, title: string, description: string, body: string}>} */
@@ -257,7 +278,7 @@ function renderProduct(p) {
   const desc = (p.description || `${p.name} — handmade in Nairobi, Kenya by Ushanga Chronicles artisans. ${productPrice(p)}.`)
     .replace(/\s+/g, " ")
     .slice(0, 300);
-  const canonical = `${SITE}/product/${p.id}`;
+  const canonical = `${SITE}/products/${productSlug(p)}`;
   const img = p.image_url || `${SITE}/logo.jpeg`;
   const priceNum = (p.sale_price && p.sale_price < p.price) ? p.sale_price : p.price;
   let html = shell;
@@ -305,7 +326,7 @@ function renderProduct(p) {
   `;
   html = html.replace(/<noscript>[\s\S]*?<\/noscript>/, `<noscript>${body}</noscript>`);
 
-  const outPath = resolve(DIST, "product", p.id, "index.html");
+  const outPath = resolve(DIST, "products", productSlug(p), "index.html");
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, html, "utf8");
 }
@@ -322,7 +343,7 @@ console.log(`[prerender] wrote ${productCount} product page(s).`);
 if (products.length) {
   const listItems = products.slice(0, 60).map(p => `
     <li style="margin-bottom:0.75rem;">
-      <a href="/product/${p.id}"><strong>${escapeAttr(p.name)}</strong></a>
+      <a href="/products/${productSlug(p)}"><strong>${escapeAttr(p.name)}</strong></a>
       — ${escapeAttr(productPrice(p))}
       ${p.category ? ` <em>(${escapeAttr(p.category)})</em>` : ""}
     </li>`).join("");
