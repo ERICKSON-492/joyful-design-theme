@@ -1,36 +1,50 @@
-# Cloudflare R2 setup for Ushanga Chronicles
+# Cloudflare R2 storage for Ushanga Chronicles
 
-The application now uses the Render API to issue short-lived presigned upload URLs. Browser clients upload directly to Cloudflare R2; the R2 secret is never exposed to the browser.
+The `ushanga` R2 bucket contains the migrated Supabase Storage objects. Object keys retain their original bucket as the first path segment, for example `product-images/products/example.webp` and `order-receipts/<order-id>/receipt.pdf`.
 
-## 1. Create the bucket and public hostname
+The app uses the Render API to issue short-lived presigned upload URLs. Browser clients upload directly to R2; the R2 secret is never exposed to the browser. Legacy public Supabase Storage URLs for allowed media buckets are translated to the matching R2 object key by the app. By default, public media is served through the API's read-only `/api/storage/public/` proxy, so a public R2 domain is not required.
 
-In Cloudflare Dashboard, open **R2 Object Storage**, create a bucket such as `ushanga-media`, and connect a custom domain such as `media.ushangachronicles.com`. Set `R2_PUBLIC_BASE_URL` to that HTTPS hostname. Do not use the S3 API endpoint as the public image URL.
+Two image URLs found in repository seed data were not present in the source bucket listing and are deliberately left pointing at their original Supabase URLs to avoid broken images: `product-images/categories/wear-it-1781032558106.jpg` and `product-images/hero/1780565881534.jpg`. Remove the corresponding exceptions in `src/lib/r2ObjectUrl.ts` once those objects are copied or the references are retired.
 
-Create an R2 API token with **Object Read & Write** access limited to this bucket. Keep the access key and secret only in Render environment variables.
+## 1. Configure the Render API environment
 
-## 2. Render environment variables
-
-Add these variables to the Node API service:
+Set these server-only variables on the Node API service:
 
 ```env
 R2_ACCOUNT_ID=your_cloudflare_account_id
 R2_ACCESS_KEY_ID=your_r2_access_key_id
 R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
-R2_BUCKET_NAME=ushanga-media
-R2_PUBLIC_BASE_URL=https://media.ushangachronicles.com
+R2_BUCKET_NAME=ushanga
 ```
+
+The R2 API token needs **Object Read & Write** access to the `ushanga` bucket. Keep the access key and secret only in server-side environment variables (for example, Render); do not add them to the frontend `.env` or a `VITE_` variable.
 
 The API exposes:
 
 - `POST /api/storage/upload-url` — authenticated users receive a URL valid for 10 minutes.
+- `GET /api/storage/public/<key>` — serves only allowlisted public-media prefixes from R2; `order-receipts` is explicitly excluded.
 - `POST /api/storage/delete` — authenticated users can delete objects they are authorized to manage.
 - `POST /api/storage/receipt-upload-url` — an order owner or admin receives a private upload URL and a seven-day signed download URL for that order's PDF receipt.
 
 Administrative folders (`product-images`, `site-images`, `custom-orders`, and `tribe-looks`) require a Neon user with the `admin` role. Review photos require a signed-in user. Receipts are restricted to the order owner or an admin.
 
-## 3. Configure R2 CORS
+## 2. Public image delivery and receipt privacy
 
-The bucket must allow the Cloudflare Pages origin to send the signed `PUT` request. Add a CORS rule similar to this in the R2 bucket settings, replacing the origins with the real production and preview domains:
+With no additional frontend setting, the app uses the API proxy for public media. This works with a private R2 bucket and prevents the `order-receipts/` objects from being served by that public-media route.
+
+**Do not enable public access on the `ushanga` bucket or point a public R2 domain at it while it contains `order-receipts/` objects.** R2 public access applies to the bucket, not just the image prefixes, and could expose receipts. If you later want CDN delivery via a custom domain, first move receipts into a separate private R2 bucket (and configure that bucket for the private receipt API), or put an access-controlled Worker in front of the mixed bucket.
+
+If you have completed that separation and want direct CDN image URLs, set this non-secret build-time variable on the frontend and rebuild:
+
+```env
+VITE_R2_PUBLIC_BASE_URL=https://media.example.com
+```
+
+The custom domain must serve the `ushanga` bucket and preserve the full key path. Leave the variable unset for the safe API-proxy default.
+
+## 3. Configure R2 CORS for browser uploads
+
+The bucket must allow the Cloudflare Pages origin to send the signed `PUT` request. Add a CORS rule similar to this in R2 bucket settings, replacing the origins with the real production and preview domains:
 
 ```json
 [
@@ -62,18 +76,14 @@ const { publicUrl } = await uploadToR2(
 )
 ```
 
-Store `publicUrl` in Neon. The browser first calls Render for a signed URL, then sends the file directly to R2. No R2 credential is bundled into the Vite frontend.
+Store `publicUrl` in Neon. The browser first calls the API for a signed URL, then sends the file directly to R2. No R2 credential is bundled into the Vite frontend. If R2 is unavailable, uploads fail instead of silently falling back to Supabase Storage.
 
-## 5. Private receipts
+## 5. Verification checklist
 
-Order receipts use the private receipt endpoint. They are not placed under the public media hostname and are never exposed as permanent public URLs.
-
-## 6. Verification checklist
-
-1. Set the five Render variables and redeploy the API.
+1. Set the four Render variables above and redeploy the API.
 2. Confirm `GET /api/health` returns `200`.
-3. Sign in through the site and upload an admin image.
-4. Confirm the browser sends `PUT` directly to the R2 signed URL and receives `200`.
-5. Confirm the returned `publicUrl` renders in a new browser tab.
-6. Confirm unauthenticated requests to `/api/storage/upload-url` return `403` and that a non-admin cannot request an administrative folder.
-7. All frontend Supabase Storage callers have now been migrated. Remove the Supabase client dependency only after the remaining Supabase database/function calls are migrated as a separate phase.
+3. Open a migrated `product-images/...` URL in the app; with the default configuration it should resolve through `/api/storage/public/`.
+4. Sign in through the site and upload an admin image. Confirm the browser sends `PUT` directly to the R2 signed URL and receives `200`.
+5. Confirm the returned image URL renders.
+6. Confirm unauthenticated requests to `/api/storage/upload-url` return `403`, non-admin users cannot request administrative folders, and `/api/storage/public/order-receipts/...` does not return a receipt.
+7. All frontend Supabase Storage upload callers should use `uploadToR2`. Supabase database/function calls are separate and are not removed by this storage migration.

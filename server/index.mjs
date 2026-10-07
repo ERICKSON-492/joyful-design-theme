@@ -22,7 +22,7 @@ const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'ushanga_session'
 const r2 = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME
   ? new S3Client({ region: 'auto', endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY } })
   : null
-const r2PublicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || '').replace(/\/$/, '')
+const publicR2MediaPrefixes = new Set(['product-images', 'site_images', 'site-images', 'review-photos', 'category-images', 'custom-orders', 'tribe-looks'])
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(body === undefined ? '' : JSON.stringify(body)) }
 const body = async (req) => { let raw = ''; for await (const chunk of req) raw += chunk; return raw ? JSON.parse(raw) : {} }
 const productFields = 'id,name,description,price,price_min,price_max,category,subcategory,image_url,image_urls,stock,is_active,is_preorder,preorder_label,low_stock_threshold,sale_price,sale_starts_at,sale_ends_at,created_at,updated_at'
@@ -203,8 +203,35 @@ async function handle(req, res, url) {
     const isAdmin = user?.role === 'admin'
     return handleFiles({ pool, req, res, url, json, user, isAdmin })
   }
+  if (req.method === 'GET' && url.pathname.startsWith('/api/storage/public/')) {
+    if (!r2) return json(res, 503, { error: 'R2 storage is not configured on the API.' })
+    let key
+    try { key = decodeURIComponent(url.pathname.slice('/api/storage/public/'.length)).replace(/^\/+/, '') }
+    catch { return json(res, 400, { error: 'Invalid object key.' }) }
+    const prefix = key.split('/')[0]
+    if (!key.includes('/') || !publicR2MediaPrefixes.has(prefix)) return json(res, 404, { error: 'Object not found.' })
+    try {
+      const object = await r2.send(new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }))
+      if (!object.Body) return json(res, 404, { error: 'Object not found.' })
+      const headers = {
+        'content-type': object.ContentType || 'application/octet-stream',
+        'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
+        'x-content-type-options': 'nosniff',
+      }
+      if (object.ContentLength != null) headers['content-length'] = String(object.ContentLength)
+      if (object.ETag) headers.etag = object.ETag
+      res.writeHead(200, headers)
+      object.Body.on('error', error => { console.error('R2 media stream failed:', error.message); res.destroy(error) })
+      object.Body.pipe(res)
+      return
+    } catch (error) {
+      if (['NoSuchKey', 'NotFound', 'NoSuchBucket'].includes(error?.name)) return json(res, 404, { error: 'Object not found.' })
+      console.error('R2 media read failed:', error?.message || error)
+      return json(res, 502, { error: 'Could not read the media object.' })
+    }
+  }
   if (req.method === 'POST' && url.pathname === '/api/storage/upload-url') {
-    if (!r2 || !r2PublicBaseUrl) return authJson(res, 503, { error: 'R2 storage is not configured on the API.' })
+    if (!r2) return authJson(res, 503, { error: 'R2 storage is not configured on the API.' })
     const b = await body(req); const folder = String(b.folder || ''); const user = await neonUser(req)
     const allowed = new Set(['product-images', 'site-images', 'review-photos', 'custom-orders', 'tribe-looks', 'order-receipts'])
     if (!allowed.has(folder)) return authJson(res, 400, { error: 'Unsupported storage folder.' })
@@ -214,7 +241,8 @@ async function handle(req, res, url) {
     const contentType = String(b.contentType || 'application/octet-stream').slice(0, 120); const size = Number(b.size || 0)
     if (key === `${folder}/` || size < 1 || size > 15 * 1024 * 1024) return authJson(res, 400, { error: 'Invalid file key or size.' })
     const uploadUrl = await getSignedUrl(r2, new PutObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key, ContentType: contentType }), { expiresIn: 600 })
-    return authJson(res, 200, { key, uploadUrl, publicUrl: `${r2PublicBaseUrl}/${key}` })
+    const publicUrl = `/api/storage/public/${key.split('/').map(encodeURIComponent).join('/')}`
+    return authJson(res, 200, { key, uploadUrl, publicUrl })
   }
   if (req.method === 'POST' && url.pathname === '/api/storage/delete') {
     if (!r2) return authJson(res, 503, { error: 'R2 storage is not configured on the API.' })

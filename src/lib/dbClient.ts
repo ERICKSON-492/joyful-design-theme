@@ -7,6 +7,7 @@
  */
 import { apiUrl } from './apiBase'
 import { getCurrentUser, logout } from './auth'
+import { migrateStorageUrls } from './r2ObjectUrl'
 
 type Result<T = any> = { data: T; error: { message: string; code?: string } | null; count?: number | null }
 
@@ -14,7 +15,7 @@ const request = async (path: string, init: RequestInit = {}): Promise<Result<any
   try {
     const res = await fetch(apiUrl(path), { credentials: 'include', ...init })
     const text = await res.text()
-    const parsed = text ? JSON.parse(text) : null
+    const parsed = text ? migrateStorageUrls(JSON.parse(text)) : null
     if (!res.ok) return { data: [], error: { message: parsed?.message || parsed?.error || res.statusText, code: parsed?.code } }
     return { data: Array.isArray(parsed) ? parsed : parsed ? [parsed] : [], error: null }
   } catch (e: any) {

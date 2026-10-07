@@ -1,4 +1,5 @@
 import { apiUrl } from './apiBase';
+import { migrateStorageUrls } from './r2ObjectUrl';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -36,7 +37,7 @@ export async function fetchPublicTable<T>(table: string, query: string, timeoutM
       throw new Error(`Public fetch failed for ${table}: ${response.status}`);
     }
 
-    return (await response.json()) as T[];
+    return migrateStorageUrls((await response.json()) as T[]);
   } finally {
     window.clearTimeout(timeoutId);
   }

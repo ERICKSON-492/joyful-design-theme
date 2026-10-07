@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { toast } from 'sonner'
+import { migrateStorageUrls } from '@/lib/r2ObjectUrl'
 
 export interface CartItem {
   id: string
@@ -34,7 +35,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem('ushanga-cart')
-      return saved ? JSON.parse(saved) : []
+      return saved ? migrateStorageUrls(JSON.parse(saved) as CartItem[]) : []
     } catch { return [] }
   })
   const [isOpen, setIsOpen] = useState(false)
