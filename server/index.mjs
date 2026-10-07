@@ -293,6 +293,38 @@ async function bootstrap() {
     catch (e) { console.error(`bootstrap: ${file} failed: ${e.message}`) }
   }
   await seedData(dir)
+  // Reconcile known heavy image references after seed data; suffix guards preserve admin replacements.
+  try {
+    const result = await pool.query(
+      `UPDATE public.category_images
+       SET image_url=$1
+       WHERE category='Wear It' AND image_url LIKE $2
+       RETURNING category`,
+      ['/media/categories/wear-it.webp', '%wear-it-1791370426397.jpg'],
+    )
+    console.log(`bootstrap: optimized Wear It image reference ${result.rowCount ? 'updated' : 'unchanged'}`)
+  } catch (e) {
+    console.error(`bootstrap: Wear It image reference reconciliation failed: ${e.message}`)
+  }
+  const optimizedProductImages = [
+    ['2b286be8-8647-422c-8c0d-5d9c73b71356', '/media/product-images/kenyan-flag-wide-beaded-bracelet.webp', '%/1783668784904-grgts.png'],
+    ['0ef80826-65b3-44bb-8471-b90935fc221f', '/media/product-images/atila-headpiece-necklace.webp', '%/1783700256809-swo65.png'],
+    ['cfecb6c7-4c2e-4416-b397-9e493bd9a82a', '/media/product-images/kenyan-flag-beaded-bracelet.webp', '%/1783668546045-olc0k.png'],
+  ]
+  for (const [id, imageUrl, originalSuffix] of optimizedProductImages) {
+    try {
+      const result = await pool.query(
+        `UPDATE public.products
+         SET image_url=$1, image_urls=array_replace(image_urls, image_url, $1)
+         WHERE id=$2 AND image_url LIKE $3
+         RETURNING id`,
+        [imageUrl, id, originalSuffix],
+      )
+      console.log(`bootstrap: optimized product image reference ${id} ${result.rowCount ? 'updated' : 'unchanged'}`)
+    } catch (e) {
+      console.error(`bootstrap: product image reference ${id} reconciliation failed: ${e.message}`)
+    }
+  }
   // Keep the four curated community gallery entries explicit and observable.
   // This also repairs an existing database if its historical seed file ran
   // before these rows were added.
