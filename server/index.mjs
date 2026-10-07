@@ -293,6 +293,33 @@ async function bootstrap() {
     catch (e) { console.error(`bootstrap: ${file} failed: ${e.message}`) }
   }
   await seedData(dir)
+  // Keep the four curated community gallery entries explicit and observable.
+  // This also repairs an existing database if its historical seed file ran
+  // before these rows were added.
+  try {
+    const curatedLooks = [
+      ['d54b4876-a131-41ae-8d17-8c12de6711b1', '/media/tribe-looks/tess.jpeg', 'Tess', 'Beaded Dress'],
+      ['cbab7d4f-6d94-4cbb-a39a-0fb205c71b8f', '/media/tribe-looks/anne.jpeg', 'Anne', 'Beaded Bracelet'],
+      ['f77e0ad0-47ea-4b5d-9351-21e6e15d65e7', '/media/tribe-looks/luna.jpeg', 'Luna', 'Beaded Dog Collar'],
+      ['c34d8b5e-83dc-46d9-84df-8d90a384f2c3', '/media/tribe-looks/amani.jpg', 'Amani K.', 'Layered Beaded Necklace'],
+    ]
+    const result = await pool.query(
+      `INSERT INTO public.tribe_looks (id, user_id, image_url, name, piece_name, status)
+       SELECT id::uuid, NULL, image_url, name, piece_name, 'approved'
+       FROM unnest($1::text[], $2::text[], $3::text[], $4::text[])
+         AS looks(id, image_url, name, piece_name)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        curatedLooks.map(([id]) => id),
+        curatedLooks.map(([, imageUrl]) => imageUrl),
+        curatedLooks.map(([, , name]) => name),
+        curatedLooks.map(([, , , pieceName]) => pieceName),
+      ],
+    )
+    console.log(`bootstrap: curated tribe looks inserted ${result.rowCount}/${curatedLooks.length}`)
+  } catch (e) {
+    console.error(`bootstrap: curated tribe looks failed: ${e.message}`)
+  }
   // Promote accounts listed in ADMIN_EMAILS (comma-separated) to admin at boot,
   // so the owner can regain admin access on a fresh database without SQL access.
   const adminEmails = String(process.env.ADMIN_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean)
