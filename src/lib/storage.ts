@@ -10,6 +10,33 @@ export interface R2UploadResult {
 const LEGACY_BUCKET = 'product-images'
 const FALLBACK_MARKER = '#supabase-fallback'
 const ALLOW_LEGACY_FALLBACK = true
+const MAX_IMAGE_UPLOAD_BYTES = 1_500_000
+const MAX_IMAGE_EDGE = 1800
+const OPTIMIZABLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
+
+async function optimizeImageUpload(file: Blob): Promise<Blob> {
+  if (!OPTIMIZABLE_IMAGE_TYPES.has(file.type) || file.size <= MAX_IMAGE_UPLOAD_BYTES || typeof createImageBitmap === 'undefined') return file
+
+  const bitmap = await createImageBitmap(file)
+  try {
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+    const context = canvas.getContext('2d')
+    if (!context) return file
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', 0.82))
+    return blob?.type === 'image/webp' && blob.size < file.size ? blob : file
+  } finally {
+    bitmap.close()
+  }
+}
+
+function webpObjectKey(key: string) {
+  return /\.[a-z0-9]+$/i.test(key) ? key.replace(/\.[^.]+$/, '.webp') : `${key}.webp`
+}
 
 function legacyStorageKey(folder: string, key: string) {
   const prefix = folder === 'site-images' ? 'site-content' : folder
@@ -35,6 +62,17 @@ function canFallback(folder: string) {
 }
 
 export async function uploadToR2(folder: string, file: Blob, key: string, contentType = file.type || 'application/octet-stream'): Promise<R2UploadResult> {
+  let uploadFile = file
+  try {
+    uploadFile = await optimizeImageUpload(file)
+    if (uploadFile !== file) {
+      key = webpObjectKey(key)
+      contentType = 'image/webp'
+    }
+  } catch (error) {
+    console.warn('Image optimization skipped:', error)
+  }
+
   let signResponse: Response
   let signed: Record<string, unknown>
   try {
@@ -42,16 +80,16 @@ export async function uploadToR2(folder: string, file: Blob, key: string, conten
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ folder, key, contentType, size: file.size }),
+      body: JSON.stringify({ folder, key, contentType, size: uploadFile.size }),
     })
     signed = await signResponse.json().catch(() => ({}))
   } catch (error) {
-    if (canFallback(folder)) return uploadToLegacySupabase(folder, file, key, contentType)
+    if (canFallback(folder)) return uploadToLegacySupabase(folder, uploadFile, key, contentType)
     throw error
   }
   if (!signResponse.ok) {
     if (signResponse.status >= 500 && canFallback(folder)) {
-      return uploadToLegacySupabase(folder, file, key, contentType)
+      return uploadToLegacySupabase(folder, uploadFile, key, contentType)
     }
     throw new Error(typeof signed.error === 'string' ? signed.error : 'Could not prepare the upload')
   }
@@ -65,15 +103,15 @@ export async function uploadToR2(folder: string, file: Blob, key: string, conten
     uploadResponse = await fetch(uploadUrl, {
       method: 'PUT',
       headers: { 'content-type': contentType },
-      body: file,
+      body: uploadFile,
     })
   } catch (error) {
-    if (canFallback(folder)) return uploadToLegacySupabase(folder, file, key, contentType)
+    if (canFallback(folder)) return uploadToLegacySupabase(folder, uploadFile, key, contentType)
     throw error
   }
   if (!uploadResponse.ok) {
     if (uploadResponse.status >= 500 && canFallback(folder)) {
-      return uploadToLegacySupabase(folder, file, key, contentType)
+      return uploadToLegacySupabase(folder, uploadFile, key, contentType)
     }
     throw new Error('Cloudflare R2 upload failed')
   }
