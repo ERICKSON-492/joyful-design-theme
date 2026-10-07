@@ -1,7 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useSEO } from '@/hooks/useSEO'
+import { useSiteContent } from '@/hooks/useSiteContent'
 
 export default function WholesalePage() {
+  const content = useSiteContent('wholesale_intro')
+  const title = content?.title?.trim() ? content.title : 'Wholesale & Gifting'
+  const summary = content?.subtitle?.trim() ? content.subtitle : 'Bulk orders, corporate gifting, and event branding - all handcrafted with the same care and quality as every individual piece.'
   useSEO(
     'Wholesale & Corporate Gifting',
     'Bulk orders, corporate gifting, and event branding — handcrafted African jewelry and decor from Ushanga Chronicles, Nairobi.',
@@ -11,13 +15,14 @@ export default function WholesalePage() {
     <div className="bg-background">
       <section className="py-16 md:py-24 bg-card">
         <div className="container mx-auto px-4 text-center max-w-3xl">
+          {content?.image_url && <img src={content.image_url} alt="Ushanga Chronicles wholesale and gifting" className="w-full max-h-80 object-cover rounded-lg mb-8" loading="lazy" />}
           <h1 className="font-display text-4xl md:text-6xl font-bold text-foreground mb-6">
-            Wholesale & Gifting
+            {title}
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Bulk orders, corporate gifting, and event branding - all handcrafted with 
-            the same care and quality as every individual piece.
+            {summary}
           </p>
+          {content?.body?.trim() && <p className="text-muted-foreground text-base leading-relaxed mt-4">{content.body}</p>}
         </div>
       </section>
 

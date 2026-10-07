@@ -1,8 +1,16 @@
 import { Link } from 'react-router-dom'
 import { Instagram, Facebook, Phone, Mail } from 'lucide-react'
 import { InstallAppButton } from './InstallAppButton'
+import { useSiteContent } from '@/hooks/useSiteContent'
 
 export function Footer() {
+  const brand = useSiteContent('footer_brand')
+  const contact = useSiteContent('footer_contact')
+  const brandDescription = brand?.body ?? 'One bead. A thousand stories. Handcrafted African jewelry, home decor, and accessories made in Nairobi, Kenya.'
+  const contactTitle = contact?.title?.trim() ? contact.title : 'Start a Conversation'
+  const contactLines = (contact ? contact.body : '+254 748 207 000\nadmin@ushangachronicles.com\nNairobi, Kenya')
+    .split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+
   return (
     <footer className="bg-foreground text-white/70 pt-16 pb-8">
       <div className="container mx-auto px-4">
@@ -12,10 +20,8 @@ export function Footer() {
             <Link to="/" className="block mb-4">
               <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-14 w-auto rounded-md" />
             </Link>
-            <p className="text-sm leading-relaxed mb-4">
-              One bead. A thousand stories. Handcrafted African jewelry, home decor, 
-              and accessories made in Nairobi, Kenya.
-            </p>
+            {brand?.title && <h3 className="text-white font-display font-semibold mb-2">{brand.title}</h3>}
+            <p className="text-sm leading-relaxed mb-4">{brandDescription}</p>
             <div className="flex items-center gap-4">
               <a href="https://www.instagram.com/ushanga_chronicles/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-primary transition-colors">
                 <Instagram className="w-5 h-5" />
@@ -62,11 +68,14 @@ export function Footer() {
 
           {/* Contact */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-4 uppercase tracking-wider">Start a Conversation</h4>
+            <h4 className="text-white font-bold text-sm mb-4 uppercase tracking-wider">{contactTitle}</h4>
+            {contact?.subtitle && <p className="text-xs text-white/60 mb-3">{contact.subtitle}</p>}
             <ul className="space-y-2 text-sm">
-              <li>+254 748 207 000</li>
-              <li>admin@ushangachronicles.com</li>
-              <li>Nairobi, Kenya</li>
+              {contactLines.map((line, index) => {
+                const email = line.includes('@')
+                const phone = /^[+\d][\d\s().-]+$/.test(line)
+                return <li key={`${line}-${index}`}>{email ? <a href={`mailto:${line}`} className="hover:text-primary transition-colors">{line}</a> : phone ? <a href={`tel:${line.replace(/[^+\d]/g, '')}`} className="hover:text-primary transition-colors">{line}</a> : line}</li>
+              })}
             </ul>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { HeroSection } from '@/components/HeroSection'
+import { HomepageIntro } from '@/components/HomepageIntro'
 import { useSEO } from '@/hooks/useSEO'
 
 // Lazy-load below-the-fold sections for faster initial paint
@@ -23,6 +24,7 @@ export default function HomePage() {
   return (
     <>
       <HeroSection />
+      <HomepageIntro />
       <Suspense fallback={<SectionFallback className="min-h-[500px] md:min-h-[600px]" />}>
         <ShopByCategory />
       </Suspense>

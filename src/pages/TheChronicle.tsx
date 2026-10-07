@@ -48,6 +48,7 @@ export default function TheChronicle() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [posts, setPosts] = useState<ChroniclePost[]>([])
+  const [storyboard, setStoryboard] = useState<SectionContent | null>(null)
   
   const cacheBustTimestamp = useMemo(() => Date.now(), [])
 
@@ -60,7 +61,7 @@ export default function TheChronicle() {
         const [data, postData] = await Promise.all([
           fetchPublicTable<{ section_key: string; title: string; body: string; image_url: string | null }>(
             'site_content',
-            'select=section_key,title,body,image_url&section_key=in.(the_chronicle_begins,about_where_it_began,about_the_craft)',
+            'select=section_key,title,body,image_url&section_key=in.(the_chronicle_begins,about_where_it_began,about_the_craft,about_storyboard)',
             8000,
           ),
           fetchPublicTable<ChroniclePost>('chronicle_posts', 'select=*&is_published=eq.true&order=published_at.desc&limit=12', 8000),
@@ -68,7 +69,7 @@ export default function TheChronicle() {
         if (!isMounted) return
         setPosts(postData || [])
         if (data && data.length > 0) {
-          const updatedContent = { ...content }
+          const updatedContent = { origin: fallbackOrigin, craft: fallbackCraft }
           
           data.forEach(row => {
             if (row.section_key === 'about_where_it_began' || row.section_key === 'the_chronicle_begins') {
@@ -86,6 +87,9 @@ export default function TheChronicle() {
                 // Uses the live uploaded dashboard image explicitly
                 image_url: row.image_url || null
               }
+            }
+            if (row.section_key === 'about_storyboard') {
+              setStoryboard({ title: row.title, body: row.body, image_url: row.image_url })
             }
           })
           
@@ -224,6 +228,16 @@ export default function TheChronicle() {
           </div>
         </div>
       </section>
+
+      {storyboard && (storyboard.title || storyboard.body || storyboard.image_url) && (
+        <section className="py-12 md:py-16">
+          <div className="container mx-auto px-4 max-w-5xl">
+            {storyboard.title && <h2 className="font-display text-2xl md:text-4xl font-bold text-foreground text-center mb-6">{storyboard.title}</h2>}
+            {storyboard.image_url && <img src={getImageUrl(storyboard.image_url) || undefined} alt={storyboard.title || 'Ushanga Chronicles behind the scenes'} className="w-full max-h-[34rem] object-cover rounded-lg" loading="lazy" />}
+            {storyboard.body && <p className="text-muted-foreground text-center leading-relaxed max-w-3xl mx-auto mt-5 whitespace-pre-line">{storyboard.body}</p>}
+          </div>
+        </section>
+      )}
 
       {posts.length > 0 && (
         <section className="py-16 md:py-24">

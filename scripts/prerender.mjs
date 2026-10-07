@@ -72,6 +72,24 @@ async function fetchProducts() {
   }
 }
 
+async function fetchApprovedReviews() {
+  try {
+    const url = new URL(`${API_BASE.replace(/\/+$/, "")}/api/db/product_reviews`);
+    url.searchParams.set("select", "product_id,customer_name,rating,title,comment,created_at");
+    url.searchParams.set("status", "eq.approved");
+    url.searchParams.set("limit", "2000");
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[prerender] approved reviews fetch failed: ${res.status}`);
+      return [];
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("[prerender] approved reviews fetch error:", err.message);
+    return [];
+  }
+}
+
 function fmtKES(n) {
   if (n == null) return "";
   return `KES ${Number(n).toLocaleString("en-KE")}`;
@@ -270,8 +288,17 @@ console.log(`[prerender] wrote ${count} static route(s).`);
 // Non-JS crawlers (Claude, ChatGPT, older bots) get real product
 // names, prices, images, and descriptions in the static HTML.
 // -------------------------------------------------------------
-const products = await fetchProducts();
+const [products, approvedReviews] = await Promise.all([fetchProducts(), fetchApprovedReviews()]);
 console.log(`[prerender] fetched ${products.length} product(s) from backend.`);
+const reviewsByProduct = new Map();
+for (const review of approvedReviews) {
+  const rating = Number(review.rating);
+  if (!review.product_id || !review.comment || !Number.isFinite(rating) || rating < 1 || rating > 5) continue;
+  const items = reviewsByProduct.get(review.product_id) || [];
+  items.push(review);
+  reviewsByProduct.set(review.product_id, items);
+}
+console.log(`[prerender] fetched approved reviews for ${reviewsByProduct.size} product(s).`);
 
 function renderProduct(p) {
   const title = `${p.name} | Ushanga Chronicles`;
@@ -281,6 +308,10 @@ function renderProduct(p) {
   const canonical = `${SITE}/products/${productSlug(p)}`;
   const img = p.image_url || `${SITE}/logo.jpeg`;
   const priceNum = (p.sale_price && p.sale_price < p.price) ? p.sale_price : p.price;
+  const productReviews = reviewsByProduct.get(p.id) || [];
+  const averageRating = productReviews.length
+    ? productReviews.reduce((sum, review) => sum + Number(review.rating), 0) / productReviews.length
+    : 0;
   let html = shell;
 
   html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${escapeAttr(title)}</title>`);
@@ -308,10 +339,34 @@ function renderProduct(p) {
       availability: p.is_preorder ? "https://schema.org/PreOrder" : (p.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"),
       url: canonical,
     },
+    ...(productReviews.length > 0 ? {
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: Number(averageRating.toFixed(2)),
+        reviewCount: productReviews.length,
+        bestRating: 5,
+        worstRating: 1,
+      },
+      review: productReviews.slice(0, 5).map(review => ({
+        "@type": "Review",
+        name: review.title || undefined,
+        reviewBody: review.comment,
+        reviewRating: { "@type": "Rating", ratingValue: Number(review.rating), bestRating: 5, worstRating: 1 },
+        author: { "@type": "Person", name: String(review.customer_name || "Customer").trim().slice(0, 99) },
+        datePublished: review.created_at ? new Date(review.created_at).toISOString() : undefined,
+      })),
+    } : {}),
   };
-  const jsonLdTag = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
+  const safeJsonLd = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
+  const jsonLdTag = `<script type="application/ld+json">${safeJsonLd}</script>`;
   html = html.replace("</head>", `${jsonLdTag}\n</head>`);
 
+  const reviewsBody = productReviews.length ? `
+      <section style="margin-top:2rem;padding-top:1rem;border-top:1px solid #ddd;">
+        <h2>Customer reviews</h2>
+        <p><strong>${averageRating.toFixed(1)} out of 5</strong> from ${productReviews.length} approved review${productReviews.length === 1 ? "" : "s"}.</p>
+        ${productReviews.slice(0, 3).map(review => `<article style="margin:1rem 0;"><p><strong>${escapeAttr(String(review.customer_name || "Customer"))}</strong> · ${Number(review.rating)}/5</p>${review.title ? `<h3>${escapeAttr(String(review.title))}</h3>` : ""}<p>${escapeAttr(String(review.comment))}</p></article>`).join("")}
+      </section>` : "";
   const body = `
     <article style="max-width:760px;margin:2rem auto;padding:1.5rem;font-family:Georgia,serif;color:#1A1A1A;">
       <p><a href="/shop">← Back to shop</a></p>
@@ -321,6 +376,7 @@ function renderProduct(p) {
       ${p.category ? `<p><strong>Category:</strong> ${escapeAttr(p.category)}</p>` : ""}
       ${p.is_preorder ? `<p><strong>Pre-order</strong></p>` : ""}
       ${p.description ? `<p>${escapeAttr(p.description)}</p>` : `<p>Handmade in Nairobi, Kenya by Ushanga Chronicles artisans. Every piece tells a story.</p>`}
+      ${reviewsBody}
       <p><a href="/shop">Shop more from Ushanga Chronicles</a> · <a href="/custom-order">Create your own custom piece</a></p>
     </article>
   `;

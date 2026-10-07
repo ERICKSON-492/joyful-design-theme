@@ -8,6 +8,7 @@ import { useCurrency } from '@/contexts/CurrencyContext'
 import { productThumb, productSrcSet, GRID_SIZES, handleImageFallback } from '@/lib/imageUrl'
 import { getActiveSalePrice } from '@/lib/salePrice'
 import { productPath } from '@/lib/slug'
+import { useSiteContent } from '@/hooks/useSiteContent'
 
 interface Product {
   id: string
@@ -30,6 +31,7 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function FeaturedProducts() {
+  const sectionContent = useSiteContent('featured_products_header')
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [offset, setOffset] = useState(0)
   const [hasLoaded, setHasLoaded] = useState(false)
@@ -78,11 +80,19 @@ export function FeaturedProducts() {
         allProducts[(offset + i) % allProducts.length]
       )
 
+  const sectionHeader = (
+    <div className="text-center mb-14">
+      <h2 className="font-display text-3xl md:text-5xl font-bold text-foreground">{sectionContent?.title ?? 'Crafted This Week'}</h2>
+      {sectionContent?.subtitle && <p className="text-primary font-display text-lg mt-2">{sectionContent.subtitle}</p>}
+      {sectionContent?.body && <p className="text-muted-foreground max-w-2xl mx-auto mt-3">{sectionContent.body}</p>}
+    </div>
+  )
+
   if (!hasLoaded && products.length === 0) {
     return (
       <section className="py-16 md:py-24 bg-background">
         <div className="container mx-auto px-4">
-          <h2 className="font-display text-3xl md:text-5xl font-bold text-center text-foreground mb-14">Crafted This Week</h2>
+          {sectionHeader}
           <p className="text-center text-muted-foreground">Loading latest pieces...</p>
         </div>
       </section>
@@ -99,7 +109,7 @@ export function FeaturedProducts() {
   return (
     <section className="py-16 md:py-24 bg-background">
       <div className="container mx-auto px-4">
-        <h2 className="font-display text-3xl md:text-5xl font-bold text-center text-foreground mb-14">Crafted This Week</h2>
+        {sectionHeader}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto">
           {products.map((product, i) => (
             <AnimatePresence key={`slot-${i}`} mode="wait">
