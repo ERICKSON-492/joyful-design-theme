@@ -6,6 +6,8 @@ The app uses the Render API to issue short-lived presigned upload URLs. Browser 
 
 Two image URLs found in repository seed data were not present in the source bucket listing and are deliberately left pointing at their original Supabase URLs to avoid broken images: `product-images/categories/wear-it-1781032558106.jpg` and `product-images/hero/1780565881534.jpg`. Remove the corresponding exceptions in `src/lib/r2ObjectUrl.ts` once those objects are copied or the references are retired.
 
+For faster catalog delivery, the 53 legacy product images above 750 KB have WebP copies under `public/media/product-images/`. `server/optimized-product-images.json` maps their original R2-backed URLs to those static CDN paths; startup updates matching primary and gallery references only. The original objects remain untouched in R2, and future eligible uploads are compressed by the shared upload helper.
+
 ## 1. Configure the Render API environment
 
 Set these server-only variables on the Node API service:
