@@ -56,6 +56,31 @@ INSERT INTO public.category_images (id,category,image_url,created_at,updated_at)
 INSERT INTO public.category_images (id,category,image_url,created_at,updated_at) VALUES ('6080a55b-397a-4fdf-ac8a-3ed7ca0a06f3','Live With It','https://hdzprvaypoylqpmuldfx.supabase.co/storage/v1/object/public/product-images/categories/live-with-it-1778233137398.jpg','2026-05-08T09:38:59.311379+00:00','2026-05-08T09:38:59.311379+00:00') ON CONFLICT DO NOTHING;
 INSERT INTO public.category_images (id,category,image_url,created_at,updated_at) VALUES ('7aee9d01-b6c2-40d0-9421-f328a29fc213','Wear It','https://hdzprvaypoylqpmuldfx.supabase.co/storage/v1/object/public/product-images/categories/wear-it-1781032558106.jpg','2026-04-09T08:18:55.975559+00:00','2026-06-09T19:15:56.89449+00:00') ON CONFLICT DO NOTHING;
 
+-- Switch only the known oversized upload to its optimized static copy; future admin uploads are left untouched.
+UPDATE public.category_images
+SET image_url='/media/categories/wear-it.webp'
+WHERE category='Wear It'
+  AND image_url='/api/storage/public/product-images/categories/wear-it-1791370426397.jpg';
+
+-- Replace only these known oversized originals; exact-URL guards preserve later admin changes.
+UPDATE public.products
+SET image_url='/media/product-images/kenyan-flag-wide-beaded-bracelet.webp',
+    image_urls=array_replace(image_urls, 'https://qokwavhqqqzjbmyshhfo.supabase.co/storage/v1/object/public/product-images/1783668784904-grgts.png', '/media/product-images/kenyan-flag-wide-beaded-bracelet.webp')
+WHERE id='2b286be8-8647-422c-8c0d-5d9c73b71356'
+  AND image_url='https://qokwavhqqqzjbmyshhfo.supabase.co/storage/v1/object/public/product-images/1783668784904-grgts.png';
+
+UPDATE public.products
+SET image_url='/media/product-images/atila-headpiece-necklace.webp',
+    image_urls=array_replace(image_urls, 'https://qokwavhqqqzjbmyshhfo.supabase.co/storage/v1/object/public/product-images/1783700256809-swo65.png', '/media/product-images/atila-headpiece-necklace.webp')
+WHERE id='0ef80826-65b3-44bb-8471-b90935fc221f'
+  AND image_url='https://qokwavhqqqzjbmyshhfo.supabase.co/storage/v1/object/public/product-images/1783700256809-swo65.png';
+
+UPDATE public.products
+SET image_url='/media/product-images/kenyan-flag-beaded-bracelet.webp',
+    image_urls=array_replace(image_urls, 'https://qokwavhqqqzjbmyshhfo.supabase.co/storage/v1/object/public/product-images/1783668546045-olc0k.png', '/media/product-images/kenyan-flag-beaded-bracelet.webp')
+WHERE id='cfecb6c7-4c2e-4416-b397-9e493bd9a82a'
+  AND image_url='https://qokwavhqqqzjbmyshhfo.supabase.co/storage/v1/object/public/product-images/1783668546045-olc0k.png';
+
 -- site_content: 7 rows
 INSERT INTO public.site_content (id,section_key,title,subtitle,body,image_url,created_at,updated_at) VALUES ('c40602c4-81c9-4a97-b67c-11f612ecb4ab','custom_order_teaser','Something made just for you',NULL,'Every piece tells your story. Commission a custom creation from Linda. From imagination to your hands handcrafted with intention.',NULL,'2026-05-11T07:06:35.679754+00:00','2026-05-11T07:06:35.679754+00:00') ON CONFLICT DO NOTHING;
 INSERT INTO public.site_content (id,section_key,title,subtitle,body,image_url,created_at,updated_at) VALUES ('63a59c33-9ff3-4aba-b7bf-e6f2ba662495','homepage_intro','',NULL,'Welcome to Ushanga Chronicles',NULL,'2026-05-11T07:07:16.539297+00:00','2026-05-11T07:07:16.539297+00:00') ON CONFLICT DO NOTHING;
