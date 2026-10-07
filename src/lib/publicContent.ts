@@ -22,6 +22,7 @@ export async function fetchPublicTable<T>(table: string, query: string, timeoutM
       products: 'products',
       product_variants: 'product-variants',
       site_content: 'db/site_content',
+      category_images: 'db/category_images',
       chronicle_posts: 'db/chronicle_posts',
       tribe_looks: 'db/tribe_looks',
     };
