@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/dbClient'
 import { deleteFromR2, uploadToR2 } from '@/lib/storage'
+import { storageKeyFromPublicUrl } from '@/lib/r2ObjectUrl'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -256,9 +257,10 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
     }
     if (!confirm('Are you sure you want to remove this image?')) return
     try {
-      const url = new URL(imageUrl)
-      const key = url.pathname.replace(/^\//, '')
-      if (key.startsWith('site-images/')) await deleteFromR2(key)
+      const key = storageKeyFromPublicUrl(imageUrl)
+      if (key && (key.startsWith('site-images/') || key.startsWith('site-content/') || key.startsWith('product-images/site-content/'))) {
+        await deleteFromR2(key)
+      }
       const { data, error: updateError } = await supabase.from('site_content').update({ image_url: null }).eq('id', contentId).select('*').single()
       if (updateError) {
         toast.error('Failed to remove image from content')

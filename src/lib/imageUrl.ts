@@ -14,6 +14,8 @@
  * URL untouched, which always works.
  */
 
+import { migratedStorageUrl } from './r2ObjectUrl'
+
 const TRANSFORMS_ENABLED = false
 
 const STORAGE_OBJECT = '/storage/v1/object/public/'
@@ -26,6 +28,8 @@ export function isTransformable(url: string | null | undefined): boolean {
 /** Always returns the original, always-working public object URL. */
 export function originalImageUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined
+  const migrated = migratedStorageUrl(url)
+  if (migrated && migrated !== url) return migrated
   // If a /render/image/ URL somehow ends up stored/passed in, convert it
   // back to the plain object URL rather than trying to "undo" query params.
   return url.includes(STORAGE_RENDER) ? url.replace(STORAGE_RENDER, STORAGE_OBJECT).split('?')[0] : url
@@ -53,7 +57,8 @@ export function productSrcSet(
 /** Default src for a thumbnail: a pre-sized variant when available, otherwise the original. */
 export function productThumb(url: string | null | undefined, width = 400): string | undefined {
   if (!url) return undefined
-  return isTransformable(url) ? resizedImage(url, width) : url
+  const original = originalImageUrl(url)
+  return original && isTransformable(original) ? resizedImage(original, width) : original
 }
 
 /**
