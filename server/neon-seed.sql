@@ -56,13 +56,13 @@ INSERT INTO public.category_images (id,category,image_url,created_at,updated_at)
 INSERT INTO public.category_images (id,category,image_url,created_at,updated_at) VALUES ('6080a55b-397a-4fdf-ac8a-3ed7ca0a06f3','Live With It','https://hdzprvaypoylqpmuldfx.supabase.co/storage/v1/object/public/product-images/categories/live-with-it-1778233137398.jpg','2026-05-08T09:38:59.311379+00:00','2026-05-08T09:38:59.311379+00:00') ON CONFLICT DO NOTHING;
 INSERT INTO public.category_images (id,category,image_url,created_at,updated_at) VALUES ('7aee9d01-b6c2-40d0-9421-f328a29fc213','Wear It','https://hdzprvaypoylqpmuldfx.supabase.co/storage/v1/object/public/product-images/categories/wear-it-1781032558106.jpg','2026-04-09T08:18:55.975559+00:00','2026-06-09T19:15:56.89449+00:00') ON CONFLICT DO NOTHING;
 
--- Switch only the known oversized upload to its optimized static copy; future admin uploads are left untouched.
+-- Switch the known oversized upload to its optimized static copy and leave later admin uploads untouched.
 UPDATE public.category_images
 SET image_url='/media/categories/wear-it.webp'
 WHERE category='Wear It'
   AND image_url='/api/storage/public/product-images/categories/wear-it-1791370426397.jpg';
 
--- Replace only these known oversized originals; exact-URL guards preserve later admin changes.
+-- Replace the known oversized originals and preserve later admin changes with exact-URL guards.
 UPDATE public.products
 SET image_url='/media/product-images/kenyan-flag-wide-beaded-bracelet.webp',
     image_urls=array_replace(image_urls, 'https://qokwavhqqqzjbmyshhfo.supabase.co/storage/v1/object/public/product-images/1783668784904-grgts.png', '/media/product-images/kenyan-flag-wide-beaded-bracelet.webp')

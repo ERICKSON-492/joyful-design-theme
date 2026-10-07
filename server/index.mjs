@@ -339,6 +339,12 @@ function splitSqlStatements(source) {
 
   for (let i = 0; i < source.length; i += 1) {
     const char = source[i]
+    if (!inSingleQuote && char === '-' && source[i + 1] === '-') {
+      const lineEnd = source.indexOf('\n', i)
+      if (lineEnd === -1) break
+      i = lineEnd - 1
+      continue
+    }
     if (char !== "'") {
       if (char === ';' && !inSingleQuote) {
         const statement = source.slice(start, i + 1).split('\n')
