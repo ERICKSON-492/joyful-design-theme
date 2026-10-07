@@ -12,6 +12,7 @@ interface Product {
   price: number
   price_min: number | null
   image_url: string | null
+  category: string
 }
 
 export function RecentlyViewed({ excludeId }: { excludeId?: string }) {
@@ -24,7 +25,7 @@ export function RecentlyViewed({ excludeId }: { excludeId?: string }) {
     const filtered = ids.filter(id => id !== excludeId).slice(0, 4)
     if (filtered.length === 0) { setProducts([]); return }
     const list = filtered.map(id => `"${id}"`).join(',')
-    fetchPublicTable<Product>('products', `select=id,name,price,price_min,image_url&id=in.(${list})&is_active=eq.true`)
+    fetchPublicTable<Product>('products', `select=id,name,price,price_min,image_url,category&id=in.(${list})&is_active=eq.true`)
       .then(data => {
         if (!data) return
         // preserve order from localStorage

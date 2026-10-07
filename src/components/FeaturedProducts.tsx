@@ -18,6 +18,7 @@ interface Product {
   sale_ends_at: string | null
   image_url: string | null
   stock: number
+  category: string
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -44,7 +45,7 @@ export function FeaturedProducts() {
       try {
         const data = await fetchPublicTable<Product>(
           'products',
-          'select=id,name,price,sale_price,sale_starts_at,sale_ends_at,image_url,stock&is_active=eq.true&order=created_at.desc&limit=24'
+          'select=id,name,price,sale_price,sale_starts_at,sale_ends_at,image_url,stock,category&is_active=eq.true&order=created_at.desc&limit=24'
         )
 
         if (!mounted) return

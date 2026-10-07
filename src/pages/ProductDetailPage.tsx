@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock, ArrowLeft, Minus, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
@@ -41,8 +41,9 @@ interface Variant {
 }
 
 export default function ProductDetailPage() {
-  const { id, slug } = useParams<{ id?: string; slug?: string }>()
+  const { id, category: routeCategory, slug } = useParams<{ id?: string; category?: string; slug?: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const routeKey = slug || id
   const { addToCart } = useCart()
   const { format } = useCurrency()
@@ -68,7 +69,7 @@ export default function ProductDetailPage() {
     product?.description
       ? product.description.replace(/\s+/g, ' ').trim().slice(0, 155)
       : 'Handcrafted African jewelry and decor from Ushanga Chronicles, Nairobi.',
-    product ? productPath(product) : (routeKey ? `/products/${routeKey}` : undefined),
+    product ? productPath(product) : (routeKey ? (routeCategory ? `/products/${routeCategory}/${routeKey}` : `/products/${routeKey}`) : undefined),
     !loading && !product // unknown/invalid product id (e.g. old/legacy links) should never be indexed
   )
 
@@ -77,8 +78,11 @@ export default function ProductDetailPage() {
   }, [product, trackView])
 
   useEffect(() => {
-    if (product && id) navigate(productPath(product), { replace: true })
-  }, [product, id, navigate])
+    if (!product || !routeKey) return
+    if (product.id !== routeKey && productSlug(product) !== routeKey) return
+    const canonicalPath = productPath(product)
+    if (location.pathname !== canonicalPath) navigate(canonicalPath, { replace: true })
+  }, [product, routeKey, location.pathname, navigate])
 
   // Inject Product JSON-LD structured data for search engines
   useEffect(() => {
