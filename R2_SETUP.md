@@ -76,7 +76,7 @@ const { publicUrl } = await uploadToR2(
 )
 ```
 
-Store `publicUrl` in Neon. The browser first calls the API for a signed URL, then sends the file directly to R2. No R2 credential is bundled into the Vite frontend. If R2 is unavailable, uploads fail instead of silently falling back to Supabase Storage.
+Store `publicUrl` in Neon. The browser first calls the API for a signed URL, then sends the file directly to R2. No R2 credential is bundled into the Vite frontend. For non-receipt media, uploads fall back to the legacy Supabase Storage bucket when the API/signing request has a network or server error (`5xx`), or the R2 upload request has a network or server error (`5xx`). The fallback URL is tagged so the app will not redirect it to a missing R2 key. Client errors (`4xx`) remain visible rather than silently falling back. Private receipt uploads never fall back to Supabase.
 
 ## 5. Verification checklist
 

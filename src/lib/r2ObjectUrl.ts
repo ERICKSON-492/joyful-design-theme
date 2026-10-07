@@ -25,6 +25,7 @@ const NOT_MIGRATED_KEYS = new Set([
 
 const PUBLIC_OBJECT_PATH = /^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/
 const configuredPublicBase = String(import.meta.env.VITE_R2_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')
+const SUPABASE_FALLBACK_MARKER = '#supabase-fallback'
 
 function encodeKey(key: string): string {
   return key.split('/').map((segment) => encodeURIComponent(segment)).join('/')
@@ -51,6 +52,8 @@ export function migratedStorageUrl(value: string | null | undefined): string | u
     return value
   }
 
+  // Supabase fallback uploads keep their original URL; fragments are not sent in HTTP.
+  if (parsed.hash === SUPABASE_FALLBACK_MARKER) return value
   const match = parsed.pathname.match(PUBLIC_OBJECT_PATH)
   if (!match) return value
 
@@ -67,6 +70,40 @@ export function migratedStorageUrl(value: string | null | undefined): string | u
 
   const rewritten = r2ObjectUrl(`${bucket}/${objectPath}`)
   return rewritten ? `${rewritten}${parsed.search}${parsed.hash}` : value
+}
+
+/** Extract a storage key from a Supabase, API-proxy, or direct R2 media URL. */
+export function storageKeyFromPublicUrl(value: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(value, typeof window === 'undefined' ? 'https://local.invalid' : window.location.origin)
+  } catch {
+    return null
+  }
+  const fallback = parsed.hash === SUPABASE_FALLBACK_MARKER
+  const supabaseMatch = parsed.pathname.match(PUBLIC_OBJECT_PATH)
+  if (supabaseMatch) {
+    let bucket: string
+    let objectPath: string
+    try {
+      bucket = decodeURIComponent(supabaseMatch[1])
+      objectPath = supabaseMatch[2].split('/').map((part) => decodeURIComponent(part)).join('/')
+    } catch {
+      return null
+    }
+    if (!PUBLIC_MEDIA_PREFIXES.has(bucket)) return null
+    return fallback ? `${objectPath}${SUPABASE_FALLBACK_MARKER}` : `${bucket}/${objectPath}`
+  }
+
+  const proxyMatch = parsed.pathname.match(/^\/api\/storage\/public\/(.+)$/)
+  const rawKey = proxyMatch?.[1] || parsed.pathname.replace(/^\/+/, '')
+  let key: string
+  try {
+    key = rawKey.split('/').map((part) => decodeURIComponent(part)).join('/')
+  } catch {
+    return null
+  }
+  return PUBLIC_MEDIA_PREFIXES.has(key.split('/')[0]) && key.includes('/') ? key : null
 }
 
 /** Normalize data responses without changing ordinary URLs or private receipt URLs. */

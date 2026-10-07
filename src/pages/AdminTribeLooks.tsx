@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
 import { getCurrentUser } from '@/lib/auth'
 import { deleteFromR2, uploadToR2 } from '@/lib/storage'
+import { storageKeyFromPublicUrl } from '@/lib/r2ObjectUrl'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { Check, X, Trash2, Upload, Loader2, Plus, Download } from 'lucide-react'
@@ -70,14 +71,7 @@ export default function AdminTribeLooks() {
 
   // Helper to extract bucket path from a public URL to facilitate storage cleanup
   const extractPathFromUrl = (url: string): string | null => {
-    try {
-      const parts = url.split('/storage/v1/object/public/product-images/')
-      if (parts.length > 1) return parts[1]
-      const pathname = new URL(url).pathname.replace(/^\//, '')
-      return pathname.startsWith('tribe-looks/') ? pathname : null
-    } catch {
-      return null
-    }
+    return storageKeyFromPublicUrl(url)
   }
 
   const deleteLook = async (look: TribeLook) => {
