@@ -8,6 +8,7 @@ import catTable from '@/assets/cat-table.jpg'
 import { ScrollReveal, StaggerContainer, StaggerItem } from './ScrollReveal'
 import { motion } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { useSiteContent } from '@/hooks/useSiteContent'
 
 const MotionLink = motion(Link)
 
@@ -53,6 +54,7 @@ interface CategoryImage {
 }
 
 export function ShopByCategory() {
+  const sectionContent = useSiteContent('shop_by_category_header')
   const [dbImages, setDbImages] = useState<Record<string, string>>({})
   const [imagesLoaded, setImagesLoaded] = useState(false)
   const [categoriesData] = useState(() => shuffle(categoriesBase))
@@ -74,11 +76,12 @@ export function ShopByCategory() {
         <ScrollReveal>
           <div className="text-center mb-12">
             <span className="text-primary font-semibold tracking-[0.3em] uppercase text-xs mb-3 block">
-              Categories
+              {sectionContent?.subtitle ?? 'Categories'}
             </span>
             <h2 className="font-display text-3xl md:text-5xl font-bold text-foreground">
-              Find Your Chronicle
+              {sectionContent?.title ?? 'Find Your Chronicle'}
             </h2>
+            {sectionContent?.body && <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">{sectionContent.body}</p>}
             <motion.div
               initial={{ width: 0 }}
               whileInView={{ width: 64 }}

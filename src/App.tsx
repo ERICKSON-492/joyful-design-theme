@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, useLocation } from 'react-router-dom'
 import { Navbar } from './components/Navbar'
+import { TopBar } from './components/TopBar'
 import { Footer } from './components/Footer'
 import { ChatWidget } from './components/ChatWidget'
 import { AnimatedRoutes } from './components/AnimatedRoutes'
@@ -34,6 +35,7 @@ function AppContent() {
       {/* Scroll to top handles window positioning before transitions complete */}
       <ScrollToTop />
 
+      {!isAdmin && <TopBar />}
       {!isAdmin && <Navbar />}
       
       {/* ⚡ 2. FIX: Added dynamic layout safety to the main wrapper */}

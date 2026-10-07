@@ -3,8 +3,13 @@ import { ScrollReveal } from './ScrollReveal'
 import { supabase } from '@/lib/dbClient'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+import { useSiteContent } from '@/hooks/useSiteContent'
 
 export function JoinTheTribe() {
+  const content = useSiteContent('join_the_tribe')
+  const title = content?.title?.trim() ? content.title : 'Become Part of the Story'
+  const description = content?.body?.trim() ? content.body : 'Join the Ushanga Tribe. Get first access to new pieces, behind-the-scenes, and exclusive Tribe offers.'
+  const offer = content?.subtitle?.trim() ? content.subtitle : 'Join today and get 10% off your first order'
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -37,11 +42,11 @@ export function JoinTheTribe() {
     <section className="py-16 md:py-24 bg-foreground">
       <div className="container mx-auto px-4 text-center max-w-xl">
         <ScrollReveal>
-          <h2 className="font-display text-3xl md:text-5xl font-bold text-white mb-4">Become Part of the Story</h2>
+          <h2 className="font-display text-3xl md:text-5xl font-bold text-white mb-4">{title}</h2>
           <p className="text-white/70 text-base leading-relaxed mb-2">
-            Join the Ushanga Tribe. Get first access to new pieces, behind-the-scenes, and exclusive Tribe offers.
+            {description}
           </p>
-          <p className="text-primary font-semibold text-sm mb-8">Join today and get 10% off your first order</p>
+          <p className="text-primary font-semibold text-sm mb-8">{offer}</p>
         </ScrollReveal>
         <ScrollReveal delay={0.2}>
           {submitted ? (

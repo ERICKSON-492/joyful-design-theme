@@ -1,6 +1,11 @@
 import { Facebook, Instagram, Youtube, Phone } from 'lucide-react'
+import { useSiteContent } from '@/hooks/useSiteContent'
 
 export function TopBar() {
+  const content = useSiteContent('topbar_banner')
+  const message = content?.body ?? 'Wholesale African Craft Sourcing Made Easy | Shipping to 55+ Countries'
+  if (!message.trim()) return null
+
   return (
     <div className="bg-primary text-primary-foreground py-2 px-4 text-center text-sm font-body">
       <div className="container mx-auto flex items-center justify-between">
@@ -19,7 +24,7 @@ export function TopBar() {
           </a>
         </div>
         <p className="flex-1 text-center font-medium tracking-wide">
-          Wholesale African Craft Sourcing Made Easy | Shipping to 55+ Countries
+          {message}
         </p>
         <div className="hidden md:block">
           <span className="text-sm">English</span>

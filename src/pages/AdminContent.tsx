@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { Save, Upload, ChevronDown, ChevronUp, X, Loader2, Image as ImageIcon } from 'lucide-react'
+import { invalidateSiteContentCache } from '@/hooks/useSiteContent'
 
 interface SiteContent {
   id: string
@@ -23,6 +24,7 @@ interface SectionConfig {
   key: string
   label: string
   description: string
+  hasTitle?: boolean
   hasSubtitle?: boolean
   hasImage?: boolean
   bodyLabel?: string
@@ -115,8 +117,8 @@ const SECTIONS: SectionConfig[] = [
     label: 'Footer Contact Info',
     description: 'Phone number, email, and location shown in the footer.',
     hasSubtitle: true,
-    bodyLabel: 'Address / Location',
-    bodyPlaceholder: 'Nairobi, Kenya',
+    bodyLabel: 'Phone, email, and location (one per line)',
+    bodyPlaceholder: '+254 748 207 000\nadmin@ushangachronicles.com\nNairobi, Kenya',
   },
   {
     key: 'wholesale_intro',
@@ -131,6 +133,7 @@ const SECTIONS: SectionConfig[] = [
     key: 'topbar_banner',
     label: 'Top Bar Banner Text',
     description: 'The announcement banner at the very top of the site.',
+    hasTitle: false,
     bodyLabel: 'Banner message',
     bodyPlaceholder: 'Wholesale African Craft Sourcing Made Easy | Shipping to 55+ Countries',
   },
@@ -152,18 +155,16 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
-  const [contentId, setContentId] = useState<string | null>(null)
 
   const cacheBustTimestamp = useMemo(() => Date.now(), [imageUrl])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    setTitle(initial?.title || config.defaults?.title || '')
-    setSubtitle(initial?.subtitle || config.defaults?.subtitle || '')
-    setBody(initial?.body || config.defaults?.body || '')
+    setTitle(initial?.title ?? config.defaults?.title ?? '')
+    setSubtitle(initial?.subtitle ?? config.defaults?.subtitle ?? '')
+    setBody(initial?.body ?? config.defaults?.body ?? '')
     setImageUrl(initial?.image_url || '')
-    setContentId(initial?.id || null)
   }, [initial, config])
 
   useEffect(() => {
@@ -203,18 +204,23 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
         image_url: config.hasImage && finalImageUrl ? finalImageUrl : null,
       }
 
-      if (contentId) {
-        const { data, error } = await supabase.from('site_content').update(payload).eq('id', contentId).select('*').single()
-        if (error) {
-          toast.error(`Failed to save changes: ${error.message}`)
-          console.error('Update error:', error)
-        } else {
-          toast.success(`${config.label} successfully updated!`)
-          if (data) {
-            setImageUrl(data.image_url || '')
-            onSaveSuccess(data)
-          }
-        }
+      // section_key is unique in Neon, so save by key rather than relying on
+      // an id captured during the initial page load. This also handles a
+      // missing/stale content row without attempting a duplicate insert.
+      const { data: existing, error: updateError } = await supabase
+        .from('site_content')
+        .update(payload)
+        .eq('section_key', config.key)
+        .select('*')
+        .maybeSingle()
+
+      if (updateError) {
+        toast.error(`Failed to save changes: ${updateError.message}`)
+        console.error('Update error:', updateError)
+      } else if (existing) {
+        toast.success(`${config.label} successfully updated!`)
+        setImageUrl(existing.image_url || '')
+        onSaveSuccess(existing)
       } else {
         const { data, error } = await supabase.from('site_content').insert({ section_key: config.key, ...payload }).select('*').single()
         if (error) {
@@ -223,7 +229,6 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
         } else {
           toast.success(`${config.label} successfully created!`)
           if (data) {
-            setContentId(data.id)
             setImageUrl(data.image_url || '')
             onSaveSuccess(data)
           }
@@ -261,7 +266,7 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
       if (key && (key.startsWith('site-images/') || key.startsWith('site-content/') || key.startsWith('product-images/site-content/'))) {
         await deleteFromR2(key)
       }
-      const { data, error: updateError } = await supabase.from('site_content').update({ image_url: null }).eq('id', contentId).select('*').single()
+      const { data, error: updateError } = await supabase.from('site_content').update({ image_url: null }).eq('section_key', config.key).select('*').maybeSingle()
       if (updateError) {
         toast.error(`Failed to remove image from content: ${updateError.message}`)
       } else {
@@ -289,10 +294,12 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
 
       {open && (
         <div className="p-4 pt-0 space-y-4 border-t border-border">
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-foreground mb-1">Title</label>
-            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Section title" />
-          </div>
+          {config.hasTitle !== false && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-foreground mb-1">Title</label>
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Section title" />
+            </div>
+          )}
 
           {config.hasSubtitle && (
             <div>
@@ -407,6 +414,7 @@ export default function AdminContent() {
 
   const handleSaveSuccess = (updatedRow: SiteContent) => {
     setContentMap(prev => ({ ...prev, [updatedRow.section_key]: updatedRow }))
+    invalidateSiteContentCache()
   }
 
   if (loading) return <p className="text-muted-foreground p-6">Loading site contents...</p>
@@ -421,7 +429,7 @@ export default function AdminContent() {
   return (
     <div className="p-6">
       <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">Site Content</h1>
-      <p className="text-muted-foreground mb-8">Edit text and images for different sections of your website.</p>
+      <p className="text-muted-foreground mb-8">Edit text and images for different sections of your website. Saved content appears on the storefront after you refresh the page.</p>
       <div className="max-w-2xl space-y-4">
         {SECTIONS.map(config => (
           <SectionEditor key={config.key} config={config} initial={contentMap[config.key] || null} onSaveSuccess={handleSaveSuccess} />
