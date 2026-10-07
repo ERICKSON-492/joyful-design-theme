@@ -306,24 +306,47 @@ async function bootstrap() {
   } catch (e) {
     console.error(`bootstrap: Wear It image reference reconciliation failed: ${e.message}`)
   }
-  const optimizedProductImages = [
-    ['2b286be8-8647-422c-8c0d-5d9c73b71356', '/media/product-images/kenyan-flag-wide-beaded-bracelet.webp', '%/1783668784904-grgts.png'],
-    ['0ef80826-65b3-44bb-8471-b90935fc221f', '/media/product-images/atila-headpiece-necklace.webp', '%/1783700256809-swo65.png'],
-    ['cfecb6c7-4c2e-4416-b397-9e493bd9a82a', '/media/product-images/kenyan-flag-beaded-bracelet.webp', '%/1783668546045-olc0k.png'],
-  ]
-  for (const [id, imageUrl, originalSuffix] of optimizedProductImages) {
-    try {
-      const result = await pool.query(
-        `UPDATE public.products
-         SET image_url=$1, image_urls=array_replace(image_urls, image_url, $1)
-         WHERE id=$2 AND image_url LIKE $3
-         RETURNING id`,
-        [imageUrl, id, originalSuffix],
-      )
-      console.log(`bootstrap: optimized product image reference ${id} ${result.rowCount ? 'updated' : 'unchanged'}`)
-    } catch (e) {
-      console.error(`bootstrap: product image reference ${id} reconciliation failed: ${e.message}`)
-    }
+  try {
+    const imageMap = JSON.parse(fs.readFileSync(path.join(dir, 'optimized-product-images.json'), 'utf8'))
+    const sourceSuffixes = imageMap.flatMap(({ source_suffixes }) => source_suffixes)
+    const replacementUrls = imageMap.flatMap(({ source_suffixes, image_url }) => source_suffixes.map(() => image_url))
+    const result = await pool.query(
+      `WITH image_map AS (
+         SELECT * FROM unnest($1::text[], $2::text[]) AS m(source_suffix, image_url)
+       ), updated_products AS (
+         UPDATE public.products AS p
+         SET image_url = COALESCE((
+               SELECT m.image_url FROM image_map AS m
+               WHERE right(split_part(split_part(p.image_url, '#', 1), '?', 1), char_length(m.source_suffix)) = m.source_suffix
+               LIMIT 1
+             ), p.image_url),
+             image_urls = ARRAY(
+               SELECT COALESCE((
+                        SELECT m.image_url FROM image_map AS m
+                        WHERE right(split_part(split_part(g.image_url, '#', 1), '?', 1), char_length(m.source_suffix)) = m.source_suffix
+                        LIMIT 1
+                      ), g.image_url)
+               FROM unnest(COALESCE(p.image_urls, ARRAY[]::text[])) WITH ORDINALITY AS g(image_url, ordinal)
+               ORDER BY g.ordinal
+             )
+         WHERE EXISTS (
+                 SELECT 1 FROM image_map AS m
+                 WHERE right(split_part(split_part(p.image_url, '#', 1), '?', 1), char_length(m.source_suffix)) = m.source_suffix
+               )
+            OR EXISTS (
+                 SELECT 1
+                 FROM unnest(COALESCE(p.image_urls, ARRAY[]::text[])) AS g(image_url)
+                 JOIN image_map AS m
+                   ON right(split_part(split_part(g.image_url, '#', 1), '?', 1), char_length(m.source_suffix)) = m.source_suffix
+               )
+         RETURNING p.id
+       )
+       SELECT count(*)::int AS updated_rows FROM updated_products`,
+      [sourceSuffixes, replacementUrls],
+    )
+    console.log(`bootstrap: optimized catalog image URLs in ${result.rows[0]?.updated_rows ?? 0} product rows across ${imageMap.length} source objects`)
+  } catch (e) {
+    console.error(`bootstrap: catalog image URL reconciliation failed: ${e.message}`)
   }
   // Keep the four curated community gallery entries explicit and observable.
   // This also repairs an existing database if its historical seed file ran
