@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS public.tribe_looks (
   piece_name text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'pending',
   created_at timestamptz NOT NULL DEFAULT now()
 );
+-- Curated featured looks may be created by the site owner rather than a customer.
+ALTER TABLE public.tribe_looks ALTER COLUMN user_id DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS public.enquiry_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
