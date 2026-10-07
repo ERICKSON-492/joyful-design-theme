@@ -206,7 +206,7 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
       if (contentId) {
         const { data, error } = await supabase.from('site_content').update(payload).eq('id', contentId).select('*').single()
         if (error) {
-          toast.error('Failed to save changes')
+          toast.error(`Failed to save changes: ${error.message}`)
           console.error('Update error:', error)
         } else {
           toast.success(`${config.label} successfully updated!`)
@@ -218,7 +218,7 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
       } else {
         const { data, error } = await supabase.from('site_content').insert({ section_key: config.key, ...payload }).select('*').single()
         if (error) {
-          toast.error('Failed to initialize content section')
+          toast.error(`Failed to initialize content section: ${error.message}`)
           console.error('Insert error:', error)
         } else {
           toast.success(`${config.label} successfully created!`)
@@ -231,7 +231,7 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
       }
     } catch (error) {
       console.error('Error:', error)
-      toast.error('An error occurred')
+      toast.error(error instanceof Error ? `Could not save content: ${error.message}` : 'An error occurred while saving content')
     } finally {
       setSaving(false)
       setUploading(false)
@@ -263,7 +263,7 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
       }
       const { data, error: updateError } = await supabase.from('site_content').update({ image_url: null }).eq('id', contentId).select('*').single()
       if (updateError) {
-        toast.error('Failed to remove image from content')
+        toast.error(`Failed to remove image from content: ${updateError.message}`)
       } else {
         setImageUrl('')
         toast.success('Image removed successfully')
@@ -374,25 +374,49 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
 export default function AdminContent() {
   const [contentMap, setContentMap] = useState<Record<string, SiteContent>>({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   useEffect(() => {
-    supabase
-      .from('site_content')
-      .select('*')
-      .in('section_key', SECTIONS.map(s => s.key))
-      .then(({ data }) => {
-        const map: Record<string, SiteContent> = {}
-        data?.forEach(row => { map[row.section_key] = row })
-        setContentMap(map)
+    let active = true
+    setLoading(true)
+    setLoadError(null)
+    const loadContent = async () => {
+      const { data, error } = await supabase
+        .from('site_content')
+        .select('*')
+        .in('section_key', SECTIONS.map(s => s.key))
+      if (!active) return
+      if (error) {
+        setLoadError(error.message)
         setLoading(false)
-      })
-  }, [])
+        return
+      }
+      const map: Record<string, SiteContent> = {}
+      data?.forEach(row => { map[row.section_key] = row })
+      setContentMap(map)
+      setLoading(false)
+    }
+    void loadContent().catch(error => {
+      if (!active) return
+      setLoadError(error instanceof Error ? error.message : 'Unexpected error')
+      setLoading(false)
+    })
+    return () => { active = false }
+  }, [loadAttempt])
 
   const handleSaveSuccess = (updatedRow: SiteContent) => {
     setContentMap(prev => ({ ...prev, [updatedRow.section_key]: updatedRow }))
   }
 
   if (loading) return <p className="text-muted-foreground p-6">Loading site contents...</p>
+  if (loadError) return (
+    <div className="p-6 max-w-2xl">
+      <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">Site Content</h1>
+      <p className="text-destructive mb-4">Could not load editable content: {loadError}</p>
+      <Button onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry</Button>
+    </div>
+  )
 
   return (
     <div className="p-6">

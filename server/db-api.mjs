@@ -121,6 +121,17 @@ export async function handleDb({ pool, req, res, url, json, body, user, isAdmin 
     if (rule.read === READ_ADMIN && !isAdmin) return json(res, 403, { message: 'Admin access required', code: '42501' })
     const values = []
     const clauses = buildFilters(params, cols, values)
+    // Reviews are public only after moderation. Signed-in customers can also
+    // see their own pending/rejected review so the storefront can prevent a
+    // duplicate submission; administrators retain full moderation access.
+    if (name === 'product_reviews' && !isAdmin) {
+      if (user) {
+        values.push(user.id)
+        clauses.push(`(status = 'approved' OR user_id = $${values.length}::uuid)`)
+      } else {
+        clauses.push("status = 'approved'")
+      }
+    }
     if (rule.read === READ_OWNER && !isAdmin) {
       if (!user) return json(res, 200, [])
       values.push(user.id)

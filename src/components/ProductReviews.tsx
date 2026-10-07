@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Link } from 'react-router-dom'
 
-interface Review {
+export interface ProductReview {
   id: string
   user_id: string
   customer_name: string
@@ -44,8 +44,8 @@ function StarRating({ value, onChange, size = 20 }: { value: number; onChange?: 
   )
 }
 
-export function ProductReviews({ productId }: { productId: string }) {
-  const [reviews, setReviews] = useState<Review[]>([])
+export function ProductReviews({ productId, onReviewsChange }: { productId: string; onReviewsChange?: (productId: string, reviews: ProductReview[]) => void }) {
+  const [reviews, setReviews] = useState<ProductReview[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -72,7 +72,9 @@ export function ProductReviews({ productId }: { productId: string }) {
         .eq('product_id', productId)
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
-      setReviews((data as Review[]) || [])
+      const approvedReviews = (data as ProductReview[]) || []
+      setReviews(approvedReviews)
+      onReviewsChange?.(productId, approvedReviews)
 
       if (user) {
         const { data: own } = await supabase
@@ -86,7 +88,7 @@ export function ProductReviews({ productId }: { productId: string }) {
       setLoading(false)
     }
     load()
-  }, [productId, user])
+  }, [productId, user, onReviewsChange])
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0
   const ratingCounts = [5, 4, 3, 2, 1].map(n => ({ stars: n, count: reviews.filter(r => r.rating === n).length }))

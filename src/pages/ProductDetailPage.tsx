@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock, ArrowLeft, Minus, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
-import { ProductReviews } from '@/components/ProductReviews'
+import { ProductReviews, type ProductReview } from '@/components/ProductReviews'
 import { RelatedProducts } from '@/components/RelatedProducts'
 import { RecentlyViewed } from '@/components/RecentlyViewed'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
@@ -40,6 +40,8 @@ interface Variant {
   stock: number
 }
 
+const NO_PRODUCT_REVIEWS: ProductReview[] = []
+
 export default function ProductDetailPage() {
   const { id, slug } = useParams<{ id?: string; slug?: string }>()
   const navigate = useNavigate()
@@ -48,6 +50,7 @@ export default function ProductDetailPage() {
   const { format } = useCurrency()
   const { addProduct: trackView } = useRecentlyViewed()
   const [product, setProduct] = useState<Product | null>(null)
+  const [reviewData, setReviewData] = useState<{ productId: string; reviews: ProductReview[] }>({ productId: '', reviews: NO_PRODUCT_REVIEWS })
   const [variants, setVariants] = useState<Variant[]>([])
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null)
   const [quantity, setQuantity] = useState(1)
@@ -56,6 +59,10 @@ export default function ProductDetailPage() {
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
   const [imgIdx, setImgIdx] = useState(0)
   const [clock, setClock] = useState(() => Date.now())
+  const reportReviews = useCallback((productId: string, reviews: ProductReview[]) => {
+    setReviewData({ productId, reviews })
+  }, [])
+  const reviewsForProduct = product && reviewData.productId === product.id ? reviewData.reviews : NO_PRODUCT_REVIEWS
 
   useEffect(() => {
     if (!product?.sale_starts_at && !product?.sale_ends_at) return
@@ -83,6 +90,8 @@ export default function ProductDetailPage() {
   // Inject Product JSON-LD structured data for search engines
   useEffect(() => {
     if (!product) return
+    const reviews = reviewsForProduct.filter(review => Number.isFinite(Number(review.rating)) && Number(review.rating) >= 1 && Number(review.rating) <= 5 && review.comment?.trim())
+    const averageRating = reviews.length ? reviews.reduce((sum, review) => sum + Number(review.rating), 0) / reviews.length : 0
     const price = getActiveSalePrice(product) ?? product.price
     const images = (product.image_urls && product.image_urls.length > 0)
       ? product.image_urls
@@ -104,6 +113,23 @@ export default function ProductDetailPage() {
           : (product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'),
         url: typeof window !== 'undefined' ? window.location.href : undefined,
       },
+      ...(reviews.length > 0 ? {
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: Number(averageRating.toFixed(2)),
+          reviewCount: reviews.length,
+          bestRating: 5,
+          worstRating: 1,
+        },
+        review: reviews.slice(0, 5).map(review => ({
+          '@type': 'Review',
+          name: review.title || undefined,
+          reviewBody: review.comment,
+          reviewRating: { '@type': 'Rating', ratingValue: Number(review.rating), bestRating: 5, worstRating: 1 },
+          author: { '@type': 'Person', name: (review.customer_name || 'Customer').trim().slice(0, 99) },
+          datePublished: review.created_at ? new Date(review.created_at).toISOString() : undefined,
+        })),
+      } : {}),
     }
     const script = document.createElement('script')
     script.type = 'application/ld+json'
@@ -111,7 +137,7 @@ export default function ProductDetailPage() {
     script.text = JSON.stringify(jsonLd)
     document.head.appendChild(script)
     return () => { script.remove() }
-  }, [product])
+  }, [product, reviewsForProduct])
 
   useEffect(() => {
     if (!routeKey) return
@@ -498,7 +524,7 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        <ProductReviews productId={product.id} />
+        <ProductReviews productId={product.id} onReviewsChange={reportReviews} />
         <RelatedProducts productId={product.id} category={product.category} />
         <RecentlyViewed excludeId={product.id} />
       </div>
