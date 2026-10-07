@@ -8,7 +8,14 @@ import { expandQuery } from '@/lib/searchTerms'
 import { getActiveSalePrice } from '@/lib/salePrice'
 import { productPath } from '@/lib/slug'
 
-const categoryList = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles', 'For Your Pet', 'Wholesale & Gifting']
+interface Category { id: string; name: string }
+
+function normalizeCategoryFilter(category: string): string {
+  const key = category.trim().toLowerCase()
+  if (key === 'for your table') return 'Kitchen and Dining'
+  if (key === 'collectibles') return 'Arts & Collectibles'
+  return category
+}
 
 interface Product {
   id: string
@@ -43,15 +50,26 @@ export default function SearchPage() {
 
   const [queryInput, setQueryInput] = useState(initialQ)
   const [activeQuery, setActiveQuery] = useState(initialQ)
-  const [selectedCats, setSelectedCats] = useState<string[]>(initialCats)
+  const [selectedCats, setSelectedCats] = useState<string[]>(initialCats.map(normalizeCategoryFilter))
   const [minPrice, setMinPrice] = useState<number | ''>(initialMin || '')
   const [maxPrice, setMaxPrice] = useState<number | ''>(initialMax || '')
   const [inStockOnly, setInStockOnly] = useState(initialInStock)
   const [sort, setSort] = useState<SortKey>(initialSort)
 
   const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [categoryList, setCategoryList] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    fetchPublicTable<Category>('categories', 'select=id,name&is_active=eq.true&order=display_order.asc')
+      .then(data => {
+        if (mounted) setCategoryList((data || []).map(category => category.name).filter(Boolean))
+      })
+      .catch(() => {})
+    return () => { mounted = false }
+  }, [])
 
   // Sync URL whenever filters change
   useEffect(() => {
@@ -88,7 +106,11 @@ export default function SearchPage() {
           q += `&category=in.(${encodeURIComponent(list)})`
         }
         const data = await fetchPublicTable<Product>('products', q)
-        if (mounted) setAllProducts(data || [])
+        if (mounted) {
+          const rows = data || []
+          setAllProducts(rows)
+          setCategoryList(current => current.length ? current : [...new Set(rows.map(p => p.category).filter(Boolean))])
+        }
       } catch {
         if (mounted) setAllProducts([])
       } finally {

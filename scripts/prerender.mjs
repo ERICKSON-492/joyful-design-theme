@@ -90,6 +90,15 @@ function productSlug(p) {
   return slug || p.id;
 }
 
+function categorySlug(category) {
+  const slug = String(category || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug || 'uncategorized';
+}
+
+function productPath(p) {
+  return `/products/${categorySlug(p.category)}/${productSlug(p)}`;
+}
+
 /** @type {Array<{path: string, title: string, description: string, body: string}>} */
 const routes = [
   {
@@ -102,9 +111,12 @@ const routes = [
       <p>Every piece is handmade in Nairobi, Kenya by skilled artisans. Explore our full collection of beaded jewelry, home decor, pet accessories, and one-of-a-kind gifts.</p>
       <h2>Categories</h2>
       <ul>
-        <li><a href="/shop?category=jewelry-apparel">Jewelry &amp; Apparel</a> — necklaces, bracelets, earrings, anklets, waist beads, headpieces</li>
-        <li><a href="/shop?category=home-decor">Home Decor &amp; Tableware</a> — placemats, coasters, bowls, sculptures</li>
-        <li><a href="/shop?category=pet-accessories">Pet Accessories</a> — beaded collars and leashes</li>
+        <li><a href="/shop?cat=wear-it">Wear It</a> — necklaces, bracelets, earrings, belts, hats, and bags</li>
+        <li><a href="/shop?cat=live-with-it">Live With It</a> — handmade decor and keepsakes for your home</li>
+        <li><a href="/shop?cat=kitchen-and-dining">Kitchen and Dining</a> — table mats and beaded coasters</li>
+        <li><a href="/shop?cat=arts-and-collectibles">Arts &amp; Collectibles</a> — artisan souvenirs and gifts</li>
+        <li><a href="/shop?cat=for-your-pet">For Your Pet</a> — beaded collars and leashes</li>
+        <li><a href="/shop?cat=wholesale-and-gifting">Wholesale &amp; Gifting</a> — tailored and bulk gifting</li>
         <li><a href="/custom-order">Create Your Chronicle</a> — commission a custom piece</li>
       </ul>
     `,
@@ -273,12 +285,20 @@ console.log(`[prerender] wrote ${count} static route(s).`);
 const products = await fetchProducts();
 console.log(`[prerender] fetched ${products.length} product(s) from backend.`);
 
+const sitemapPath = resolve(DIST, "sitemap.xml");
+if (products.length && existsSync(sitemapPath)) {
+  const productEntries = products.map(p => `  <url>\n    <loc>${SITE}${productPath(p)}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`).join("\n");
+  const sitemap = readFileSync(sitemapPath, "utf8");
+  writeFileSync(sitemapPath, sitemap.replace("</urlset>", `${productEntries}\n</urlset>`), "utf8");
+  console.log(`[prerender] added ${products.length} product URL(s) to sitemap.`);
+}
+
 function renderProduct(p) {
   const title = `${p.name} | Ushanga Chronicles`;
   const desc = (p.description || `${p.name} — handmade in Nairobi, Kenya by Ushanga Chronicles artisans. ${productPrice(p)}.`)
     .replace(/\s+/g, " ")
     .slice(0, 300);
-  const canonical = `${SITE}/products/${productSlug(p)}`;
+  const canonical = `${SITE}${productPath(p)}`;
   const img = p.image_url || `${SITE}/logo.jpeg`;
   const priceNum = (p.sale_price && p.sale_price < p.price) ? p.sale_price : p.price;
   let html = shell;
@@ -326,9 +346,14 @@ function renderProduct(p) {
   `;
   html = html.replace(/<noscript>[\s\S]*?<\/noscript>/, `<noscript>${body}</noscript>`);
 
-  const outPath = resolve(DIST, "products", productSlug(p), "index.html");
+  const outPath = resolve(DIST, "products", categorySlug(p.category), productSlug(p), "index.html");
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, html, "utf8");
+  // Keep the old one-segment URL available; the hydrated app redirects it to
+  // the category-bearing canonical path above.
+  const legacyOutPath = resolve(DIST, "products", productSlug(p), "index.html");
+  mkdirSync(dirname(legacyOutPath), { recursive: true });
+  writeFileSync(legacyOutPath, html, "utf8");
 }
 
 let productCount = 0;
@@ -343,7 +368,7 @@ console.log(`[prerender] wrote ${productCount} product page(s).`);
 if (products.length) {
   const listItems = products.slice(0, 60).map(p => `
     <li style="margin-bottom:0.75rem;">
-      <a href="/products/${productSlug(p)}"><strong>${escapeAttr(p.name)}</strong></a>
+      <a href="${productPath(p)}"><strong>${escapeAttr(p.name)}</strong></a>
       — ${escapeAttr(productPrice(p))}
       ${p.category ? ` <em>(${escapeAttr(p.category)})</em>` : ""}
     </li>`).join("");

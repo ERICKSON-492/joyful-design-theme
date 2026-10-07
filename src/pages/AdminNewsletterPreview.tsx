@@ -91,7 +91,7 @@ export default function AdminNewsletterPreview() {
 
       const { data: prods } = await supabase
         .from('products')
-        .select('id, name, description, price, price_min, price_max, image_url, image_urls')
+        .select('id, name, category, description, price, price_min, price_max, image_url, image_urls')
         .eq('is_active', true)
         .gt('created_at', sinceTs)
         .order('created_at', { ascending: false })

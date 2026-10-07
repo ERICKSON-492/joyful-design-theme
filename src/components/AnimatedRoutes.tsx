@@ -103,6 +103,7 @@ export function AnimatedRoutes() {
           <Route path="/about-us" element={<PageTransition><TheChronicle /></PageTransition>} />
           <Route path="/shop" element={<PageTransition><ShopPage /></PageTransition>} />
           <Route path="/search" element={<PageTransition><SearchPage /></PageTransition>} />
+          <Route path="/products/:category/:slug" element={<PageTransition><ProductDetailPage /></PageTransition>} />
           <Route path="/products/:slug" element={<PageTransition><ProductDetailPage /></PageTransition>} />
           <Route path="/product/:id" element={<PageTransition><ProductDetailPage /></PageTransition>} />
           <Route path="/custom-order" element={<PageTransition><CustomOrderPage /></PageTransition>} />

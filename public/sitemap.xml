@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Note: /product/:id pages are dynamic (one per product in the database)
-  and aren't listed individually here since a static file can't know
-  about them. Search engines will still find and index individual
-  product pages by following links from /shop and category pages.
+  Canonical product URLs (/products/:category/:slug) are appended from the
+  active catalog by scripts/prerender.mjs during each production build.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
