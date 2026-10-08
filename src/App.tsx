@@ -12,6 +12,7 @@ import { InstallAppPrompt } from './components/InstallAppPrompt'
 import { BackButton } from './components/BackButton'
 import { CartReminder } from './components/CartReminder'
 import { useProfileSync } from './hooks/useProfileSync'
+import { CookieConsent } from './components/CookieConsent'
 
 // ⚡ 1. Inline Scroll Restoration Helper
 // This resets the scroll tracking instantly when navigating between pages.
@@ -51,6 +52,7 @@ function AppContent() {
       {!isAdmin && <InstallAppPrompt />}
       {!isAdmin && <BackButton />}
       {!isAdmin && <CartReminder />}
+      <CookieConsent />
     </div>
   )
 }
