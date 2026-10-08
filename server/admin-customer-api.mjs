@@ -169,6 +169,7 @@ export async function handleAdminCustomers({ pool, req, res, url, json, body, is
         )
       }
 
+      await client.query('DELETE FROM public.auth_login_events WHERE user_id=$1::uuid OR lower(email)=lower($2)', [customerId, email || ''])
       await client.query('DELETE FROM public.auth_users WHERE id=$1::uuid', [customerId])
       await client.query('COMMIT')
       return json(res, 200, { ok: true, anonymizedOrders: orders.rowCount || 0 })
