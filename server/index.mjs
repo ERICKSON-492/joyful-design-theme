@@ -78,9 +78,20 @@ async function neonUser(req) {
   await pool.query('UPDATE auth_sessions SET last_seen_at=now() WHERE token_hash=$1', [tokenHash(token)])
   return r.rows[0]
 }
-async function createSession(req, userId) {
+function clientIp(req) {
+  const fwd = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+  return (fwd || req.socket.remoteAddress || '').replace(/^::ffff:/, '') || null
+}
+async function recordLoginEvent(req, event, userId, email) {
+  try {
+    await pool.query('INSERT INTO auth_login_events (user_id,email,event,ip_address,user_agent) VALUES ($1,$2,$3,$4,$5)', [userId || null, email || null, event, clientIp(req), String(req.headers['user-agent'] || '').slice(0, 400) || null])
+  } catch (e) { console.error('login event not recorded:', e.message) }
+}
+async function createSession(req, userId, event = 'login') {
   const raw = crypto.randomBytes(32).toString('base64url')
   await pool.query('INSERT INTO auth_sessions (user_id,token_hash,expires_at,user_agent,ip_address) VALUES ($1,$2,now()+($3 * interval \'1 second\'),$4,$5)', [userId, tokenHash(raw), sessionTtlSeconds, req.headers['user-agent'] || null, req.socket.remoteAddress || null])
+  const who = await pool.query('SELECT email FROM auth_users WHERE id=$1', [userId]).catch(() => null)
+  await recordLoginEvent(req, event, userId, who?.rows[0]?.email)
   return raw
 }
 const authJson = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)) }
@@ -120,12 +131,12 @@ async function handle(req, res, url) {
     const b = await body(req); const email = String(b.email || '').trim().toLowerCase(); const password = String(b.password || ''); const displayName = String(b.displayName || b.name || '').trim()
     if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 6 || password.length > 128) return authJson(res, 400, { error: 'Use a valid email and a password of at least 6 characters.' })
     const passwordHash = await bcrypt.hash(password, 12)
-    try { const r = await pool.query('INSERT INTO auth_users (email,password_hash,display_name) VALUES ($1,$2,$3) RETURNING id,email,display_name,role', [email, passwordHash, displayName || null]); const session = await createSession(req, r.rows[0].id); return authJson(res, 201, { user: safeUser(r.rows[0]) }, { 'set-cookie': cookie(session) }) }
+    try { const r = await pool.query('INSERT INTO auth_users (email,password_hash,display_name) VALUES ($1,$2,$3) RETURNING id,email,display_name,role', [email, passwordHash, displayName || null]); const session = await createSession(req, r.rows[0].id, 'signup'); return authJson(res, 201, { user: safeUser(r.rows[0]) }, { 'set-cookie': cookie(session) }) }
     catch (e) { if (e.code === '23505') return authJson(res, 409, { error: 'An account with that email already exists.' }); throw e }
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/login') {
     const b = await body(req); const email = String(b.email || '').trim().toLowerCase(); const password = String(b.password || ''); const r = await pool.query('SELECT id,email,password_hash,display_name,role,is_active FROM auth_users WHERE email=$1', [email]); const user = r.rows[0]
-    if (!user || !user.is_active || !(await bcrypt.compare(password, user.password_hash))) return authJson(res, 401, { error: 'Invalid email or password.' })
+    if (!user || !user.is_active || !(await bcrypt.compare(password, user.password_hash))) { await recordLoginEvent(req, 'login_failed', user?.id, email); return authJson(res, 401, { error: 'Invalid email or password.' }) }
     const session = await createSession(req, user.id); return authJson(res, 200, { user: safeUser(user) }, { 'set-cookie': cookie(session) })
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/logout') { const token = parseCookies(req.headers.cookie || '')[sessionCookieName]; if (token) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1', [tokenHash(token)]); return authJson(res, 200, { ok: true }, { 'set-cookie': cookie('', 0) }) }
@@ -170,6 +181,11 @@ async function handle(req, res, url) {
   if (url.pathname.startsWith('/api/admin/')) {
     const adminAccess = await requireAdmin(req)
     if (!adminAccess) return json(res, 403, { error: 'Admin access required' })
+    if (req.method === 'GET' && url.pathname === '/api/admin/logins') {
+      const events = await pool.query(`SELECT e.id, e.event, COALESCE(e.email, u.email) AS email, u.display_name, u.role, e.ip_address, e.user_agent, e.created_at FROM auth_login_events e LEFT JOIN auth_users u ON u.id=e.user_id ORDER BY e.created_at DESC LIMIT 300`)
+      const sessions = await pool.query(`SELECT s.id, u.email, u.display_name, u.role, s.created_at, s.last_seen_at, s.user_agent, host(s.ip_address) AS ip_address FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.expires_at>now() ORDER BY s.last_seen_at DESC LIMIT 100`)
+      return json(res, 200, { events: events.rows, sessions: sessions.rows })
+    }
     if (/^\/api\/admin\/customers(?:\/[^/]+)?$/.test(url.pathname)) {
       return handleAdminCustomers({ pool, req, res, url, json, body, isAdmin: true })
     }

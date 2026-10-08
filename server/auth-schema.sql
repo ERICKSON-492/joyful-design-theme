@@ -38,3 +38,15 @@ CREATE INDEX IF NOT EXISTS auth_reset_tokens_user_idx ON public.auth_reset_token
 CREATE OR REPLACE FUNCTION public.purge_expired_auth_sessions() RETURNS void LANGUAGE sql AS $$
   DELETE FROM public.auth_sessions WHERE expires_at < now();
 $$;
+
+CREATE TABLE IF NOT EXISTS public.auth_login_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES public.auth_users(id) ON DELETE SET NULL,
+  email text,
+  event text NOT NULL CHECK (event IN ('login', 'signup', 'login_failed')),
+  ip_address text,
+  user_agent text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS auth_login_events_created_idx ON public.auth_login_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS auth_login_events_user_idx ON public.auth_login_events (user_id);
