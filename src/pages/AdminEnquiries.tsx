@@ -3,7 +3,7 @@ import { supabase } from '@/lib/dbClient'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Send, MessageSquare, ExternalLink } from 'lucide-react'
+import { Send, MessageSquare, ExternalLink, Trash2 } from 'lucide-react'
 
 interface Message {
   id: string
@@ -129,6 +129,16 @@ export default function AdminEnquiries() {
     window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
   }
 
+  const deleteConversation = async (id: string, name?: string) => {
+    if (!window.confirm(`Delete the whole conversation${name ? ` with ${name}` : ''}? This cannot be undone.`)) return
+    const { error } = await supabase.from('enquiry_messages').delete().eq('conversation_id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Conversation deleted')
+    if (selectedConv === id) setSelectedConv(null)
+    setMessages(prev => prev.filter(m => m.conversation_id !== id))
+    setConversations(prev => prev.filter(c => c.conversation_id !== id))
+  }
+
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!reply.trim() || !selectedConv || !selectedConvData) return
@@ -155,10 +165,10 @@ export default function AdminEnquiries() {
             <p className="p-4 text-sm text-muted-foreground text-center">No enquiries yet</p>
           )}
           {conversations.map(c => (
+            <div key={c.conversation_id} className="relative group">
             <button
-              key={c.conversation_id}
               onClick={() => setSelectedConv(c.conversation_id)}
-              className={`w-full text-left p-4 border-b border-border hover:bg-accent transition-colors ${
+              className={`w-full text-left p-4 pr-10 border-b border-border hover:bg-accent transition-colors ${
                 selectedConv === c.conversation_id ? 'bg-accent' : ''
               }`}
             >
@@ -171,6 +181,15 @@ export default function AdminEnquiries() {
               <p className="text-xs text-muted-foreground truncate mt-1">{c.last_message}</p>
               <p className="text-[10px] text-muted-foreground mt-1">{new Date(c.last_time).toLocaleString()}</p>
             </button>
+            <button
+              type="button"
+              aria-label="Delete conversation"
+              onClick={() => deleteConversation(c.conversation_id, c.customer_name)}
+              className="absolute right-2 bottom-2 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            </div>
           ))}
         </div>
 
@@ -185,6 +204,16 @@ export default function AdminEnquiries() {
                     {customerPhone || selectedConvData?.customer_email || 'No contact info'}
                   </p>
                 </div>
+                <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => deleteConversation(selectedConv, selectedConvData?.customer_name)}
+                  className="text-destructive"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                </Button>
                 <Button
                   type="button"
                   size="sm"
@@ -194,6 +223,7 @@ export default function AdminEnquiries() {
                 >
                   <ExternalLink className="w-3.5 h-3.5 mr-1" /> WhatsApp
                 </Button>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {convMessages.map(m => (
@@ -232,10 +262,10 @@ export default function AdminEnquiries() {
               {/* Mobile conversation list */}
               <div className="md:hidden w-full mt-4 px-4 space-y-2">
                 {conversations.map(c => (
+                  <div key={c.conversation_id} className="relative">
                   <button
-                    key={c.conversation_id}
                     onClick={() => setSelectedConv(c.conversation_id)}
-                    className="w-full text-left p-3 bg-card border border-border rounded-lg"
+                    className="w-full text-left p-3 pr-12 bg-card border border-border rounded-lg"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-sm text-foreground">{c.customer_name}</span>
@@ -245,6 +275,15 @@ export default function AdminEnquiries() {
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-1">{c.last_message}</p>
                   </button>
+                  <button
+                    type="button"
+                    aria-label="Delete conversation"
+                    onClick={() => deleteConversation(c.conversation_id, c.customer_name)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  </div>
                 ))}
               </div>
             </div>
