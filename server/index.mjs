@@ -10,6 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
 import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, processScheduledSaleNotifications } from './functions-api.mjs'
+import { createGoogleOAuthRoutes } from './google-oauth.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -82,6 +83,7 @@ async function createSession(req, userId) {
   return raw
 }
 const authJson = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)) }
+const handleGoogleOAuth = createGoogleOAuthRoutes({ pool, createSession, sessionCookie: cookie, env: process.env })
 
 async function authUser(req) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
@@ -110,6 +112,7 @@ function queryFilters(url) {
   return { where: where.length ? `WHERE ${where.join(' AND ')}` : '', values, limit: Math.min(Number(p.get('limit') || 100), 200), order: p.get('order')?.includes('created_at.desc') ? 'created_at DESC' : p.get('order')?.includes('price.asc') ? 'price ASC' : 'created_at ASC' }
 }
 async function handle(req, res, url) {
+  if (await handleGoogleOAuth(req, res, url)) return
   if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true })
   if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user = await neonUser(req); return authJson(res, 200, { user: user ? safeUser(user) : null }) }
   if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
