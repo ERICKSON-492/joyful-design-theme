@@ -20,7 +20,7 @@ export async function onRequest(context) {
     method: request.method,
     headers,
     body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
-    redirect: 'follow',
+    redirect: 'manual',
   });
 
   const response = await fetch(upstreamRequest);
