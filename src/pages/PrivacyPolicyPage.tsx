@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useSEO } from '@/hooks/useSEO'
+import { Button } from '@/components/ui/button'
+import { COOKIE_CONSENT_EVENT, COOKIE_CONSENT_KEY } from '@/lib/cookieConsent'
 
 export default function PrivacyPolicyPage() {
   useSEO('Privacy Policy', 'How Ushanga Chronicles collects, uses, and protects your personal information.', '/privacy-policy')
@@ -54,10 +56,17 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="font-display text-xl font-bold text-foreground mb-2">5. Cookies</h2>
             <p>
-              We use a small number of cookies to keep you signed in, remember your cart, and measure aggregate usage.
-              You can disable cookies in your browser settings, but parts of the shop (such as checkout) may stop
-              working correctly.
+              Essential cookies and local storage keep you signed in and remember your cart. Optional analytics and
+              advertising cookies from Google Analytics and Meta only load when you select Accept in our cookie popup.
+              Selecting Decline keeps these optional services off without affecting shopping or sign-in. Your choice
+              is remembered on this browser. You can change it below.
             </p>
+            <Button variant="outline" className="mt-3 min-h-11 text-base" onClick={() => {
+              try { localStorage.removeItem(COOKIE_CONSENT_KEY) } catch { /* Storage may be blocked. */ }
+              // Reload removes any optional scripts already running before a new choice.
+              window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_EVENT, { detail: null }))
+              window.location.reload()
+            }}>Change cookie choice</Button>
           </section>
 
           <section>
