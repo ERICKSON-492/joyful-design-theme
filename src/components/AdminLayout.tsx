@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { getCurrentUser, logout } from '@/lib/auth'
-import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText, Camera, Truck, CreditCard, Star, Boxes, Mail, BookOpen, Tag, MapPin, Palette, Users, BarChart3 } from 'lucide-react'
+import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText, Camera, Truck, CreditCard, Star, Boxes, Mail, BookOpen, Tag, MapPin, Palette, Users, BarChart3, KeyRound } from 'lucide-react'
 import type { AuthUser } from '@/lib/auth'
 import { useSEO } from '@/hooks/useSEO'
 
@@ -11,6 +11,7 @@ const navItems = [
   { label: 'Products', href: '/admin/products', icon: Package },
   { label: 'Inventory', href: '/admin/inventory', icon: Boxes },
   { label: 'Customers', href: '/admin/customers', icon: Users },
+  { label: 'Logins', href: '/admin/logins', icon: KeyRound },
   { label: 'Coupons', href: '/admin/coupons', icon: Tag },
   { label: 'Delivery Areas', href: '/admin/delivery-areas', icon: MapPin },
   { label: 'Custom Orders', href: '/admin/custom-orders', icon: Palette },

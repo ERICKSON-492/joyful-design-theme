@@ -27,6 +27,7 @@ const AdminCoupons = lazy(() => import('../pages/AdminCoupons'))
 const AdminNairobiAreas = lazy(() => import('../pages/AdminNairobiAreas'))
 const AdminCustomOrders = lazy(() => import('../pages/AdminCustomOrders'))
 const AdminUsers = lazy(() => import('../pages/AdminUsers'))
+const AdminLogins = lazy(() => import('../pages/AdminLogins'))
 const AdminAnalytics = lazy(() => import('../pages/AdminAnalytics'))
 const AdminPayments = lazy(() => import('../pages/AdminPayments'))
 const AdminReviews = lazy(() => import('../pages/AdminReviews'))
@@ -82,6 +83,7 @@ export function AnimatedRoutes() {
             <Route path="delivery-areas" element={<AdminNairobiAreas />} />
             <Route path="custom-orders" element={<AdminCustomOrders />} />
             <Route path="customers" element={<AdminUsers />} />
+            <Route path="logins" element={<AdminLogins />} />
             <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="payments" element={<AdminPayments />} />
             <Route path="reviews" element={<AdminReviews />} />
