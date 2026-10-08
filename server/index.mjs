@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
 import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, processScheduledSaleNotifications } from './functions-api.mjs'
 import { createGoogleOAuthRoutes } from './google-oauth.mjs'
+import { handleAdminCustomers } from './admin-customer-api.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -167,7 +168,11 @@ async function handle(req, res, url) {
   }
   if (req.method === 'GET' && url.pathname === '/api/product-variants') { const f = queryFilters(url); const r = await pool.query(`SELECT ${variantFields} FROM public.product_variants ${f.where} ORDER BY ${f.order} LIMIT ${f.limit}`, f.values); return json(res, 200, r.rows.map(variantDto)) }
   if (url.pathname.startsWith('/api/admin/')) {
-    if (!(await requireAdmin(req))) return json(res, 403, { error: 'Admin access required' })
+    const adminAccess = await requireAdmin(req)
+    if (!adminAccess) return json(res, 403, { error: 'Admin access required' })
+    if (/^\/api\/admin\/customers(?:\/[^/]+)?$/.test(url.pathname)) {
+      return handleAdminCustomers({ pool, req, res, url, json, body, isAdmin: true })
+    }
     if (req.method === 'GET' && url.pathname === '/api/admin/products') { const r = await pool.query(`SELECT ${productFields} FROM public.products ORDER BY created_at DESC`); return json(res, 200, { products: r.rows.map(productDto) }) }
     if (req.method === 'POST' && url.pathname === '/api/admin/products') { const b = await body(req); const r = await pool.query(`INSERT INTO products (name,description,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,category,subcategory,stock,image_url,image_urls,is_active,is_preorder,preorder_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING ${productFields}`, [b.name,b.description||null,b.price,b.sale_price??null,b.sale_starts_at||null,b.sale_ends_at||null,b.price_min??null,b.price_max??null,b.category||'',b.subcategory||null,b.stock||0,b.image_url||null,b.image_urls||[],b.is_active!==false,b.is_preorder||false,b.preorder_label||null]); return json(res, 201, productDto(r.rows[0])) }
     const match = url.pathname.match(/^\/api\/admin\/products\/([^/]+)$/)

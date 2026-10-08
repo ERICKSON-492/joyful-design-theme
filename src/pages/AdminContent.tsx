@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
 import { deleteFromR2, uploadToR2 } from '@/lib/storage'
 import { storageKeyFromPublicUrl } from '@/lib/r2ObjectUrl'
@@ -156,7 +156,7 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
 
-  const cacheBustTimestamp = useMemo(() => Date.now(), [imageUrl])
+  const [cacheBustTimestamp, setCacheBustTimestamp] = useState(() => Date.now())
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
@@ -166,6 +166,10 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
     setBody(initial?.body ?? config.defaults?.body ?? '')
     setImageUrl(initial?.image_url || '')
   }, [initial, config])
+
+  useEffect(() => {
+    setCacheBustTimestamp(Date.now())
+  }, [imageUrl])
 
   useEffect(() => {
     if (selectedFile) {
@@ -250,6 +254,13 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
     if (file.size > 5 * 1024 * 1024) { toast.error('Image size should be less than 5MB'); e.target.value = ''; return }
     setSelectedFile(file)
     toast.success(`Selected: ${file.name}`)
+  }
+
+  const handleClearText = () => {
+    setTitle('')
+    setSubtitle('')
+    setBody('')
+    toast.success('Text cleared in the editor. Save Changes to publish the blank fields.')
   }
 
   const handleRemoveImage = async () => {
@@ -364,6 +375,10 @@ function SectionEditor({ config, initial, onSaveSuccess }: { config: SectionConf
               ) : (
                 <><Save className="w-4 h-4" /> Save Changes</>
               )}
+            </Button>
+
+            <Button variant="outline" type="button" onClick={handleClearText} disabled={saving || uploading} className="gap-2">
+              <X className="w-4 h-4" /> Clear Text
             </Button>
 
             {selectedFile && (

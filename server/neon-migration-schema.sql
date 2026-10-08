@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS public.product_reviews (
   admin_response text,
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE public.product_reviews ALTER COLUMN user_id DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS public.tribe_looks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -202,6 +203,7 @@ ALTER TABLE public.joyful_orders ADD COLUMN IF NOT EXISTS shipping_area text;
 ALTER TABLE public.joyful_orders ADD COLUMN IF NOT EXISTS coupon_code text;
 ALTER TABLE public.joyful_orders ADD COLUMN IF NOT EXISTS discount_amount numeric NOT NULL DEFAULT 0;
 ALTER TABLE public.joyful_orders ADD COLUMN IF NOT EXISTS receipt_url text;
+ALTER TABLE public.joyful_orders ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 
 -- Coupon redemption, previously the redeem_coupon RPC.
 CREATE OR REPLACE FUNCTION public.redeem_coupon(p_coupon_id uuid)
