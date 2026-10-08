@@ -203,6 +203,23 @@ export async function handleDb({ pool, req, res, url, json, body, user, isAdmin 
       values.push(user.id)
       clauses.push(`${rule.owner} = $${values.length}::uuid`)
     }
+    if (name === 'orders' && isAdmin) {
+      const orderId = /^eq\.([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i.exec(params.get('id') || '')?.[1]
+      if (!orderId) return json(res, 400, { message: 'Delete one order at a time by its ID', code: '21000' })
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query('DELETE FROM public.order_email_notifications WHERE order_id=$1::uuid', [orderId])
+        const deleted = await client.query(`DELETE FROM public.${physical} WHERE id=$1::uuid RETURNING *`, [orderId])
+        await client.query('COMMIT')
+        return json(res, 200, deleted.rows)
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    }
     const r = await pool.query(`DELETE FROM public.${physical} WHERE ${clauses.join(' AND ')} RETURNING *`, values)
     return json(res, 200, r.rows)
   }

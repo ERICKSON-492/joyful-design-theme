@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
 import { sendEmail } from '@/lib/functions'
 import { format } from 'date-fns'
-import { Eye, ChevronDown, ChevronUp, Search, Mail } from 'lucide-react'
+import { Archive, ChevronDown, ChevronUp, RotateCcw, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Tables } from '@/integrations/supabase/types'
 
-type Order = Tables<'orders'>
+type Order = Tables<'orders'> & { archived_at?: string | null }
 
 const STATUS_OPTIONS = ['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'failed'] as const
 
@@ -28,6 +28,7 @@ export default function AdminOrders() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [orderView, setOrderView] = useState<'active' | 'archived' | 'all'>('active')
   const [updating, setUpdating] = useState<string | null>(null)
   const [trackingInputs, setTrackingInputs] = useState<Record<string, string>>({})
 
@@ -39,7 +40,7 @@ export default function AdminOrders() {
         .order('created_at', { ascending: false })
       
       if (error) throw error
-      setOrders(data || [])
+      setOrders((data || []) as Order[])
     } catch (err) {
       console.error('Error fetching orders:', err)
       toast.error('Failed to load orders')
@@ -163,13 +164,52 @@ export default function AdminOrders() {
     }
   }
 
+  const setOrderArchived = async (order: Order, archived: boolean) => {
+    const label = `Order #${order.id.slice(0, 8)} for ${order.customer_name || 'Unknown customer'}`
+    if (archived && !window.confirm(`Archive ${label}? It will be hidden from the active list and can be restored later.`)) return
+    setUpdating(order.id)
+    try {
+      const archivedAt = archived ? new Date().toISOString() : null
+      const { error } = await supabase.from('orders').update({ archived_at: archivedAt }).eq('id', order.id)
+      if (error) throw error
+      setOrders(previous => previous.map(item => item.id === order.id ? { ...item, archived_at: archivedAt } : item))
+      toast.success(archived ? 'Order archived' : 'Order restored')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update order archive status')
+    } finally {
+      setUpdating(null)
+    }
+  }
+
+  const permanentlyDeleteOrder = async (order: Order) => {
+    const orderCode = order.id.slice(0, 8)
+    if (!window.confirm(
+      `Permanently delete order #${orderCode} for ${order.customer_name || 'Unknown customer'}? This removes the order and notification-log rows; a stored receipt file may remain in storage. It will not issue a refund, reverse a payment, or restock inventory.`,
+    )) return
+    if (window.prompt(`Type ${orderCode} to confirm permanent deletion`) !== orderCode) return
+
+    setUpdating(order.id)
+    try {
+      const { error } = await supabase.from('orders').delete().eq('id', order.id)
+      if (error) throw error
+      setOrders(previous => previous.filter(item => item.id !== order.id))
+      if (expandedId === order.id) setExpandedId(null)
+      toast.success('Order permanently deleted')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete order')
+    } finally {
+      setUpdating(null)
+    }
+  }
+
   const filtered = orders.filter(o => {
     const matchesSearch = !search || 
       (o.customer_name?.toLowerCase().includes(search.toLowerCase())) ||
       (o.phone?.includes(search)) ||
       (o.id.includes(search))
     const matchesStatus = statusFilter === 'all' || o.status === statusFilter
-    return matchesSearch && matchesStatus
+    const matchesView = orderView === 'all' || (orderView === 'archived' ? Boolean(o.archived_at) : !o.archived_at)
+    return matchesSearch && matchesStatus && matchesView
   })
 
   const parseItems = (items: unknown): Array<{ name?: string; quantity?: number; price?: number }> => {
@@ -202,6 +242,16 @@ export default function AdminOrders() {
         >
           <option value="all">All Statuses</option>
           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+        </select>
+        <select
+          value={orderView}
+          onChange={e => setOrderView(e.target.value as 'active' | 'archived' | 'all')}
+          aria-label="Order archive view"
+          className="px-4 py-2.5 rounded-lg border border-border bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="active">Active Orders</option>
+          <option value="archived">Archived Orders</option>
+          <option value="all">All Orders</option>
         </select>
       </div>
 
@@ -241,6 +291,7 @@ export default function AdminOrders() {
                       <p className="font-medium text-foreground text-sm truncate">
                         {order.customer_name || 'Unknown'}
                       </p>
+                      {order.archived_at && <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">ARCHIVED</span>}
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColors[order.status] || 'bg-muted text-muted-foreground'}`}>
                         {order.status.toUpperCase()}
                       </span>
@@ -348,6 +399,25 @@ export default function AdminOrders() {
                       )}
 
                       {updating === order.id && <span className="text-xs text-muted-foreground animate-pulse">Processing...</span>}
+                      <div className="flex items-center gap-2 sm:ml-auto">
+                        <button
+                          type="button"
+                          disabled={updating === order.id}
+                          onClick={() => void setOrderArchived(order, !order.archived_at)}
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:bg-accent disabled:opacity-50"
+                        >
+                          {order.archived_at ? <RotateCcw className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                          {order.archived_at ? 'Restore' : 'Archive'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={updating === order.id}
+                          onClick={() => void permanentlyDeleteOrder(order)}
+                          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete permanently
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
