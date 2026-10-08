@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { parseCookieConsent } from './cookieConsent'
+import { parseCookieConsent } from './cookieConsent.ts'
 
 describe('cookie choices', () => {
   test('first-time visitors have no consent', () => {
