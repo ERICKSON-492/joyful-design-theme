@@ -17,6 +17,38 @@ export async function queueEmail(pool, { to, subject, html, label = 'generic', a
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]))
 const money = value => `KSh ${Number(value || 0).toLocaleString('en-KE')}`
 
+export async function queueNewProductNotifications(pool, product) {
+  if (!product?.id || !product?.is_active) return 0
+  const recipients = (await pool.query(
+    `SELECT email FROM (
+       SELECT email FROM public.newsletter_subscribers
+       UNION
+       SELECT email FROM public.auth_users WHERE is_active=true
+     ) recipients WHERE email IS NOT NULL AND email <> '' ORDER BY email`,
+  )).rows
+  let queued = 0
+  const productUrl = `https://ushangachronicles.com/product/${encodeURIComponent(product.id)}`
+  const image = product.image_url ? `<img src="${escapeHtml(product.image_url)}" alt="${escapeHtml(product.name)}" width="560" style="max-width:100%;border-radius:8px;display:block;margin:16px 0;" />` : ''
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a1a"><h2 style="color:#b8860b">A new piece has arrived</h2><h1>${escapeHtml(product.name)}</h1>${image}<p>${escapeHtml(product.description || 'Discover the latest handcrafted piece from Ushanga Chronicles.')}</p><p><strong>${money(product.sale_price && Number(product.sale_price) < Number(product.price) ? product.sale_price : product.price)}</strong></p><p><a href="${productUrl}" style="background:#b8860b;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px">View the new piece</a></p><p style="color:#777;font-size:12px">You are receiving this because you have an Ushanga Chronicles account or subscribed to product updates.</p></div>`
+  for (const recipient of recipients) {
+    const claim = await pool.query(
+      `INSERT INTO public.product_email_notifications (product_id,recipient_email)
+       VALUES ($1,$2) ON CONFLICT (product_id,recipient_email) DO NOTHING RETURNING id`,
+      [product.id, recipient.email.toLowerCase()],
+    )
+    if (!claim.rowCount) continue
+    try {
+      await queueEmail(pool, { to: recipient.email, subject: `New at Ushanga Chronicles: ${product.name}`, html, label: 'new-product-notification' })
+      queued += 1
+    } catch (error) {
+      await pool.query('DELETE FROM public.product_email_notifications WHERE id=$1', [claim.rows[0].id]).catch(() => {})
+      throw error
+    }
+  }
+  if (queued) drainOutbox(pool).catch(error => console.error('new-product notification outbox drain failed:', error.message))
+  return queued
+}
+
 export async function queueOrderNotification(pool, { orderId, eventKey, to, subject, html, label }) {
   if (!to) return false
   const claim = await pool.query(

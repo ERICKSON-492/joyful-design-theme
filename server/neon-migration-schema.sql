@@ -241,3 +241,13 @@ CREATE TABLE IF NOT EXISTS public.analytics_report_state (
   report_key text PRIMARY KEY,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Prevent a product notification from being queued twice for the same recipient.
+CREATE TABLE IF NOT EXISTS public.product_email_notifications (
+  id bigserial PRIMARY KEY,
+  product_id uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  recipient_email text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (product_id, recipient_email)
+);
+CREATE INDEX IF NOT EXISTS product_email_notifications_product_idx ON public.product_email_notifications (product_id);

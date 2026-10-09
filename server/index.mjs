@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
-import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, processScheduledSaleNotifications } from './functions-api.mjs'
+import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, queueNewProductNotifications, processScheduledSaleNotifications } from './functions-api.mjs'
 import { createGoogleOAuthRoutes } from './google-oauth.mjs'
 import { handleAdminCustomers } from './admin-customer-api.mjs'
 import { handleVisitorEvent, handleVisitorReport, processWeeklyVisitorReport } from './analytics-api.mjs'
@@ -193,7 +193,13 @@ async function handle(req, res, url) {
       return handleAdminCustomers({ pool, req, res, url, json, body, isAdmin: true })
     }
     if (req.method === 'GET' && url.pathname === '/api/admin/products') { const r = await pool.query(`SELECT ${productFields} FROM public.products ORDER BY created_at DESC`); return json(res, 200, { products: r.rows.map(productDto) }) }
-    if (req.method === 'POST' && url.pathname === '/api/admin/products') { const b = await body(req); const r = await pool.query(`INSERT INTO products (name,description,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,category,subcategory,stock,image_url,image_urls,is_active,is_preorder,preorder_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING ${productFields}`, [b.name,b.description||null,b.price,b.sale_price??null,b.sale_starts_at||null,b.sale_ends_at||null,b.price_min??null,b.price_max??null,b.category||'',b.subcategory||null,b.stock||0,b.image_url||null,b.image_urls||[],b.is_active!==false,b.is_preorder||false,b.preorder_label||null]); return json(res, 201, productDto(r.rows[0])) }
+    if (req.method === 'POST' && url.pathname === '/api/admin/products') {
+      const b = await body(req)
+      const r = await pool.query(`INSERT INTO products (name,description,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,category,subcategory,stock,image_url,image_urls,is_active,is_preorder,preorder_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING ${productFields}`, [b.name,b.description||null,b.price,b.sale_price??null,b.sale_starts_at||null,b.sale_ends_at||null,b.price_min??null,b.price_max??null,b.category||'',b.subcategory||null,b.stock||0,b.image_url||null,b.image_urls||[],b.is_active!==false,b.is_preorder||false,b.preorder_label||null])
+      const product = productDto(r.rows[0])
+      if (product.is_active) queueNewProductNotifications(pool, product).catch(error => console.error('new-product notification queue failed:', error.message))
+      return json(res, 201, product)
+    }
     const match = url.pathname.match(/^\/api\/admin\/products\/([^/]+)$/)
     if (match && req.method === 'PATCH') { const b = await body(req); const allowed = ['name','description','price','price_min','price_max','category','subcategory','stock','image_url','image_urls','is_active','is_preorder','preorder_label','low_stock_threshold','sale_price','sale_starts_at','sale_ends_at']; const sets=[]; const vals=[]; for (const k of allowed) if (b[k] !== undefined) { vals.push(b[k]); sets.push(`${k}=$${vals.length}`) } if (!sets.length) return json(res, 400, { error:'No fields' }); vals.push(match[1]); const r=await pool.query(`UPDATE products SET ${sets.join(',')},updated_at=now() WHERE id=$${vals.length} RETURNING ${productFields}`,vals); return r.rowCount ? json(res,200,productDto(r.rows[0])) : json(res,404,{error:'Product not found'}) }
     if (match && req.method === 'DELETE') { await pool.query('UPDATE products SET is_active=false,updated_at=now() WHERE id=$1',[match[1]]); return json(res,204) }
