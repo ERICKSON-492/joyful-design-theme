@@ -11,6 +11,18 @@ CREATE TABLE IF NOT EXISTS public.products (
   sale_starts_at timestamptz, sale_ends_at timestamptz
 );
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_price numeric;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS image_url text;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price_min numeric;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS price_max numeric;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_preorder boolean NOT NULL DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS preorder_label text;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS image_urls text[] NOT NULL DEFAULT '{}';
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS subcategory text;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS low_stock_threshold integer NOT NULL DEFAULT 5;
+ALTER TABLE public.products ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE public.products ALTER COLUMN created_at SET DEFAULT now();
+ALTER TABLE public.products ALTER COLUMN updated_at SET DEFAULT now();
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_starts_at timestamptz;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_ends_at timestamptz;
 CREATE TABLE IF NOT EXISTS public.product_variants (
