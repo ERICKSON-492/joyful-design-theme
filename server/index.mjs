@@ -12,7 +12,7 @@ import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api
 import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, processScheduledSaleNotifications } from './functions-api.mjs'
 import { createGoogleOAuthRoutes } from './google-oauth.mjs'
 import { handleAdminCustomers } from './admin-customer-api.mjs'
-import { handleVisitorEvent, handleVisitorReport } from './analytics-api.mjs'
+import { handleVisitorEvent, handleVisitorReport, processWeeklyVisitorReport } from './analytics-api.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -474,5 +474,10 @@ async function seedData(dir) {
 const server=http.createServer(async(req,res)=>{try{applyCors(req,res);if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}await handle(req,res,new URL(req.url,`http://${req.headers.host||'localhost'}`))}catch(e){console.error(e);json(res,500,{error:'Internal server error'})}})
 if (process.env.SKIP_BOOTSTRAP !== 'true') await bootstrap()
 processScheduledSaleNotifications(pool).catch(e => console.error('initial scheduled sale notifications failed:', e.message))
-setInterval(() => { drainOutbox(pool).catch(e => console.error('outbox drain failed:', e.message)); processScheduledSaleNotifications(pool).catch(e => console.error('scheduled sale notifications failed:', e.message)) }, 60000)
+processWeeklyVisitorReport(pool).catch(e => console.error('initial weekly visitor report failed:', e.message))
+setInterval(() => {
+  drainOutbox(pool).catch(e => console.error('outbox drain failed:', e.message))
+  processScheduledSaleNotifications(pool).catch(e => console.error('scheduled sale notifications failed:', e.message))
+  processWeeklyVisitorReport(pool).catch(e => console.error('weekly visitor report failed:', e.message))
+}, 60000)
 server.listen(port,'0.0.0.0',()=>console.log(`Neon API listening on ${port}`))

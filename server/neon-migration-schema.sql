@@ -235,3 +235,9 @@ CREATE INDEX IF NOT EXISTS visitor_sessions_country_idx ON public.visitor_sessio
 CREATE INDEX IF NOT EXISTS visitor_sessions_region_idx ON public.visitor_sessions (region, first_seen_at DESC);
 CREATE INDEX IF NOT EXISTS analytics_page_views_viewed_at_idx ON public.analytics_page_views (viewed_at DESC);
 CREATE INDEX IF NOT EXISTS analytics_page_views_session_idx ON public.analytics_page_views (session_key);
+
+-- Idempotency guard for recurring analytics emails.
+CREATE TABLE IF NOT EXISTS public.analytics_report_state (
+  report_key text PRIMARY KEY,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
