@@ -154,9 +154,17 @@ export default function AdminProducts() {
       image_urls: form.image_urls,
       is_active: form.is_active, is_preorder: form.is_preorder, preorder_label: form.preorder_label || null,
     }
-    try { await adminApi(editId ? `/api/admin/products/${editId}` : '/api/admin/products', { method: editId ? 'PATCH' : 'POST', body: JSON.stringify(payload) }); toast.success(editId ? 'Product updated!' : 'Product added!') }
-    catch (error) { toast.error(error instanceof Error ? error.message : 'Product save failed') }
-    setLoading(false); resetForm(); fetchProducts()
+    if (!payload.name.trim()) { setLoading(false); toast.error('Please enter a product name'); return }
+    if (!payload.category) { setLoading(false); toast.error('Please choose a category'); return }
+    if (!Number.isFinite(payload.price)) { setLoading(false); toast.error('Please enter a valid price'); return }
+    try {
+      await adminApi(editId ? `/api/admin/products/${editId}` : '/api/admin/products', { method: editId ? 'PATCH' : 'POST', body: JSON.stringify(payload) })
+      toast.success(editId ? 'Product updated!' : 'Product added!')
+      resetForm(); fetchProducts()
+    } catch (error) {
+      // Keep the form filled in so nothing typed is lost.
+      toast.error(`Product not saved: ${error instanceof Error ? error.message : 'unknown error'}`, { duration: 10000 })
+    } finally { setLoading(false) }
   }
 
   const handleEdit = (p: Product) => {
