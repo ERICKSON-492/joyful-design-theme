@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
+import { apiUrl } from '@/lib/apiBase'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, PieChart, Pie, Cell,
 } from 'recharts'
-import { TrendingUp, ShoppingBag, Users, Package } from 'lucide-react'
+import { TrendingUp, ShoppingBag, Users, Package, Eye, Globe2, MapPin, FileText } from 'lucide-react'
 
 interface OrderRow {
   id: string
@@ -12,6 +13,14 @@ interface OrderRow {
   status: string
   total_amount: number
   items: { id: string; name: string; price: number; quantity: number }[] | null
+}
+interface VisitorReport {
+  summary: { visitors: number; today: number; this_week: number }
+  daily: { day: string; visitors: number }[]
+  countries: { name: string; visitors: number }[]
+  regions: { name: string; visitors: number }[]
+  pages: { path: string; page_views: number; unique_visitors: number }[]
+  sources: { name: string; visitors: number }[]
 }
 
 // Orders in these statuses represent a completed/real sale for revenue
@@ -26,6 +35,7 @@ const RANGE_OPTIONS = [
 ]
 
 const PIE_COLORS = ['#D4A017', '#2563EB', '#16A34A', '#DC2626', '#7C3AED', '#EA580C', '#6B7280']
+const CHART_STYLE = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 13 }
 
 export default function AdminAnalytics() {
   const [orders, setOrders] = useState<OrderRow[]>([])
@@ -33,28 +43,33 @@ export default function AdminAnalytics() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [rangeDays, setRangeDays] = useState<number | null>(30)
+  const [visitorDays, setVisitorDays] = useState(30)
+  const [visitorReport, setVisitorReport] = useState<VisitorReport | null>(null)
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       setLoadError(null)
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id, created_at, status, total_amount, items')
-        .order('created_at', { ascending: true })
+      const [ordersResult, profilesResult, visitorResult] = await Promise.all([
+        supabase.from('orders').select('id, created_at, status, total_amount, items').order('created_at', { ascending: true }),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        fetch(apiUrl(`/api/admin/analytics/visitors?days=${visitorDays}`), { credentials: 'include' }).then(async response => {
+          const result = await response.json()
+          if (!response.ok) throw new Error(result.error || result.message || 'Visitor analytics could not be loaded')
+          return result as VisitorReport
+        }).catch(error => error instanceof Error ? error : new Error('Visitor analytics could not be loaded')),
+      ])
+      const { data, error } = ordersResult
       if (error) {
         setLoadError(error.message)
-        setLoading(false)
-        return
-      }
-      if (data) setOrders(data as unknown as OrderRow[])
-
-      const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true })
-      setCustomerCount(count ?? null)
+      } else if (data) setOrders(data as unknown as OrderRow[])
+      setCustomerCount(profilesResult.count ?? null)
+      if (visitorResult instanceof Error) setLoadError(previous => previous || visitorResult.message)
+      else setVisitorReport(visitorResult)
       setLoading(false)
     }
     load()
-  }, [])
+  }, [visitorDays])
 
   const filteredOrders = useMemo(() => {
     if (rangeDays === null) return orders
@@ -131,6 +146,33 @@ export default function AdminAnalytics() {
         <p className="text-muted-foreground">Loading...</p>
       ) : (
         <>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h2 className="font-display text-xl font-bold text-foreground">Website Visitors</h2>
+            <div className="flex gap-2">
+              {[7, 30, 90].map(days => (
+                <button key={days} onClick={() => setVisitorDays(days)} className={`text-xs px-3 py-1.5 rounded-full font-medium ${visitorDays === days ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                  {days} days
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-card border border-border p-5 rounded-lg"><Eye className="w-5 h-5 text-primary mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.summary.visitors ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Unique visitors ({visitorDays} days)</p></div>
+            <div className="bg-card border border-border p-5 rounded-lg"><Eye className="w-5 h-5 text-blue-500 mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.summary.today ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Visitors today</p></div>
+            <div className="bg-card border border-border p-5 rounded-lg"><TrendingUp className="w-5 h-5 text-green-500 mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.summary.this_week ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Visitors this week</p></div>
+            <div className="bg-card border border-border p-5 rounded-lg"><FileText className="w-5 h-5 text-orange-500 mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.pages.reduce((sum, row) => sum + row.page_views, 0) ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Page views</p></div>
+          </div>
+          <div className="bg-card border border-border rounded-lg p-5 mb-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Visitors Over Time</h3>
+            {!visitorReport?.daily.length ? <p className="text-sm text-muted-foreground py-8 text-center">No visitor data yet. Tracking begins after deployment and visitor consent.</p> : <ResponsiveContainer width="100%" height={240}><AreaChart data={visitorReport.daily}><defs><linearGradient id="visitorFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563EB" stopOpacity={0.35} /><stop offset="100%" stopColor="#2563EB" stopOpacity={0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" /><XAxis dataKey="day" fontSize={12} stroke="hsl(var(--muted-foreground))" /><YAxis allowDecimals={false} fontSize={12} stroke="hsl(var(--muted-foreground))" /><Tooltip contentStyle={CHART_STYLE} /><Area type="monotone" dataKey="visitors" name="Visitors" stroke="#2563EB" strokeWidth={2} fill="url(#visitorFill)" /></AreaChart></ResponsiveContainer>}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {[{ title: 'Visitors by Country', icon: Globe2, rows: visitorReport?.countries || [] }, { title: 'Visitors by Region', icon: MapPin, rows: visitorReport?.regions || [] }].map(({ title, icon: Icon, rows }) => <div key={title} className="bg-card border border-border rounded-lg p-5"><h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Icon className="w-4 h-4 text-primary" />{title}</h3>{rows.length === 0 ? <p className="text-sm text-muted-foreground py-8 text-center">No data yet.</p> : <div className="space-y-3">{rows.slice(0, 8).map((row, index) => <div key={`${row.name}-${index}`} className="flex items-center justify-between gap-4 text-sm"><span className="truncate text-foreground">{row.name}</span><span className="font-semibold text-muted-foreground">{row.visitors.toLocaleString()}</span></div>)}</div>}</div>)}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+            <div className="bg-card border border-border rounded-lg p-5"><h3 className="text-sm font-semibold text-foreground mb-4">Traffic Sources</h3>{!visitorReport?.sources.length ? <p className="text-sm text-muted-foreground py-8 text-center">No campaign data yet.</p> : <div className="space-y-3">{visitorReport.sources.slice(0, 8).map((row, index) => <div key={`${row.name}-${index}`} className="flex items-center justify-between gap-4 text-sm"><span className="truncate text-foreground">{row.name}</span><span className="font-semibold text-muted-foreground">{row.visitors.toLocaleString()}</span></div>)}</div>}</div>
+            <div className="bg-card border border-border rounded-lg p-5"><h3 className="text-sm font-semibold text-foreground mb-4">Top Pages</h3>{!visitorReport?.pages.length ? <p className="text-sm text-muted-foreground py-8 text-center">No page views yet.</p> : <div className="space-y-3">{visitorReport.pages.slice(0, 8).map(page => <div key={page.path} className="flex items-center justify-between gap-4 text-sm"><span className="truncate text-foreground">{page.path}</span><span className="whitespace-nowrap text-muted-foreground">{page.page_views} views / {page.unique_visitors} visitors</span></div>)}</div>}</div>
+          </div>
           {/* KPI cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-card border border-border p-5 rounded-lg">

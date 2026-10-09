@@ -1,4 +1,5 @@
 import { getCookieConsent } from './cookieConsent'
+import { apiUrl } from './apiBase'
 
 declare global {
   interface Window {
@@ -8,6 +9,54 @@ declare global {
 }
 
 let enabled = false
+const VISITOR_SESSION_KEY = 'ushanga-visitor-session'
+const LANDING_PAGE_KEY = 'ushanga-landing-page'
+
+function visitorSessionKey() {
+  try {
+    const existing = window.localStorage.getItem(VISITOR_SESSION_KEY)
+    if (existing) return existing
+    const created = crypto.randomUUID()
+    window.localStorage.setItem(VISITOR_SESSION_KEY, created)
+    return created
+  } catch {
+    return crypto.randomUUID()
+  }
+}
+
+function firstLandingPage(path: string) {
+  try {
+    const existing = window.sessionStorage.getItem(LANDING_PAGE_KEY)
+    if (existing) return existing
+    window.sessionStorage.setItem(LANDING_PAGE_KEY, path)
+  } catch {
+    // Tracking must never interrupt navigation when storage is unavailable.
+  }
+  return path
+}
+
+function sendFirstPartyPageView(path: string) {
+  const params = new URLSearchParams(window.location.search)
+  const payload = JSON.stringify({
+    sessionKey: visitorSessionKey(),
+    path: path.split('?')[0] || '/',
+    landingPage: firstLandingPage(path.split('?')[0] || '/'),
+    referrer: document.referrer || null,
+    deviceType: /Tablet|iPad/i.test(navigator.userAgent) ? 'tablet' : /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+    utmSource: params.get('utm_source'),
+    utmMedium: params.get('utm_medium'),
+    utmCampaign: params.get('utm_campaign'),
+  })
+  const endpoint = apiUrl('/api/analytics/visit')
+  try {
+    // text/plain avoids a preflight when the storefront and Render API have different origins.
+    const sent = navigator.sendBeacon?.(endpoint, new Blob([payload], { type: 'text/plain;charset=UTF-8' }))
+    if (sent) return
+  } catch {
+    // Fall through to keepalive fetch.
+  }
+  void fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: payload, keepalive: true }).catch(() => {})
+}
 
 export function enableAnalytics() {
   if (enabled || getCookieConsent() !== 'accepted') return
@@ -54,6 +103,7 @@ export function enableAnalytics() {
  */
 export function trackPageView(path: string) {
   if (typeof window === 'undefined' || getCookieConsent() !== 'accepted') return
+  sendFirstPartyPageView(path)
   // Deliberately build page_location from origin + pathname + search only —
   // never window.location.hash. During an OAuth redirect, the URL fragment
   // can briefly contain real session tokens before Supabase strips it, and

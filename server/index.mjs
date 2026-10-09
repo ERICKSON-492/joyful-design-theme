@@ -12,6 +12,7 @@ import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api
 import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, processScheduledSaleNotifications } from './functions-api.mjs'
 import { createGoogleOAuthRoutes } from './google-oauth.mjs'
 import { handleAdminCustomers } from './admin-customer-api.mjs'
+import { handleVisitorEvent, handleVisitorReport } from './analytics-api.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -126,6 +127,8 @@ function queryFilters(url) {
 async function handle(req, res, url) {
   if (await handleGoogleOAuth(req, res, url)) return
   if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true })
+  if (url.pathname === '/api/analytics/visit') return handleVisitorEvent({ pool, req, res, json, body })
+  if (url.pathname === '/api/admin/analytics/visitors') return handleVisitorReport({ pool, req, res, url, json, requireAdmin })
   if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user = await neonUser(req); return authJson(res, 200, { user: user ? safeUser(user) : null }) }
   if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
     const b = await body(req); const email = String(b.email || '').trim().toLowerCase(); const password = String(b.password || ''); const displayName = String(b.displayName || b.name || '').trim()

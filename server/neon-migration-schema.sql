@@ -127,6 +127,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   user_id uuid NOT NULL UNIQUE, display_name text, phone text,
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- Existing Neon databases may have an older profiles table without these columns.
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS display_name text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone text;
 
 CREATE TABLE IF NOT EXISTS public.stock_adjustments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -210,3 +213,25 @@ CREATE OR REPLACE FUNCTION public.redeem_coupon(p_coupon_id uuid)
 RETURNS void LANGUAGE sql AS $$
   UPDATE public.coupons SET times_used = times_used + 1, updated_at = now() WHERE id = p_coupon_id;
 $$;
+
+-- First-party visitor analytics. No raw IP addresses are stored.
+CREATE TABLE IF NOT EXISTS public.visitor_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_key text NOT NULL UNIQUE,
+  first_seen_at timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  country text, region text, city text,
+  landing_page text, referrer text, device_type text,
+  utm_source text, utm_medium text, utm_campaign text
+);
+CREATE TABLE IF NOT EXISTS public.analytics_page_views (
+  id bigserial PRIMARY KEY,
+  session_key text NOT NULL,
+  path text NOT NULL,
+  viewed_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS visitor_sessions_first_seen_idx ON public.visitor_sessions (first_seen_at DESC);
+CREATE INDEX IF NOT EXISTS visitor_sessions_country_idx ON public.visitor_sessions (country, first_seen_at DESC);
+CREATE INDEX IF NOT EXISTS visitor_sessions_region_idx ON public.visitor_sessions (region, first_seen_at DESC);
+CREATE INDEX IF NOT EXISTS analytics_page_views_viewed_at_idx ON public.analytics_page_views (viewed_at DESC);
+CREATE INDEX IF NOT EXISTS analytics_page_views_session_idx ON public.analytics_page_views (session_key);
