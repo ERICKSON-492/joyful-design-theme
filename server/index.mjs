@@ -206,7 +206,17 @@ async function handle(req, res, url) {
     }
     const match = url.pathname.match(/^\/api\/admin\/products\/([^/]+)$/)
     if (match && req.method === 'PATCH') { const b = await body(req); const allowed = ['name','description','price','price_min','price_max','category','subcategory','stock','image_url','image_urls','is_active','is_preorder','preorder_label','low_stock_threshold','sale_price','sale_starts_at','sale_ends_at']; const sets=[]; const vals=[]; for (const k of allowed) if (b[k] !== undefined) { vals.push(b[k]); sets.push(`${k}=$${vals.length}`) } if (!sets.length) return json(res, 400, { error:'No fields' }); vals.push(match[1]); let r; try { r=await pool.query(`UPDATE products SET ${sets.join(',')},updated_at=now() WHERE id=$${vals.length} RETURNING ${productFields}`,vals) } catch (error) { console.error('product update failed:', error.message); return json(res,400,{error:error.message}) } return r.rowCount ? json(res,200,productDto(r.rows[0])) : json(res,404,{error:'Product not found'}) }
-    if (match && req.method === 'DELETE') { await pool.query('UPDATE products SET is_active=false,updated_at=now() WHERE id=$1',[match[1]]); return json(res,204) }
+    if (match && req.method === 'DELETE') {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(match[1])) return json(res,400,{error:'Invalid product id'})
+      try {
+        const r = await pool.query('DELETE FROM products WHERE id=$1::uuid',[match[1]])
+        return r.rowCount ? json(res,200,{ok:true}) : json(res,404,{error:'Product not found'})
+      } catch (error) {
+        console.error('product delete failed:', error.message)
+        try { await pool.query('UPDATE products SET is_active=false,updated_at=now() WHERE id=$1::uuid',[match[1]]); return json(res,200,{ok:true,archived:true}) }
+        catch (e2) { return json(res,500,{error:e2.message}) }
+      }
+    }
     const vm = url.pathname.match(/^\/api\/admin\/variants(?:\/([^/]+))?$/)
     if (vm && req.method === 'POST') { const b=await body(req); const r=await pool.query(`INSERT INTO product_variants (product_id,variant_label,size,color,price,stock,is_active) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${variantFields}`,[b.product_id,b.variant_label||`${b.size||''} ${b.color||''}`.trim(),b.size||null,b.color||null,b.price||0,b.stock||0,b.is_active!==false]); return json(res,201,variantDto(r.rows[0])) }
     if (vm && req.method === 'PATCH') { const b=await body(req); const keys=['variant_label','size','color','price','stock','is_active']; const sets=[];const vals=[];for(const k of keys)if(b[k]!==undefined){vals.push(b[k]);sets.push(`${k}=$${vals.length}`)}vals.push(vm[1]);const r=await pool.query(`UPDATE product_variants SET ${sets.join(',')},updated_at=now() WHERE id=$${vals.length} RETURNING ${variantFields}`,vals);return r.rowCount?json(res,200,variantDto(r.rows[0])):json(res,404,{error:'Variant not found'}) }

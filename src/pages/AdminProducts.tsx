@@ -181,9 +181,14 @@ export default function AdminProducts() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this product?')) return
-    try { await adminApi(`/api/admin/products/${id}`, { method: 'DELETE' }); toast.success('Product archived'); fetchProducts() }
-    catch (error) { toast.error(error instanceof Error ? error.message : 'Product archive failed') }
+    if (!confirm('Permanently delete this product and its variants and reviews? Past orders are not affected.')) return
+    try {
+      const result = await adminApi(`/api/admin/products/${id}`, { method: 'DELETE' })
+      toast.success(result?.archived ? 'Product hidden (it could not be fully deleted)' : 'Product deleted')
+      setProducts(prev => prev.filter(p => p.id !== id))
+      fetchProducts()
+    }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'Product delete failed') }
   }
 
   // Variant handlers
