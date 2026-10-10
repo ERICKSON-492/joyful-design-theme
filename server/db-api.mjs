@@ -163,6 +163,10 @@ export async function handleDb({ pool, req, res, url, json, body, user, isAdmin 
         return json(res, e.code === '23505' ? 409 : 400, { message: e.message, code: e.code || '400', details: e.detail || null })
       }
     }
+    if (physical === 'enquiry_messages') {
+      const { forwardEnquiryToWhatsApp } = await import('./whatsapp.mjs')
+      for (const row of inserted) void forwardEnquiryToWhatsApp(pool, row)
+    }
     return json(res, 201, inserted)
   }
 
