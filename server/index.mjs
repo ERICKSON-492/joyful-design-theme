@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
 import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, queueNewProductNotifications, processScheduledSaleNotifications } from './functions-api.mjs'
 import { createGoogleOAuthRoutes } from './google-oauth.mjs'
+import { handleWhatsAppWebhook } from './whatsapp.mjs'
 import { handleAdminCustomers } from './admin-customer-api.mjs'
 import { handleVisitorEvent, handleVisitorReport, processWeeklyVisitorReport } from './analytics-api.mjs'
 
@@ -312,6 +313,7 @@ async function handle(req, res, url) {
     const isAdmin = user?.role === 'admin' ? true : Boolean(await requireAdmin(req))
     return handleFunction({ pool, req, res, url, json, body, user, isAdmin })
   }
+  if (url.pathname === '/api/whatsapp/webhook') return handleWhatsAppWebhook({ pool, req, res, url, json, body })
   if (url.pathname === '/api/mpesa/callback') return handleMpesaCallback({ pool, req, res, json, body })
   if (url.pathname.startsWith('/api/rpc/')) return handleRpc({ pool, req, res, url, json, body })
   return json(res,404,{error:'Not found'})

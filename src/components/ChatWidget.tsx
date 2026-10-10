@@ -3,6 +3,8 @@ import { MessageCircle, X, Send, Check, CheckCheck } from 'lucide-react'
 import { supabase } from '@/lib/dbClient'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
+import { playChime } from '@/lib/notify'
 
 interface Message {
   id: string
@@ -64,7 +66,15 @@ export function ChatWidget() {
         (payload) => {
           const m = payload.new as Message
           setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
-          if (m.is_from_admin && !open) setUnread((n) => n + 1)
+          if (m.is_from_admin && !open) {
+            setUnread((n) => n + 1)
+            playChime()
+            toast('New reply from Ushanga Chronicles', {
+              description: m.message.length > 90 ? `${m.message.slice(0, 90)}...` : m.message,
+              duration: 12000,
+              action: { label: 'Open chat', onClick: () => setOpen(true) },
+            })
+          }
         }
       )
       .on(
