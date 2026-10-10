@@ -4,6 +4,9 @@ import { getCurrentUser, logout } from '@/lib/auth'
 import { Package, MessageSquare, LogOut, LayoutDashboard, ChevronLeft, Image, ShoppingBag, Grid3X3, FileText, Camera, Truck, CreditCard, Star, Boxes, Mail, BookOpen, Tag, MapPin, Palette, Users, BarChart3, KeyRound } from 'lucide-react'
 import type { AuthUser } from '@/lib/auth'
 import { useSEO } from '@/hooks/useSEO'
+import { useAdminAlerts } from '@/hooks/useAdminAlerts'
+import { Bell } from 'lucide-react'
+import { desktopAlertsPermission, requestDesktopAlerts } from '@/lib/notify'
 
 const navItems = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -34,6 +37,8 @@ export default function AdminLayout() {
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const location = useLocation()
+  useAdminAlerts(!!user)
+  const [perm, setPerm] = useState(desktopAlertsPermission())
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -86,6 +91,11 @@ export default function AdminLayout() {
           <Link to="/" className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ChevronLeft className="w-4 h-4" /> Back to Site
           </Link>
+          {perm === 'default' && (
+            <button onClick={async () => setPerm(await requestDesktopAlerts())} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full">
+              <Bell className="w-4 h-4" /> Turn on desktop alerts
+            </button>
+          )}
           <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:text-destructive/80 transition-colors w-full">
             <LogOut className="w-4 h-4" /> Sign Out
           </button>
