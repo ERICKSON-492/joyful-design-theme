@@ -13,6 +13,9 @@ import { BackButton } from './components/BackButton'
 import { CartReminder } from './components/CartReminder'
 import { useProfileSync } from './hooks/useProfileSync'
 import { CookieConsent } from './components/CookieConsent'
+import { Toaster } from 'sonner'
+import { CustomerAlerts } from './components/CustomerAlerts'
+import { NewArrivalNotice } from './components/NewArrivalNotice'
 
 // ⚡ 1. Inline Scroll Restoration Helper
 // This resets the scroll tracking instantly when navigating between pages.
@@ -52,7 +55,10 @@ function AppContent() {
       {!isAdmin && <InstallAppPrompt />}
       {!isAdmin && <BackButton />}
       {!isAdmin && <CartReminder />}
+      {!isAdmin && <CustomerAlerts />}
+      {!isAdmin && <NewArrivalNotice />}
       <CookieConsent />
+      <Toaster position="top-center" richColors closeButton />
     </div>
   )
 }
