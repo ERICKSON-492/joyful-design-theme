@@ -17,16 +17,11 @@ import { Toaster } from 'sonner'
 import { CustomerAlerts } from './components/CustomerAlerts'
 import { NewArrivalNotice } from './components/NewArrivalNotice'
 import { SaleNotice } from './components/SaleNotice'
+import { PushNotificationPrompt } from './components/PushNotificationPrompt'
 
-// ⚡ 1. Inline Scroll Restoration Helper
-// This resets the scroll tracking instantly when navigating between pages.
 function ScrollToTop() {
   const { pathname } = useLocation()
-
-  useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [pathname])
-
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
   return null
 }
 
@@ -37,19 +32,10 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col isolation-isolate">
-      {/* Scroll to top handles window positioning before transitions complete */}
       <ScrollToTop />
-
       {!isAdmin && <TopBar />}
       {!isAdmin && <Navbar />}
-      
-      {/* ⚡ 2. FIX: Added dynamic layout safety to the main wrapper */}
-      {/* h-full and min-h-[70vh] guarantees that even if AnimatePresence completely empties 
-          the routes wrapper during a transition, the footer stays anchored below the fold. */}
-      <main className="flex-1 flex flex-col min-h-[75vh] w-full relative">
-        <AnimatedRoutes />
-      </main>
-
+      <main className="flex-1 flex flex-col min-h-[75vh] w-full relative"><AnimatedRoutes /></main>
       {!isAdmin && <Footer />}
       {!isAdmin && <ChatWidget />}
       {!isAdmin && <CartDrawer />}
@@ -59,6 +45,7 @@ function AppContent() {
       {!isAdmin && <CustomerAlerts />}
       {!isAdmin && <NewArrivalNotice />}
       {!isAdmin && <SaleNotice />}
+      {!isAdmin && <PushNotificationPrompt />}
       <CookieConsent />
       <Toaster position="top-center" richColors closeButton />
     </div>
@@ -66,13 +53,5 @@ function AppContent() {
 }
 
 export default function App() {
-  return (
-    <BrowserRouter>
-      <CurrencyProvider>
-        <CartProvider>
-          <AppContent />
-        </CartProvider>
-      </CurrencyProvider>
-    </BrowserRouter>
-  )
+  return <BrowserRouter><CurrencyProvider><CartProvider><AppContent /></CartProvider></CurrencyProvider></BrowserRouter>
 }

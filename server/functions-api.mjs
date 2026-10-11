@@ -1,6 +1,7 @@
 // Background jobs that used to be hosted edge functions: transactional email,
 // the newsletter digest, M-Pesa STK push and unsubscribe handling. Plus the two
 // coupon database calls the checkout makes.
+import { GoogleAuth } from 'google-auth-library'
 
 const resendKey = () => process.env.RESEND_API_KEY || ''
 const fromAddress = () => process.env.EMAIL_FROM || 'Ushanga Chronicles <orders@ushangachronicles.com>'
@@ -16,6 +17,53 @@ export async function queueEmail(pool, { to, subject, html, label = 'generic', a
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]))
 const money = value => `KSh ${Number(value || 0).toLocaleString('en-KE')}`
+
+let fcmAuth
+function fcmConfig() {
+  if (!process.env.FCM_SERVICE_ACCOUNT_JSON) return null
+  try {
+    const credentials = JSON.parse(process.env.FCM_SERVICE_ACCOUNT_JSON)
+    return { credentials, projectId: process.env.FCM_PROJECT_ID || credentials.project_id }
+  } catch (error) {
+    console.error('Invalid FCM_SERVICE_ACCOUNT_JSON:', error.message)
+    return null
+  }
+}
+
+async function sendPushMessage(token, product) {
+  const config = fcmConfig()
+  if (!config?.projectId) return false
+  fcmAuth ||= new GoogleAuth({ credentials: config.credentials, scopes: ['https://www.googleapis.com/auth/firebase.messaging'] })
+  const client = await fcmAuth.getClient()
+  const accessToken = await client.getAccessToken()
+  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/messages:send`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${accessToken.token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ message: {
+      token,
+      notification: { title: 'New at Ushanga Chronicles', body: `${product.name} is now available.` },
+      data: { title: 'New at Ushanga Chronicles', body: `${product.name} is now available.`, url: `/product/${product.id}` },
+      webpush: { fcmOptions: { link: `https://ushangachronicles.com/product/${product.id}` } },
+    } }),
+  })
+  if (!response.ok) throw new Error(`FCM returned ${response.status}: ${await response.text()}`)
+  return true
+}
+
+export async function sendPushNewProductNotifications(pool, product) {
+  if (!fcmConfig()?.projectId) return 0
+  const tokens = (await pool.query('SELECT id,token FROM public.fcm_tokens WHERE enabled=true')).rows
+  let sent = 0
+  for (const row of tokens) {
+    try {
+      if (await sendPushMessage(row.token, product)) sent += 1
+    } catch (error) {
+      console.error(`FCM product notification failed for token ${row.id}:`, error.message)
+      if (/404|UNREGISTERED|registration-token-not-registered/i.test(error.message)) await pool.query('UPDATE public.fcm_tokens SET enabled=false WHERE id=$1', [row.id]).catch(() => {})
+    }
+  }
+  return sent
+}
 
 export async function queueNewProductNotifications(pool, product) {
   if (!product?.id || !product?.is_active) return 0
@@ -46,6 +94,7 @@ export async function queueNewProductNotifications(pool, product) {
     }
   }
   if (queued) drainOutbox(pool).catch(error => console.error('new-product notification outbox drain failed:', error.message))
+  sendPushNewProductNotifications(pool, product).catch(error => console.error('new-product push notification failed:', error.message))
   return queued
 }
 

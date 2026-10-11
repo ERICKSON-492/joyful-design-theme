@@ -251,3 +251,15 @@ CREATE TABLE IF NOT EXISTS public.product_email_notifications (
   UNIQUE (product_id, recipient_email)
 );
 CREATE INDEX IF NOT EXISTS product_email_notifications_product_idx ON public.product_email_notifications (product_id);
+
+-- Opted-in Firebase browser tokens for instant web push alerts.
+CREATE TABLE IF NOT EXISTS public.fcm_tokens (
+  id bigserial PRIMARY KEY,
+  token text NOT NULL UNIQUE,
+  user_id uuid REFERENCES public.auth_users(id) ON DELETE SET NULL,
+  enabled boolean NOT NULL DEFAULT true,
+  user_agent text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS fcm_tokens_enabled_idx ON public.fcm_tokens (enabled, last_seen_at DESC);

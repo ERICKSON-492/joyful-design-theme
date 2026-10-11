@@ -130,6 +130,23 @@ async function handle(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true })
   if (url.pathname === '/api/analytics/visit') return handleVisitorEvent({ pool, req, res, json, body })
   if (url.pathname === '/api/admin/analytics/visitors') return handleVisitorReport({ pool, req, res, url, json, requireAdmin })
+  if (req.method === 'POST' && url.pathname === '/api/push/register') {
+    const b = await body(req); const token = String(b.token || '').trim();
+    if (token.length < 20 || token.length > 4096) return json(res, 400, { error: 'Invalid Firebase browser token' })
+    const user = await neonUser(req)
+    await pool.query(
+      `INSERT INTO public.fcm_tokens (token,user_id,user_agent,enabled,last_seen_at)
+       VALUES ($1,$2,$3,true,now())
+       ON CONFLICT (token) DO UPDATE SET user_id=COALESCE(EXCLUDED.user_id,fcm_tokens.user_id), user_agent=EXCLUDED.user_agent, enabled=true, last_seen_at=now()`,
+      [token, user?.id || null, String(req.headers['user-agent'] || '').slice(0, 400) || null],
+    )
+    return json(res, 204)
+  }
+  if (req.method === 'DELETE' && url.pathname === '/api/push/register') {
+    const b = await body(req); const token = String(b.token || '').trim()
+    if (token) await pool.query('UPDATE public.fcm_tokens SET enabled=false,last_seen_at=now() WHERE token=$1', [token])
+    return json(res, 204)
+  }
   if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user = await neonUser(req); return authJson(res, 200, { user: user ? safeUser(user) : null }) }
   if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
     const b = await body(req); const email = String(b.email || '').trim().toLowerCase(); const password = String(b.password || ''); const displayName = String(b.displayName || b.name || '').trim()
