@@ -206,21 +206,9 @@ export function CartDrawer() {
                     style={{ minHeight: '44px' }}
                   >
                     <LogIn className="w-4 h-4" />
-                    Log In to Checkout
+                    Proceed to checkout
                   </Link>
                 )}
-                
-                <a
-                  href={`https://wa.me/254748207000?text=${encodeURIComponent(
-                    `Hi! I'd like to order:\n${items.map(i => `• ${i.name} x${i.quantity} - KSh ${(i.price * i.quantity).toLocaleString()}`).join('\n')}\n\nTotal: KSh ${totalPrice.toLocaleString()}`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full border border-border text-foreground text-center py-3 font-bold text-sm tracking-wider uppercase hover:bg-accent transition-colors rounded-lg"
-                  style={{ minHeight: '44px' }}
-                >
-                  Order via WhatsApp
-                </a>
                 
                 <button
                   onClick={() => setIsOpen(false)}
