@@ -106,7 +106,7 @@ function selectList(params, cols) {
 }
 
 // ---------------------------------------------------------------- data routes
-export async function handleDb({ pool, req, res, url, json, body, user, isAdmin }) {
+export async function handleDb({ pool, req, res, url, json, body, user, isAdmin, onOrderUpdated }) {
   const name = decodeURIComponent(url.pathname.slice('/api/db/'.length))
   const rule = tableRules[name]
   if (!rule) return json(res, 404, { message: `Unknown table ${name}`, code: '42P01' })
@@ -192,6 +192,9 @@ export async function handleDb({ pool, req, res, url, json, body, user, isAdmin 
     }
     try {
       const r = await pool.query(`UPDATE public.${physical} SET ${sets.join(',')} WHERE ${clauses.join(' AND ')} RETURNING *`, values)
+      if (physical === 'joyful_orders' && payload.status && onOrderUpdated) {
+        for (const order of r.rows) await onOrderUpdated(order).catch(error => console.error('order status notification failed:', error.message))
+      }
       return json(res, 200, r.rows)
     } catch (e) {
       return json(res, 400, { message: e.message, code: e.code || '400' })

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
-import { sendEmail } from '@/lib/functions'
 import { format } from 'date-fns'
 import { Archive, ChevronDown, ChevronUp, RotateCcw, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -53,62 +52,11 @@ export default function AdminOrders() {
     fetchOrders() 
   }, [])
 
-  const getCustomerEmail = (order: Order) => {
-    const directEmail = (order as Order & { email?: string | null }).email
-    if (typeof directEmail === 'string' && directEmail.trim()) return directEmail.trim()
-    if (!order.shipping_address || typeof order.shipping_address !== 'object' || Array.isArray(order.shipping_address)) {
-      return null
-    }
-    const email = (order.shipping_address as Record<string, unknown>).email
-    return typeof email === 'string' && email.trim() ? email.trim() : null
-  }
-
   const getShippingAddress = (order: Order) => {
     if (!order.shipping_address || typeof order.shipping_address !== 'object' || Array.isArray(order.shipping_address)) {
       return null
     }
     return order.shipping_address as Record<string, unknown>
-  }
-
-  const generateStatusEmailHtml = (order: Order, newStatus: string, updatedTracking?: string) => {
-    const trackingNumber = updatedTracking || order.tracking_number
-    return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
-        <div style="text-align: center; padding: 14px 0; border-bottom: 3px solid #D4A017; margin-bottom: 18px;">
-          <div style="font-family: 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 800; color: #1A1A1A; letter-spacing: 0.04em;">USHANGA CHRONICLES</div>
-          <div style="font-size: 11px; color: #6b7280; margin-top: 2px; letter-spacing: 0.08em; text-transform: uppercase;">One bead. A thousand stories.</div>
-        </div>
-        
-        <h2 style="color: #1A1A1A; margin: 0 0 16px 0;">Hello ${order.customer_name || 'Customer'},</h2>
-        
-        <p style="color: #374151; font-size: 15px; line-height: 1.5;">Your order <strong>#${order.id.slice(0, 8)}</strong> has been updated!</p>
-        
-        <div style="margin: 24px 0; background-color: #fafafa; border-radius: 8px; padding: 20px; text-align: center;">
-          <p style="font-size: 28px; font-weight: 700; margin: 0; color: #D4A017;">
-            ${newStatus.toUpperCase()}
-          </p>
-        </div>
-        
-        ${newStatus === 'shipped' && trackingNumber ? `
-          <div style="margin: 16px 0; padding: 12px; background-color: #f0f9ff; border-radius: 8px;">
-            <p style="margin: 0;"><strong>Tracking Number:</strong> ${trackingNumber}</p>
-          </div>
-        ` : ''}
-        
-        <div style="margin: 16px 0; padding: 12px; background-color: #f9f9f9; border-radius: 8px;">
-          <p style="margin: 0;"><strong>Order Total:</strong> KSh ${Number(order.total_amount).toLocaleString()}</p>
-        </div>
-        
-        <p style="color: #374151; font-size: 14px;">Thank you for shopping with Ushanga Chronicles!</p>
-        
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f3f4f6; text-align: center; font-size: 12px; color: #9ca3af;">
-          <p style="margin: 0;">Questions? Reply to this email or WhatsApp +254 748 207 000</p>
-          <p style="margin: 8px 0 0 0;">
-            <a href="https://ushangachronicles.com/privacy-policy" style="color: #9ca3af;">Privacy Policy</a>
-          </p>
-        </div>
-      </div>
-    `
   }
 
   const updateStatus = async (id: string, newStatus: string) => {
@@ -118,8 +66,6 @@ export default function AdminOrders() {
     setUpdating(id)
 
     try {
-      const trackingNumber = trackingInputs[id] || order.tracking_number
-      
       const updatePayload: Partial<Order> = { status: newStatus }
       if (newStatus === 'shipped' && trackingInputs[id]) {
         updatePayload.tracking_number = trackingInputs[id]
@@ -137,24 +83,7 @@ export default function AdminOrders() {
 
       setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updatePayload } : o))
 
-      const customerEmail = getCustomerEmail(order)
-      if (!customerEmail) {
-        toast.success('Status updated (no email on file)')
-        return
-      }
-
-      try {
-        await sendEmail({
-          to: customerEmail,
-          subject: `Order #${id.slice(0, 8)} Status Update - Ushanga Chronicles`,
-          html: generateStatusEmailHtml(order, newStatus, trackingNumber || undefined),
-          label: 'order-status-update',
-        })
-        toast.success('Status updated & email queued!')
-      } catch (emailErr) {
-        console.error('Email sending failed:', emailErr)
-        toast.warning('Status updated, but email notification failed')
-      }
+      toast.success('Status updated; customer notifications queued by the server.')
       
     } catch (error) {
       console.error('Order status update failed:', error)

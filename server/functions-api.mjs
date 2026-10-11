@@ -56,7 +56,10 @@ export async function sendPushNewProductNotifications(pool, product) {
 
 export async function sendPushBroadcast(pool, payload) {
   if (!fcmConfig()?.projectId) return { configured: false, total: 0, sent: 0, failed: 0 }
-  const tokens = (await pool.query('SELECT id,token FROM public.fcm_tokens WHERE enabled=true')).rows
+  const tokens = (await pool.query(
+    'SELECT id,token FROM public.fcm_tokens WHERE enabled=true AND ($1::uuid IS NULL OR user_id=$1::uuid)',
+    [payload.userId || null],
+  )).rows
   let sent = 0
   let failed = 0
   for (const row of tokens) {
@@ -137,6 +140,42 @@ export async function queuePaymentNotification(pool, order, status) {
   const detail = paid ? 'Your M-Pesa payment was received and your order is being processed.' : failed ? 'Your M-Pesa payment was not completed. Please try again or contact us for help.' : 'Check your phone and enter your M-Pesa PIN to complete payment.'
   const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a1a"><h2 style="color:#b8860b">${title}</h2><p>Order <strong>#${escapeHtml(String(order.id).slice(0, 8))}</strong></p><p>${detail}</p><p>Order total: <strong>${money(order.total_amount)}</strong></p><p>Questions? Reply to this email or WhatsApp +254 748 207 000.</p></div>`
   return queueOrderNotification(pool, { orderId: order.id, eventKey: `payment-${status}`, to: order.email, subject: `${title} - Order #${String(order.id).slice(0, 8)}`, html, label: `payment-${status}` })
+}
+
+export async function queueOrderStatusNotification(pool, order) {
+  if (!order?.status) return false
+  const status = String(order.status)
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a1a"><h2 style="color:#b8860b">Your order status was updated</h2><p>Hello ${escapeHtml(order.customer_name || 'there')},</p><p>Order <strong>#${escapeHtml(String(order.id).slice(0, 8))}</strong> is now <strong>${escapeHtml(status.toUpperCase())}</strong>.</p>${status === 'shipped' && order.tracking_number ? `<p>Tracking number: <strong>${escapeHtml(order.tracking_number)}</strong></p>` : ''}<p>Order total: <strong>${money(order.total_amount)}</strong></p><p>Questions? Reply to this email or WhatsApp +254 748 207 000.</p></div>`
+  const email = order.email ? queueOrderNotification(pool, { orderId: order.id, eventKey: `status-${status}`, to: order.email, subject: `Order #${String(order.id).slice(0, 8)} status update - Ushanga Chronicles`, html, label: 'order-status-update' }) : Promise.resolve(false)
+  const push = queueOrderPushNotification(pool, order, status)
+  const [emailQueued, pushQueued] = await Promise.all([email, push])
+  return emailQueued || pushQueued
+}
+
+async function queueOrderPushNotification(pool, order, status) {
+  if (!order?.user_id) return false
+  const claim = await pool.query(
+    `INSERT INTO public.order_push_notifications (order_id,event_key,user_id)
+     VALUES ($1,$2,$3) ON CONFLICT (order_id,event_key,user_id) DO NOTHING RETURNING id`,
+    [order.id, `status-${status}`, order.user_id],
+  )
+  if (!claim.rowCount) return false
+  try {
+    const result = await sendPushBroadcast(pool, {
+      title: 'Ushanga Chronicles order update',
+      body: `Order #${String(order.id).slice(0, 8).toUpperCase()} is now ${status}.`,
+      url: '/my-orders',
+      userId: order.user_id,
+    })
+    if (!result.configured || !result.sent) {
+      await pool.query('DELETE FROM public.order_push_notifications WHERE id=$1', [claim.rows[0].id]).catch(() => {})
+      return false
+    }
+    return true
+  } catch (error) {
+    await pool.query('DELETE FROM public.order_push_notifications WHERE id=$1', [claim.rows[0].id]).catch(() => {})
+    throw error
+  }
 }
 
 export async function processScheduledSaleNotifications(pool) {

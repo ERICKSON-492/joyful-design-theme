@@ -263,3 +263,12 @@ CREATE TABLE IF NOT EXISTS public.fcm_tokens (
   last_seen_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS fcm_tokens_enabled_idx ON public.fcm_tokens (enabled, last_seen_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.order_push_notifications (
+  id bigserial PRIMARY KEY,
+  order_id uuid NOT NULL,
+  event_key text NOT NULL,
+  user_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (order_id, event_key, user_id)
+);

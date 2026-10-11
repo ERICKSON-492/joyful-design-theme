@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
-import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, queueNewProductNotifications, sendPushBroadcast, processScheduledSaleNotifications } from './functions-api.mjs'
+import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, queueOrderStatusNotification, queueNewProductNotifications, sendPushBroadcast, processScheduledSaleNotifications } from './functions-api.mjs'
 import { createGoogleOAuthRoutes } from './google-oauth.mjs'
 import { handleWhatsAppWebhook } from './whatsapp.mjs'
 import { handleAdminCustomers } from './admin-customer-api.mjs'
@@ -265,7 +265,7 @@ async function handle(req, res, url) {
   if (url.pathname.startsWith('/api/db/')) {
     const user = await neonUser(req)
     const isAdmin = user?.role === 'admin' ? true : Boolean(await requireAdmin(req))
-    return handleDb({ pool, req, res, url, json, body, user, isAdmin })
+    return handleDb({ pool, req, res, url, json, body, user, isAdmin, onOrderUpdated: order => queueOrderStatusNotification(pool, order) })
   }
   if (url.pathname.startsWith('/api/files/')) {
     const user = await neonUser(req)
