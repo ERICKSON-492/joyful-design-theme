@@ -122,7 +122,7 @@ export function ProductReviews({ productId, onReviewsChange }: { productId: stri
     const { data: profile } = await supabase.from('profiles').select('display_name').eq('user_id', user.id).maybeSingle()
     const customerName = profile?.display_name || user.email?.split('@')[0] || 'Tribe Member'
 
-    const { error } = await supabase.from('product_reviews').insert({
+    const { data: submittedReview, error } = await supabase.from('product_reviews').insert({
       product_id: productId,
       user_id: user.id,
       customer_name: customerName,
@@ -130,14 +130,19 @@ export function ProductReviews({ productId, onReviewsChange }: { productId: stri
       title: title.trim() || null,
       comment: comment.trim(),
       photo_urls: photoUrls,
-    })
+    }).select('*').single()
     setSubmitting(false)
     if (error) {
       if (error.code === '23505') toast.error('You have already reviewed this product')
       else toast.error('Failed to submit review')
       return
     }
-    toast.success("Review submitted! It'll appear after admin approval.")
+    toast.success('Your review is published. Thanks for sharing your experience!')
+    if (submittedReview) {
+      const updatedReviews = [submittedReview as ProductReview, ...reviews]
+      setReviews(updatedReviews)
+      onReviewsChange?.(productId, updatedReviews)
+    }
     setShowForm(false)
     setRating(0); setTitle(''); setComment(''); setPhotoUrls([])
     setHasReviewed(true)
@@ -234,7 +239,7 @@ export function ProductReviews({ productId, onReviewsChange }: { productId: stri
           <Button onClick={handleSubmit} disabled={submitting || uploading} className="w-full md:w-auto">
             {submitting ? 'Submitting...' : 'Submit Review'}
           </Button>
-          <p className="text-xs text-muted-foreground">Your review will appear after admin approval.</p>
+          <p className="text-xs text-muted-foreground">Your review is published as soon as you submit it.</p>
         </div>
       )}
 
