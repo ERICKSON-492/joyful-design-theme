@@ -30,7 +30,7 @@ function fcmConfig() {
   }
 }
 
-async function sendPushMessage(token, product) {
+async function sendPushMessage(token, { title, body, url }) {
   const config = fcmConfig()
   if (!config?.projectId) return false
   fcmAuth ||= new GoogleAuth({ credentials: config.credentials, scopes: ['https://www.googleapis.com/auth/firebase.messaging'] })
@@ -41,9 +41,9 @@ async function sendPushMessage(token, product) {
     headers: { authorization: `Bearer ${accessToken.token}`, 'content-type': 'application/json' },
     body: JSON.stringify({ message: {
       token,
-      notification: { title: 'New at Ushanga Chronicles', body: `${product.name} is now available.` },
-      data: { title: 'New at Ushanga Chronicles', body: `${product.name} is now available.`, url: `/product/${product.id}` },
-      webpush: { fcmOptions: { link: `https://ushangachronicles.com/product/${product.id}` } },
+      notification: { title, body },
+      data: { title, body, url },
+      webpush: { fcmOptions: { link: `https://ushangachronicles.com${url}` } },
     } }),
   })
   if (!response.ok) throw new Error(`FCM returned ${response.status}: ${await response.text()}`)
@@ -51,18 +51,24 @@ async function sendPushMessage(token, product) {
 }
 
 export async function sendPushNewProductNotifications(pool, product) {
-  if (!fcmConfig()?.projectId) return 0
+  return sendPushBroadcast(pool, { title: 'New at Ushanga Chronicles', body: `${product.name} is now available.`, url: `/product/${product.id}` })
+}
+
+export async function sendPushBroadcast(pool, payload) {
+  if (!fcmConfig()?.projectId) return { configured: false, total: 0, sent: 0, failed: 0 }
   const tokens = (await pool.query('SELECT id,token FROM public.fcm_tokens WHERE enabled=true')).rows
   let sent = 0
+  let failed = 0
   for (const row of tokens) {
     try {
-      if (await sendPushMessage(row.token, product)) sent += 1
+      if (await sendPushMessage(row.token, payload)) sent += 1
     } catch (error) {
+      failed += 1
       console.error(`FCM product notification failed for token ${row.id}:`, error.message)
       if (/404|UNREGISTERED|registration-token-not-registered/i.test(error.message)) await pool.query('UPDATE public.fcm_tokens SET enabled=false WHERE id=$1', [row.id]).catch(() => {})
     }
   }
-  return sent
+  return { configured: true, total: tokens.length, sent, failed }
 }
 
 export async function queueNewProductNotifications(pool, product) {

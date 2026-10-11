@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
 import { invokeFunction } from '@/lib/functions'
-import { Mail, Send, CheckCircle2, XCircle, Loader2, Eye, RefreshCw, Users } from 'lucide-react'
+import { apiUrl } from '@/lib/apiBase'
+import { Mail, Send, CheckCircle2, XCircle, Loader2, Eye, RefreshCw, Users, Bell, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -21,14 +22,16 @@ interface Stats {
   pending: number
   subscribers: number
 }
+interface RunResult { sent?: number; reason?: string; posts?: unknown; error?: string; pushTest?: { total?: number; sent?: number; failed?: number; error?: string } }
 
 export default function AdminNewsletter() {
   const [stats, setStats] = useState<Stats>({ total: 0, sent: 0, failed: 0, pending: 0, subscribers: 0 })
   const [logs, setLogs] = useState<LogRow[]>([])
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
-  const [lastResult, setLastResult] = useState<any>(null)
+  const [lastResult, setLastResult] = useState<RunResult | null>(null)
   const [filter, setFilter] = useState<'all' | 'newsletter-digest'>('all')
+  const [pushRunning, setPushRunning] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -56,23 +59,44 @@ export default function AdminNewsletter() {
     setLoading(false)
   }
 
+  // loadData intentionally follows the selected template filter.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadData() }, [filter])
 
   const runDigest = async () => {
     setRunning(true)
     setLastResult(null)
     try {
-      const data = await invokeFunction<any>('send-newsletter-digest', {})
+      const data = await invokeFunction<RunResult>('send-newsletter-digest', {})
       setLastResult(data)
       if (data?.sent > 0) toast.success(`Digest sent to ${data.sent} subscribers`)
       else if (data?.reason === 'no_new_products' && !data?.posts) toast.info('No new content to send today')
       else toast.success('Digest job completed')
       setTimeout(loadData, 1500)
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to run digest')
-      setLastResult({ error: e.message })
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to run digest'
+      toast.error(message)
+      setLastResult({ error: message })
     }
     setRunning(false)
+  }
+
+  const sendTestPush = async () => {
+    if (!window.confirm('Send a test browser notification to every customer who enabled push alerts?')) return
+    setPushRunning(true)
+    try {
+      const response = await fetch(apiUrl('/api/admin/push/test'), { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' } })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Test push failed')
+      toast.success(`Test alert sent to ${data.sent} of ${data.total} opted-in browsers`)
+      setLastResult({ pushTest: data })
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Test push failed'
+      toast.error(message)
+      setLastResult({ pushTest: { error: message } })
+    } finally {
+      setPushRunning(false)
+    }
   }
 
   const deliveryRate = stats.total > 0 ? ((stats.sent / stats.total) * 100).toFixed(1) : '0'
@@ -92,6 +116,11 @@ export default function AdminNewsletter() {
             className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50">
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {running ? 'Sending...' : 'Send digest now'}
+          </button>
+          <button onClick={sendTestPush} disabled={pushRunning}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors disabled:opacity-50">
+            {pushRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+            {pushRunning ? 'Sending...' : 'Send test push'}
           </button>
         </div>
       </div>
@@ -122,7 +151,7 @@ export default function AdminNewsletter() {
               <RefreshCw className={`w-4 h-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
-          <select value={filter} onChange={e => setFilter(e.target.value as any)}
+          <select value={filter} onChange={e => setFilter(e.target.value as 'all' | 'newsletter-digest')}
             className="text-sm border border-border rounded-md px-3 py-1.5 bg-background">
             <option value="all">All templates</option>
             <option value="newsletter-digest">Newsletter digest only</option>
@@ -167,7 +196,7 @@ export default function AdminNewsletter() {
   )
 }
 
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: number | string; color: string }) {
+function StatCard({ icon: Icon, label, value, color }: { icon: LucideIcon; label: string; value: number | string; color: string }) {
   return (
     <div className="bg-card border border-border rounded-lg p-4">
       <Icon className={`w-5 h-5 mb-3 ${color}`} />

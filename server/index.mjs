@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
-import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, queueNewProductNotifications, processScheduledSaleNotifications } from './functions-api.mjs'
+import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, queueNewProductNotifications, sendPushBroadcast, processScheduledSaleNotifications } from './functions-api.mjs'
 import { createGoogleOAuthRoutes } from './google-oauth.mjs'
 import { handleWhatsAppWebhook } from './whatsapp.mjs'
 import { handleAdminCustomers } from './admin-customer-api.mjs'
@@ -202,6 +202,11 @@ async function handle(req, res, url) {
   if (url.pathname.startsWith('/api/admin/')) {
     const adminAccess = await requireAdmin(req)
     if (!adminAccess) return json(res, 403, { error: 'Admin access required' })
+    if (req.method === 'POST' && url.pathname === '/api/admin/push/test') {
+      const result = await sendPushBroadcast(pool, { title: 'Ushanga Chronicles test alert', body: 'Push notifications are working. Thank you for being part of the tribe.', url: '/shop' })
+      if (!result.configured) return json(res, 503, { error: 'Firebase push is not configured on the Render API service', ...result })
+      return json(res, 200, result)
+    }
     if (req.method === 'GET' && url.pathname === '/api/admin/logins') {
       const events = await pool.query(`SELECT e.id, e.event, COALESCE(e.email, u.email) AS email, u.display_name, u.role, e.ip_address, e.user_agent, e.created_at FROM auth_login_events e LEFT JOIN auth_users u ON u.id=e.user_id ORDER BY e.created_at DESC LIMIT 300`)
       const sessions = await pool.query(`SELECT s.id, u.email, u.display_name, u.role, s.created_at, s.last_seen_at, s.user_agent, host(s.ip_address) AS ip_address FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.expires_at>now() ORDER BY s.last_seen_at DESC LIMIT 100`)
