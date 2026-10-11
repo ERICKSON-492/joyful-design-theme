@@ -1,5 +1,9 @@
 # Neon migration roadmap
 
+## Current checkout and notifications request
+- [ ] Verify final-checkout WhatsApp messages include items, quantities and total.
+- [ ] Add and verify shopper notifications for newly active sales.
+
 API server: https://joyful-design-theme.onrender.com (Node, `server/index.mjs`, Neon Postgres)
 
 ## Done
