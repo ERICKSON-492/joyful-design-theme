@@ -23,7 +23,7 @@ interface Review {
 export default function AdminReviews() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending')
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [responseDrafts, setResponseDrafts] = useState<Record<string, string>>({})
   const [responding, setResponding] = useState<string | null>(null)
 
@@ -66,7 +66,7 @@ export default function AdminReviews() {
   return (
     <div>
       <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">Product Reviews</h1>
-      <p className="text-muted-foreground mb-6">Moderate customer reviews and respond to feedback.</p>
+      <p className="text-muted-foreground mb-6">Customer reviews publish immediately. Review feedback, reject or remove content that violates your guidelines, and respond to customers.</p>
 
       <div className="flex gap-2 mb-6 flex-wrap">
         {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (

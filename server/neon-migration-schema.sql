@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS public.product_reviews (
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.product_reviews ALTER COLUMN user_id DROP NOT NULL;
+-- Product reviews publish immediately; convert the existing moderation backlog too.
+ALTER TABLE public.product_reviews ALTER COLUMN status SET DEFAULT 'approved';
+UPDATE public.product_reviews SET status='approved', updated_at=now() WHERE status='pending';
 
 CREATE TABLE IF NOT EXISTS public.tribe_looks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
