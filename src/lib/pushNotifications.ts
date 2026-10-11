@@ -29,7 +29,11 @@ export async function enablePushNotifications() {
   if (!client || !('Notification' in window) || !('serviceWorker' in navigator)) throw new Error('Push notifications are not supported in this browser.')
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('Browser notification permission was not granted.')
-  const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+  await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+  // Registration resolves before the worker is necessarily active. Waiting
+  // for ready prevents PushManager.subscribe from failing with "no active
+  // Service Worker" on the first opt-in attempt.
+  const registration = await navigator.serviceWorker.ready
   const token = await getToken(client, { vapidKey, serviceWorkerRegistration: registration })
   if (!token) throw new Error('Firebase did not return a browser token.')
   const response = await fetch(apiUrl('/api/push/register'), {
