@@ -16,6 +16,7 @@ import { CookieConsent } from './components/CookieConsent'
 import { Toaster } from 'sonner'
 import { CustomerAlerts } from './components/CustomerAlerts'
 import { NewArrivalNotice } from './components/NewArrivalNotice'
+import { SaleNotice } from './components/SaleNotice'
 
 // ⚡ 1. Inline Scroll Restoration Helper
 // This resets the scroll tracking instantly when navigating between pages.
@@ -57,6 +58,7 @@ function AppContent() {
       {!isAdmin && <CartReminder />}
       {!isAdmin && <CustomerAlerts />}
       {!isAdmin && <NewArrivalNotice />}
+      {!isAdmin && <SaleNotice />}
       <CookieConsent />
       <Toaster position="top-center" richColors closeButton />
     </div>

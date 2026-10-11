@@ -1,5 +1,9 @@
 # Neon migration roadmap
 
+## Current checkout and notifications request
+- [x] Final-checkout WhatsApp summary includes items, quantities and full total; formatting tests pass.
+- [x] Shopper sale popups added; timing/deduplication tests and controlled browser popup/action checks pass. Live admin-created sale and authenticated checkout remain unverified.
+
 API server: https://joyful-design-theme.onrender.com (Node, `server/index.mjs`, Neon Postgres)
 
 ## Done

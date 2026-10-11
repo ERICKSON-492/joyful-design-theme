@@ -11,6 +11,7 @@ import { apiUrl } from '@/lib/apiBase'
 import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 import { useSEO } from '@/hooks/useSEO'
 import { Button } from '@/components/ui/button'
+import { whatsappOrderMessage } from '@/lib/shopNotifications'
 
 type PaymentStatus = 'idle' | 'creating' | 'pushing' | 'polling' | 'success' | 'failed'
 
@@ -798,7 +799,7 @@ export default function CheckoutPage() {
                   <Button asChild variant="outline" className="w-full min-h-12 font-bold uppercase tracking-wider" disabled={isProcessing}>
                     <a
                       href={isProcessing ? undefined : `https://wa.me/254748207000?text=${encodeURIComponent(
-                        `Hi! I'd like to order:\n${items.map(i => `• ${i.name} x${i.quantity} - KSh ${(i.price * i.quantity).toLocaleString()}`).join('\n')}\n\nName: ${name}\nPhone: ${phone}\nDelivery: ${[selectedLocation, country, buildingName, floorNumber, houseNumber, postalCode].filter(Boolean).join(', ')}\nShipping: ${selectedShipping?.name || 'Not selected'} - KSh ${shippingCost.toLocaleString()}\nSubtotal: KSh ${totalPrice.toLocaleString()}${discountAmount > 0 ? `\nDiscount: KSh ${discountAmount.toLocaleString()}` : ''}\nTotal: KSh ${grandTotal.toLocaleString()}`
+                        whatsappOrderMessage({ items, name, phone, delivery: [selectedLocation, country, buildingName, floorNumber, houseNumber, postalCode].filter(Boolean).join(', '), shippingName: selectedShipping?.name || 'Not selected', shippingCost, subtotal: totalPrice, discount: discountAmount, total: grandTotal })
                       )}`}
                       target="_blank"
                       rel="noopener noreferrer"
