@@ -1,24 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import catWearIt from '@/assets/cat-wear-it.jpg'
-import catLiveWithIt from '@/assets/cat-live-with-it.jpg'
-import catCollectibles from '@/assets/cat-collectibles.jpg'
-import catPet from '@/assets/cat-pet.jpg'
-import catTable from '@/assets/cat-table.jpg'
 import { ScrollReveal, StaggerContainer, StaggerItem } from './ScrollReveal'
 import { motion } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useSiteContent } from '@/hooks/useSiteContent'
 
 const MotionLink = motion(Link)
-
-const defaultImages: Record<string, string> = {
-  'Wear It': catWearIt,
-  'Live With It': catLiveWithIt,
-  'Collectibles': catCollectibles,
-  'For Your Pet': catPet,
-  'For Your Table': catTable,
-}
 
 const categoriesBase = [
   { name: 'Wear It', dbKey: 'Wear It', href: '/shop?cat=wear-it', tagline: 'Adorn yourself' },
@@ -111,9 +98,9 @@ export function ShopByCategory() {
                 whileTap={{ scale: 0.97 }}
                 transition={{ duration: 0.35, ease: 'easeOut' }}
               >
-                {imagesLoaded ? (
+                {imagesLoaded && dbImages[cat.dbKey] ? (
                 <motion.img
-                  src={dbImages[cat.dbKey] || defaultImages[cat.name]}
+                  src={dbImages[cat.dbKey]}
                   alt={cat.name}
                   className={isBanner ? 'w-full h-auto block md:h-full md:object-cover' : 'w-full h-full object-cover'}
                   loading="lazy"
@@ -123,7 +110,9 @@ export function ShopByCategory() {
                   transition={{ duration: 0.6, ease: 'easeOut' }}
                 />
                 ) : (
-                  <div className={isBanner ? 'w-full aspect-[16/9] bg-muted animate-pulse' : 'w-full h-full bg-muted animate-pulse'} />
+                  <div className={`${isBanner ? 'w-full aspect-[16/9]' : 'w-full h-full'} bg-muted flex items-center justify-center`}>
+                    {imagesLoaded && <span className="px-3 text-center text-xs text-muted-foreground">No category image uploaded</span>}
+                  </div>
                 )}
                 {/* Gradient overlay for legibility */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent group-hover:from-primary/80 group-hover:via-primary/30 transition-colors duration-500" />

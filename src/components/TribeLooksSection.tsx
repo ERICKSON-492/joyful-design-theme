@@ -1,23 +1,10 @@
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import tribeTess from '@/assets/tribe-tess.jpeg'
-import tribeAnne from '@/assets/tribe-anne.jpeg'
-import tribeLuna from '@/assets/tribe-luna.jpeg'
-import tribe1 from '@/assets/tribe-1.jpg'
 import { ScrollReveal } from './ScrollReveal'
 import { fetchPublicTable } from '@/lib/publicContent'
 
 interface Look { image: string; name: string; piece: string }
-
-// Shown until (or alongside, if there are fewer than 4) admin-curated /
-// customer-approved looks exist in the database.
-const fallbackLooks: Look[] = [
-  { image: tribeTess, name: 'Tess', piece: 'Beaded Dress' },
-  { image: tribeAnne, name: 'Anne', piece: 'Beaded Bracelet' },
-  { image: tribeLuna, name: 'Luna', piece: 'Beaded Dog Collar' },
-  { image: tribe1, name: 'Amani K.', piece: 'Layered Beaded Necklace' },
-]
 
 const VISIBLE_COUNT = 4
 const ROTATE_INTERVAL_MS = 5000
@@ -43,12 +30,10 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function TribeLooksSection() {
-  const [pool, setPool] = useState<Look[]>(fallbackLooks)
+  const [pool, setPool] = useState<Look[]>([])
   const [startIndex, setStartIndex] = useState(0)
 
-  // Load real looks from the database (admin-curated + approved customer
-  // submissions). Falls back to the bundled defaults if there aren't
-  // enough approved looks yet, so the section never looks empty.
+  // Load only admin-curated or approved customer-uploaded looks from the database.
   useEffect(() => {
     fetchPublicTable<{ image_url: string; name: string; piece_name: string }>(
       'tribe_looks',
@@ -56,17 +41,9 @@ export function TribeLooksSection() {
     )
       .then(data => {
         const live: Look[] = data.map(d => ({ image: d.image_url, name: d.name, piece: d.piece_name }))
-        if (live.length >= VISIBLE_COUNT) {
-          setPool(shuffle(live))
-        } else if (live.length > 0) {
-          // Mix real looks in with fallbacks so real submissions show up
-          // right away even before there are enough to fill the grid alone.
-          setPool(shuffle([...live, ...fallbackLooks]))
-        } else {
-          setPool(shuffle(fallbackLooks))
-        }
+        setPool(shuffle(live))
       })
-      .catch(() => setPool(shuffle(fallbackLooks)))
+      .catch(() => setPool([]))
   }, [])
 
   // Rotate through the pool automatically, showing a new set of 4 every
@@ -96,7 +73,9 @@ export function TribeLooksSection() {
           </div>
         </ScrollReveal>
 
-        <motion.div
+        {pool.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No approved community looks have been uploaded yet.</p>
+        ) : <motion.div
           layout
           className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto"
         >
@@ -149,7 +128,7 @@ export function TribeLooksSection() {
             </motion.div>
           ))}
           </AnimatePresence>
-        </motion.div>
+        </motion.div>}
 
         <ScrollReveal delay={0.3}>
           <div className="text-center mt-14">
