@@ -505,12 +505,20 @@ async function seedData(dir) {
   if (!fs.existsSync(full)) return
   const statements = splitSqlStatements(fs.readFileSync(full, 'utf8'))
   let ok = 0
+  let skippedOrderSeeds = 0
   const failures = []
   for (const sql of statements) {
+    // Legacy order rows are a one-time import, not bootstrap fixtures. Replaying
+    // them on every restart resurrects orders that an administrator permanently
+    // deleted because the seed rows use fixed IDs with ON CONFLICT DO NOTHING.
+    if (/^\s*INSERT\s+INTO\s+(?:public\.)?joyful_orders\b/i.test(sql)) {
+      skippedOrderSeeds++
+      continue
+    }
     try { await pool.query(sql); ok++ }
     catch (e) { failures.push(`${e.message} :: ${sql.slice(0, 120)}`) }
   }
-  console.log(`bootstrap: seed applied ${ok}/${statements.length} statements`)
+  console.log(`bootstrap: seed applied ${ok}/${statements.length} statements; skipped ${skippedOrderSeeds} legacy order rows`)
   for (const f of failures.slice(0, 20)) console.error(`seed failed: ${f}`)
 }
 
