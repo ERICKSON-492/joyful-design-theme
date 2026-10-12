@@ -92,9 +92,10 @@ export default function ShopPage() {
   useEffect(() => {
     if (!subParam) return
     const target = subParam.toLowerCase()
-    const match = subcategories.find(s => slugify(s.name) === target || legacySlug(s.name) === target)
+    const categoryId = categoriesData.find(c => c.name === activeCategory)?.id
+    const match = subcategories.find(s => (slugify(s.name) === target || legacySlug(s.name) === target) && (!categoryId || s.category_id === categoryId))
     if (match) setActiveSub(match.name)
-  }, [subParam, subcategories, activeCategory])
+  }, [subParam, subcategories, categoriesData, activeCategory])
 
   useEffect(() => {
     let mounted = true
@@ -244,6 +245,9 @@ export default function ShopPage() {
                     <h3 className="font-display text-sm md:text-base font-semibold text-foreground mb-1 hover:text-primary transition-colors">
                       {product.name}
                     </h3>
+                    {product.subcategory && (
+                      <p className="text-xs text-muted-foreground mb-2">{product.subcategory}</p>
+                    )}
                   </Link>
                   <div className="mb-1">
                     {variantState[product.id]?.hasVariants ? (

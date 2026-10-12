@@ -21,6 +21,8 @@ export async function fetchPublicTable<T>(table: string, query: string, timeoutM
     const neonRoutes: Record<string, string> = {
       products: 'products',
       product_variants: 'product-variants',
+      categories: 'db/categories',
+      subcategories: 'db/subcategories',
       site_content: 'db/site_content',
       category_images: 'db/category_images',
       chronicle_posts: 'db/chronicle_posts',
