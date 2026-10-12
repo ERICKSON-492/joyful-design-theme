@@ -15,7 +15,7 @@ interface OrderRow {
   items: { id: string; name: string; price: number; quantity: number }[] | null
 }
 interface VisitorReport {
-  summary: { visitors: number; today: number; this_week: number }
+  summary: { visitors: number; today: number; this_week: number; page_views: number; engagement_seconds: number; avg_engagement_seconds: number; engaged_sessions: number }
   daily: { day: string; visitors: number }[]
   countries: { name: string; visitors: number }[]
   regions: { name: string; visitors: number }[]
@@ -36,6 +36,18 @@ const RANGE_OPTIONS = [
 
 const PIE_COLORS = ['#D4A017', '#2563EB', '#16A34A', '#DC2626', '#7C3AED', '#EA580C', '#6B7280']
 const CHART_STYLE = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 13 }
+
+function formatDuration(seconds: number) {
+  if (!seconds || seconds < 1) return '0s'
+  const minutes = Math.floor(seconds / 60)
+  const remaining = Math.round(seconds % 60)
+  return minutes ? `${minutes}m ${remaining}s` : `${remaining}s`
+}
+
+function formatCountryName(value: string) {
+  if (!/^[A-Za-z]{2}$/.test(value)) return value
+  try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(value.toUpperCase()) || value.toUpperCase() } catch { return value.toUpperCase() }
+}
 
 export default function AdminAnalytics() {
   const [orders, setOrders] = useState<OrderRow[]>([])
@@ -160,17 +172,19 @@ export default function AdminAnalytics() {
             <div className="bg-card border border-border p-5 rounded-lg"><Eye className="w-5 h-5 text-primary mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.summary.visitors ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Unique visitors ({visitorDays} days)</p></div>
             <div className="bg-card border border-border p-5 rounded-lg"><Eye className="w-5 h-5 text-blue-500 mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.summary.today ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Visitors today</p></div>
             <div className="bg-card border border-border p-5 rounded-lg"><TrendingUp className="w-5 h-5 text-green-500 mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.summary.this_week ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Visitors this week</p></div>
-            <div className="bg-card border border-border p-5 rounded-lg"><FileText className="w-5 h-5 text-orange-500 mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.pages.reduce((sum, row) => sum + row.page_views, 0) ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Page views</p></div>
+            <div className="bg-card border border-border p-5 rounded-lg"><FileText className="w-5 h-5 text-orange-500 mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.summary.page_views ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Page views</p></div>
+            <div className="bg-card border border-border p-5 rounded-lg"><TrendingUp className="w-5 h-5 text-violet-500 mb-3" /><p className="text-2xl font-bold text-foreground">{formatDuration(visitorReport?.summary.avg_engagement_seconds ?? 0)}</p><p className="text-xs text-muted-foreground mt-1">Avg. engagement time</p></div>
+            <div className="bg-card border border-border p-5 rounded-lg"><Users className="w-5 h-5 text-teal-500 mb-3" /><p className="text-2xl font-bold text-foreground">{visitorReport?.summary.engaged_sessions ?? '—'}</p><p className="text-xs text-muted-foreground mt-1">Engaged sessions (10s+)</p></div>
           </div>
           <div className="bg-card border border-border rounded-lg p-5 mb-6">
             <h3 className="text-sm font-semibold text-foreground mb-4">Visitors Over Time</h3>
             {!visitorReport?.daily.length ? <p className="text-sm text-muted-foreground py-8 text-center">No visitor data yet. Tracking begins after deployment and visitor consent.</p> : <ResponsiveContainer width="100%" height={240}><AreaChart data={visitorReport.daily}><defs><linearGradient id="visitorFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563EB" stopOpacity={0.35} /><stop offset="100%" stopColor="#2563EB" stopOpacity={0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" /><XAxis dataKey="day" fontSize={12} stroke="hsl(var(--muted-foreground))" /><YAxis allowDecimals={false} fontSize={12} stroke="hsl(var(--muted-foreground))" /><Tooltip contentStyle={CHART_STYLE} /><Area type="monotone" dataKey="visitors" name="Visitors" stroke="#2563EB" strokeWidth={2} fill="url(#visitorFill)" /></AreaChart></ResponsiveContainer>}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {[{ title: 'Visitors by Country', icon: Globe2, rows: visitorReport?.countries || [] }, { title: 'Visitors by Region', icon: MapPin, rows: visitorReport?.regions || [] }].map(({ title, icon: Icon, rows }) => <div key={title} className="bg-card border border-border rounded-lg p-5"><h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Icon className="w-4 h-4 text-primary" />{title}</h3>{rows.length === 0 ? <p className="text-sm text-muted-foreground py-8 text-center">No data yet.</p> : <div className="space-y-3">{rows.slice(0, 8).map((row, index) => <div key={`${row.name}-${index}`} className="flex items-center justify-between gap-4 text-sm"><span className="truncate text-foreground">{row.name}</span><span className="font-semibold text-muted-foreground">{row.visitors.toLocaleString()}</span></div>)}</div>}</div>)}
+            {[{ title: 'Users by Country', icon: Globe2, rows: visitorReport?.countries || [] }, { title: 'Users by Region', icon: MapPin, rows: visitorReport?.regions || [] }].map(({ title, icon: Icon, rows }) => <div key={title} className="bg-card border border-border rounded-lg p-5"><h3 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2"><Icon className="w-4 h-4 text-primary" />{title}</h3><p className="text-xs text-muted-foreground mb-4">Unique users · {visitorDays}-day period</p>{rows.length === 0 ? <p className="text-sm text-muted-foreground py-8 text-center">No data yet.</p> : <div className="space-y-3">{rows.slice(0, 8).map((row, index) => { const share = visitorReport?.summary.visitors ? Math.round((row.visitors / visitorReport.summary.visitors) * 100) : 0; const label = title === 'Users by Country' ? formatCountryName(row.name) : row.name; return <div key={`${row.name}-${index}`} className="text-sm"><div className="flex items-center justify-between gap-4"><span className="truncate text-foreground">{label}</span><span className="whitespace-nowrap font-semibold text-muted-foreground">{row.visitors.toLocaleString()} <span className="font-normal">({share}%)</span></span></div><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, share)}%` }} /></div></div> })}</div>}</div>)}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-            <div className="bg-card border border-border rounded-lg p-5"><h3 className="text-sm font-semibold text-foreground mb-4">Traffic Sources</h3>{!visitorReport?.sources.length ? <p className="text-sm text-muted-foreground py-8 text-center">No campaign data yet.</p> : <div className="space-y-3">{visitorReport.sources.slice(0, 8).map((row, index) => <div key={`${row.name}-${index}`} className="flex items-center justify-between gap-4 text-sm"><span className="truncate text-foreground">{row.name}</span><span className="font-semibold text-muted-foreground">{row.visitors.toLocaleString()}</span></div>)}</div>}</div>
+            <div className="bg-card border border-border rounded-lg p-5"><h3 className="text-sm font-semibold text-foreground mb-1">Traffic Sources</h3><p className="text-xs text-muted-foreground mb-4">Users by source</p>{!visitorReport?.sources.length ? <p className="text-sm text-muted-foreground py-8 text-center">No campaign data yet.</p> : <div className="space-y-3">{visitorReport.sources.slice(0, 8).map((row, index) => <div key={`${row.name}-${index}`} className="flex items-center justify-between gap-4 text-sm"><span className="truncate text-foreground">{row.name}</span><span className="font-semibold text-muted-foreground">{row.visitors.toLocaleString()}</span></div>)}</div>}</div>
             <div className="bg-card border border-border rounded-lg p-5"><h3 className="text-sm font-semibold text-foreground mb-4">Top Pages</h3>{!visitorReport?.pages.length ? <p className="text-sm text-muted-foreground py-8 text-center">No page views yet.</p> : <div className="space-y-3">{visitorReport.pages.slice(0, 8).map(page => <div key={page.path} className="flex items-center justify-between gap-4 text-sm"><span className="truncate text-foreground">{page.path}</span><span className="whitespace-nowrap text-muted-foreground">{page.page_views} views / {page.unique_visitors} visitors</span></div>)}</div>}</div>
           </div>
           {/* KPI cards */}

@@ -228,8 +228,10 @@ CREATE TABLE IF NOT EXISTS public.analytics_page_views (
   id bigserial PRIMARY KEY,
   session_key text NOT NULL,
   path text NOT NULL,
-  viewed_at timestamptz NOT NULL DEFAULT now()
+  viewed_at timestamptz NOT NULL DEFAULT now(),
+  duration_seconds integer NOT NULL DEFAULT 0
 );
+ALTER TABLE public.analytics_page_views ADD COLUMN IF NOT EXISTS duration_seconds integer NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS visitor_sessions_first_seen_idx ON public.visitor_sessions (first_seen_at DESC);
 CREATE INDEX IF NOT EXISTS visitor_sessions_country_idx ON public.visitor_sessions (country, first_seen_at DESC);
 CREATE INDEX IF NOT EXISTS visitor_sessions_region_idx ON public.visitor_sessions (region, first_seen_at DESC);

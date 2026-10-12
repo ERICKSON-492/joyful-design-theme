@@ -29,8 +29,13 @@ function rateLimited(req) {
 }
 
 function locationFromRequest(req) {
+  const countryCode = text(req.headers['cf-ipcountry'] || req.headers['x-country'] || req.headers['x-vercel-ip-country'], 80)
+  let country = countryCode
+  if (countryCode && /^[A-Za-z]{2}$/.test(countryCode)) {
+    try { country = new Intl.DisplayNames(['en'], { type: 'region' }).of(countryCode.toUpperCase()) || countryCode.toUpperCase() } catch { country = countryCode.toUpperCase() }
+  }
   return {
-    country: text(req.headers['cf-ipcountry'] || req.headers['x-country'] || req.headers['x-vercel-ip-country'], 80),
+    country,
     region: text(req.headers['cf-region'] || req.headers['x-vercel-ip-country-region'], 120),
     city: text(req.headers['cf-ipcity'] || req.headers['x-vercel-ip-city'], 120),
   }
@@ -47,6 +52,20 @@ export async function handleVisitorEvent({ pool, req, res, json, body }) {
   if (!validSessionKey(payload.sessionKey)) return json(res, 400, { error: 'Invalid session key' })
   const path = text(payload.path, 300)
   if (!path || !path.startsWith('/')) return json(res, 400, { error: 'Invalid path' })
+
+  if (payload.eventType === 'engagement') {
+    const duration = Math.max(0, Math.min(1800, Number(payload.durationSeconds) || 0))
+    if (duration > 0) {
+      await pool.query(
+        `UPDATE public.analytics_page_views
+         SET duration_seconds = GREATEST(duration_seconds, $1)
+         WHERE id = (SELECT id FROM public.analytics_page_views WHERE session_key=$2 AND path=$3 ORDER BY viewed_at DESC LIMIT 1)`,
+        [Math.round(duration), String(payload.sessionKey), path],
+      )
+      await pool.query('UPDATE public.visitor_sessions SET last_seen_at=now() WHERE session_key=$1', [String(payload.sessionKey)])
+    }
+    return json(res, 204)
+  }
 
   const location = locationFromRequest(req)
   const session = {
@@ -74,7 +93,7 @@ export async function handleVisitorEvent({ pool, req, res, json, body }) {
        utm_campaign=COALESCE(visitor_sessions.utm_campaign, EXCLUDED.utm_campaign)` ,
     [session.sessionKey, location.country, location.region, location.city, session.landingPage, session.referrer, session.deviceType, session.utmSource, session.utmMedium, session.utmCampaign],
   )
-  await pool.query('INSERT INTO public.analytics_page_views (session_key, path) VALUES ($1,$2)', [session.sessionKey, path])
+  await pool.query('INSERT INTO public.analytics_page_views (session_key, path, duration_seconds) VALUES ($1,$2,0)', [session.sessionKey, path])
   return json(res, 204)
 }
 
@@ -84,7 +103,7 @@ export async function handleVisitorReport({ pool, req, res, url, json, requireAd
   const requestedDays = Number(url.searchParams.get('days') || 30)
   const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30
   const [summary, daily, countries, regions, pages, sources] = await Promise.all([
-    pool.query(`SELECT COUNT(*)::int AS visitors, COUNT(*) FILTER (WHERE first_seen_at::date = CURRENT_DATE)::int AS today, COUNT(*) FILTER (WHERE first_seen_at >= date_trunc('week', now()))::int AS this_week FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day')`, [days]),
+    pool.query(`SELECT COUNT(*)::int AS visitors, COUNT(*) FILTER (WHERE first_seen_at::date = CURRENT_DATE)::int AS today, COUNT(*) FILTER (WHERE first_seen_at >= date_trunc('week', now()))::int AS this_week, (SELECT COUNT(*)::int FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day')) AS page_views, COALESCE((SELECT SUM(duration_seconds)::int FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day')), 0) AS engagement_seconds, COALESCE((SELECT ROUND(SUM(duration_seconds)::numeric / NULLIF(COUNT(DISTINCT session_key), 0))::int FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day')), 0) AS avg_engagement_seconds, COALESCE((SELECT COUNT(*)::int FROM (SELECT session_key FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day') GROUP BY session_key HAVING SUM(duration_seconds) >= 10) engaged), 0) AS engaged_sessions FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day')`, [days]),
     pool.query(`SELECT first_seen_at::date AS day, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY 1`, [days]),
     pool.query(`SELECT COALESCE(NULLIF(country,''),'Unknown') AS name, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY visitors DESC, name LIMIT 20`, [days]),
     pool.query(`SELECT COALESCE(NULLIF(region,''),'Unknown') AS name, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY visitors DESC, name LIMIT 20`, [days]),

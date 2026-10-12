@@ -11,6 +11,9 @@ declare global {
 let enabled = false
 const VISITOR_SESSION_KEY = 'ushanga-visitor-session'
 const LANDING_PAGE_KEY = 'ushanga-landing-page'
+let activePath: string | null = null
+let pageStartedAt = 0
+let lastEngagementSeconds = 0
 
 function visitorSessionKey() {
   try {
@@ -58,6 +61,26 @@ function sendFirstPartyPageView(path: string) {
   void fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: payload, keepalive: true }).catch(() => {})
 }
 
+function sendEngagement(path: string, durationSeconds: number) {
+  if (!path || durationSeconds <= lastEngagementSeconds) return
+  const duration = Math.min(1800, Math.round(durationSeconds))
+  if (duration <= lastEngagementSeconds) return
+  lastEngagementSeconds = duration
+  const payload = JSON.stringify({ eventType: 'engagement', sessionKey: visitorSessionKey(), path: path.split('?')[0] || '/', durationSeconds: duration })
+  const endpoint = apiUrl('/api/analytics/visit')
+  try {
+    const sent = navigator.sendBeacon?.(endpoint, new Blob([payload], { type: 'text/plain;charset=UTF-8' }))
+    if (sent) return
+  } catch {
+    // Fall through to keepalive fetch.
+  }
+  void fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: payload, keepalive: true }).catch(() => {})
+}
+
+function flushEngagement() {
+  if (activePath && pageStartedAt) sendEngagement(activePath, (Date.now() - pageStartedAt) / 1000)
+}
+
 export function enableAnalytics() {
   if (enabled || getCookieConsent() !== 'accepted') return
   enabled = true
@@ -91,6 +114,12 @@ export function enableAnalytics() {
   meta.async = true
   meta.src = 'https://connect.facebook.net/en_US/fbevents.js'
   document.head.appendChild(meta)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushEngagement()
+  })
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') flushEngagement()
+  }, 15_000)
   trackPageView(`${window.location.pathname}${window.location.search}`)
 }
 
@@ -103,6 +132,10 @@ export function enableAnalytics() {
  */
 export function trackPageView(path: string) {
   if (typeof window === 'undefined' || getCookieConsent() !== 'accepted') return
+  if (activePath && pageStartedAt) sendEngagement(activePath, (Date.now() - pageStartedAt) / 1000)
+  activePath = path.split('?')[0] || '/'
+  pageStartedAt = Date.now()
+  lastEngagementSeconds = 0
   sendFirstPartyPageView(path)
   // Deliberately build page_location from origin + pathname + search only —
   // never window.location.hash. During an OAuth redirect, the URL fragment
