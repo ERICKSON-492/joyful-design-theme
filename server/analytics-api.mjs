@@ -102,15 +102,28 @@ export async function handleVisitorReport({ pool, req, res, url, json, requireAd
   if (!await requireAdmin(req)) return json(res, 403, { error: 'Admin access required', code: '42501' })
   const requestedDays = Number(url.searchParams.get('days') || 30)
   const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30
-  const [summary, daily, countries, regions, pages, sources] = await Promise.all([
+  const sourceCase = `CASE
+      WHEN COALESCE(utm_source,'') <> '' THEN initcap(utm_source)
+      WHEN referrer ILIKE '%instagram%' THEN 'Instagram'
+      WHEN referrer ILIKE '%facebook%' OR referrer ILIKE '%fb.%' THEN 'Facebook'
+      WHEN referrer ILIKE '%whatsapp%' OR referrer ILIKE '%wa.me%' THEN 'WhatsApp'
+      WHEN referrer ILIKE '%tiktok%' THEN 'TikTok'
+      WHEN referrer ILIKE '%google%' THEN 'Google'
+      WHEN referrer ILIKE '%bing%' OR referrer ILIKE '%yahoo%' OR referrer ILIKE '%duckduckgo%' THEN 'Other search'
+      WHEN referrer ILIKE '%chatgpt%' OR referrer ILIKE '%openai%' OR referrer ILIKE '%perplexity%' THEN 'AI assistants'
+      WHEN COALESCE(referrer,'') = '' OR referrer ILIKE '%ushangachronicles%' THEN 'Typed in / bookmark'
+      ELSE 'Other websites' END`
+  const [summary, daily, countries, regions, pages, sources, funnel, devices] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int AS visitors, COUNT(*) FILTER (WHERE first_seen_at::date = CURRENT_DATE)::int AS today, COUNT(*) FILTER (WHERE first_seen_at >= date_trunc('week', now()))::int AS this_week, (SELECT COUNT(*)::int FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day')) AS page_views, COALESCE((SELECT SUM(duration_seconds)::int FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day')), 0) AS engagement_seconds, COALESCE((SELECT ROUND(SUM(duration_seconds)::numeric / NULLIF(COUNT(DISTINCT session_key), 0))::int FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day')), 0) AS avg_engagement_seconds, COALESCE((SELECT COUNT(*)::int FROM (SELECT session_key FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day') GROUP BY session_key HAVING SUM(duration_seconds) >= 10) engaged), 0) AS engaged_sessions FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day')`, [days]),
     pool.query(`SELECT first_seen_at::date AS day, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY 1`, [days]),
     pool.query(`SELECT COALESCE(NULLIF(country,''),'Unknown') AS name, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY visitors DESC, name LIMIT 20`, [days]),
     pool.query(`SELECT COALESCE(NULLIF(region,''),'Unknown') AS name, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY visitors DESC, name LIMIT 20`, [days]),
-    pool.query(`SELECT path, COUNT(*)::int AS page_views, COUNT(DISTINCT session_key)::int AS unique_visitors FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day') GROUP BY path ORDER BY page_views DESC, path LIMIT 20`, [days]),
-    pool.query(`SELECT COALESCE(NULLIF(utm_source,''),'Direct') AS name, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY visitors DESC, name LIMIT 20`, [days]),
+    pool.query(`SELECT path, COUNT(*)::int AS page_views, COUNT(DISTINCT session_key)::int AS unique_visitors FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day') AND path NOT LIKE '/admin%' GROUP BY path ORDER BY page_views DESC, path LIMIT 20`, [days]),
+    pool.query(`SELECT ${sourceCase} AS name, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY visitors DESC, name LIMIT 20`, [days]),
+    pool.query(`SELECT COUNT(DISTINCT session_key)::int AS visited, COUNT(DISTINCT session_key) FILTER (WHERE path LIKE '/product%')::int AS viewed_product, COUNT(DISTINCT session_key) FILTER (WHERE path LIKE '/checkout%')::int AS reached_checkout FROM public.analytics_page_views WHERE viewed_at >= now() - ($1 * interval '1 day') AND path NOT LIKE '/admin%'`, [days]),
+    pool.query(`SELECT initcap(COALESCE(NULLIF(device_type,''),'Unknown')) AS name, COUNT(*)::int AS visitors FROM public.visitor_sessions WHERE first_seen_at >= now() - ($1 * interval '1 day') GROUP BY 1 ORDER BY visitors DESC`, [days]),
   ])
-  return json(res, 200, { days, summary: summary.rows[0], daily: daily.rows, countries: countries.rows, regions: regions.rows, pages: pages.rows, sources: sources.rows })
+  return json(res, 200, { days, summary: summary.rows[0], daily: daily.rows, countries: countries.rows, regions: regions.rows, pages: pages.rows, sources: sources.rows, funnel: funnel.rows[0], devices: devices.rows })
 }
 
 function isoWeekKey(date = new Date()) {
