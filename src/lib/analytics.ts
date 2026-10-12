@@ -120,23 +120,32 @@ export function enableAnalytics() {
   window.setInterval(() => {
     if (document.visibilityState === 'visible') flushEngagement()
   }, 15_000)
-  trackPageView(`${window.location.pathname}${window.location.search}`)
+  sendMarketingPageView(`${window.location.pathname}${window.location.search}`)
+}
+
+/**
+ * Sends anonymous first-party page views for all visitors, then sends
+ * third-party marketing events only after optional cookie consent. The
+ * first-party payload contains no name, email, IP address, or advertising ID.
+ */
+export function trackPageView(path: string) {
+  if (typeof window === 'undefined') return
+  if (activePath && pageStartedAt) sendEngagement(activePath, (Date.now() - pageStartedAt) / 1000)
+  activePath = path.split('?')[0] || '/'
+  pageStartedAt = Date.now()
+  lastEngagementSeconds = 0
+  sendFirstPartyPageView(path)
+  if (getCookieConsent() !== 'accepted') return
+  sendMarketingPageView(path)
 }
 
 /**
  * Sends a GA4 page_view event and a Meta Pixel PageView event for the given
  * path. Both snippets in index.html only fire automatically on the very
  * first load — client-side route changes in this SPA need to report
- * themselves manually, or these tools will only ever see a single pageview
- * per visitor no matter how many pages they actually browse.
+ * themselves manually.
  */
-export function trackPageView(path: string) {
-  if (typeof window === 'undefined' || getCookieConsent() !== 'accepted') return
-  if (activePath && pageStartedAt) sendEngagement(activePath, (Date.now() - pageStartedAt) / 1000)
-  activePath = path.split('?')[0] || '/'
-  pageStartedAt = Date.now()
-  lastEngagementSeconds = 0
-  sendFirstPartyPageView(path)
+function sendMarketingPageView(path: string) {
   // Deliberately build page_location from origin + pathname + search only —
   // never window.location.hash. During an OAuth redirect, the URL fragment
   // can briefly contain real session tokens before Supabase strips it, and
