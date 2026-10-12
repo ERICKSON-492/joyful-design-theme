@@ -120,6 +120,8 @@ function queryFilters(url) {
   if (p.get('is_active') === 'eq.true') add('is_active=$VALUE', true)
   if (p.get('is_active') === 'eq.false') add('is_active=$VALUE', false)
   if (p.get('category')?.startsWith('eq.')) add('category=$VALUE', decodeURIComponent(p.get('category').slice(3)))
+  if (p.get('subcategory')?.startsWith('eq.')) add('subcategory=$VALUE', p.get('subcategory').slice(3))
+  if (p.get('name')?.startsWith('ilike.')) add('name ILIKE $VALUE', p.get('name').slice(6).replace(/\*/g, '%'))
   if (p.get('id')?.startsWith('eq.')) add('id=$VALUE', p.get('id').slice(3))
   if (p.get('id')?.startsWith('neq.')) add('id<>$VALUE', p.get('id').slice(4))
   if (p.get('product_id')?.startsWith('eq.')) add('product_id=$VALUE', p.get('product_id').slice(3))
