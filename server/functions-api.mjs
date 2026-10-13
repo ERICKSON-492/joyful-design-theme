@@ -74,6 +74,44 @@ export async function sendPushBroadcast(pool, payload) {
   return { configured: true, total: tokens.length, sent, failed }
 }
 
+export async function notifyAdminOfEnquiry(pool, enquiry) {
+  if (!enquiry?.id || enquiry.is_from_admin) return { emailQueued: 0, pushSent: 0 }
+  const name = escapeHtml(enquiry.customer_name || 'A visitor')
+  const message = escapeHtml(enquiry.message || '')
+  const contact = [enquiry.customer_email, enquiry.customer_phone].filter(Boolean).map(escapeHtml).join(' · ')
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a1a"><h2 style="color:#b8860b">New website enquiry</h2><p><strong>From:</strong> ${name}</p>${contact ? `<p><strong>Contact:</strong> ${contact}</p>` : ''}<p style="white-space:pre-wrap;border-left:3px solid #b8860b;padding-left:12px">${message}</p><p><a href="https://ushangachronicles.com/admin/enquiries" style="background:#b8860b;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px">Open enquiries</a></p></div>`
+  const emails = String(process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || 'admin@ushangachronicles.com')
+    .split(',').map(email => email.trim()).filter(Boolean)
+  let emailQueued = 0
+  for (const email of emails) {
+    try {
+      await queueEmail(pool, { to: email, subject: `New enquiry from ${enquiry.customer_name || 'a visitor'}`, html, label: 'enquiry-admin-alert' })
+      emailQueued += 1
+    } catch (error) {
+      console.error('enquiry admin email queue failed:', error.message)
+    }
+  }
+  if (emailQueued) drainOutbox(pool).catch(error => console.error('enquiry admin email delivery failed:', error.message))
+
+  let pushSent = 0
+  if (fcmConfig()?.projectId) {
+    const tokens = (await pool.query(
+      `SELECT t.id,t.token FROM public.fcm_tokens t
+       JOIN public.auth_users u ON u.id=t.user_id
+       WHERE t.enabled=true AND u.role='admin'`,
+    )).rows
+    for (const token of tokens) {
+      try {
+        if (await sendPushMessage(token.token, { title: `New enquiry from ${enquiry.customer_name || 'a visitor'}`, body: String(enquiry.message || '').slice(0, 160), url: '/admin/enquiries' })) pushSent += 1
+      } catch (error) {
+        console.error(`enquiry admin push failed for token ${token.id}:`, error.message)
+        if (/404|UNREGISTERED|registration-token-not-registered/i.test(error.message)) await pool.query('UPDATE public.fcm_tokens SET enabled=false WHERE id=$1', [token.id]).catch(() => {})
+      }
+    }
+  }
+  return { emailQueued, pushSent }
+}
+
 export async function sendPushSaleNotification(pool, product, eventKey = 'sale-start') {
   if (!product?.id || !product?.sale_price || Number(product.sale_price) >= Number(product.price)) return { sent: 0, total: 0, skipped: true }
   const windowKey = `${product.sale_price}|${product.sale_starts_at || ''}|${product.sale_ends_at || ''}`

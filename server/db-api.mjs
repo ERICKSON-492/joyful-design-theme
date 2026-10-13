@@ -2,6 +2,7 @@
 // These replace what the app used to get from Supabase (PostgREST, storage buckets,
 // realtime broadcast channels and edge functions).
 import crypto from 'node:crypto'
+import { notifyAdminOfEnquiry } from './functions-api.mjs'
 
 const READ_PUBLIC = 'public'
 const READ_OWNER = 'owner'
@@ -165,7 +166,10 @@ export async function handleDb({ pool, req, res, url, json, body, user, isAdmin,
     }
     if (physical === 'enquiry_messages') {
       const { forwardEnquiryToWhatsApp } = await import('./whatsapp.mjs')
-      for (const row of inserted) void forwardEnquiryToWhatsApp(pool, row)
+      for (const row of inserted) {
+        void forwardEnquiryToWhatsApp(pool, row)
+        void notifyAdminOfEnquiry(pool, row).catch(error => console.error('enquiry admin notification failed:', error.message))
+      }
     }
     return json(res, 201, inserted)
   }
