@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { uploadToR2 } from '@/lib/storage'
-import { toDatetimeLocal, toIsoTimestamp } from '@/lib/salePrice'
+import { getActiveSalePrice, toDatetimeLocal, toIsoTimestamp } from '@/lib/salePrice'
 import { Plus, Trash2, Edit, X, Upload, Layers, GripVertical, Search, SlidersHorizontal } from 'lucide-react'
 import { apiUrl } from '@/lib/apiBase'
 
@@ -161,9 +161,12 @@ export default function AdminProducts() {
     if (!payload.category) { setLoading(false); toast.error('Please choose a category'); return }
     if (!Number.isFinite(payload.price)) { setLoading(false); toast.error('Please enter a valid price'); return }
     try {
-      await adminApi(editId ? `/api/admin/products/${editId}` : '/api/admin/products', { method: editId ? 'PATCH' : 'POST', body: JSON.stringify(payload) })
+      const savedProduct = await adminApi(editId ? `/api/admin/products/${editId}` : '/api/admin/products', { method: editId ? 'PATCH' : 'POST', body: JSON.stringify(payload) })
       toast.success(editId ? 'Product updated!' : 'Product added!')
-      resetForm(); fetchProducts()
+      if (editId) setProducts(prev => prev.map(product => product.id === editId ? savedProduct : product))
+      else setProducts(prev => [savedProduct, ...prev])
+      resetForm()
+      await fetchProducts()
     } catch (error) {
       // Keep the form filled in so nothing typed is lost.
       toast.error(`Product not saved: ${error instanceof Error ? error.message : 'unknown error'}`, { duration: 10000 })
@@ -436,13 +439,23 @@ export default function AdminProducts() {
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-semibold text-foreground text-sm">{p.name}</h3>
-                  <p className="text-primary font-bold text-sm">KSh {p.price.toLocaleString()}</p>
+                  {getActiveSalePrice(p) !== null ? (
+                    <p className="text-sm">
+                      <span className="text-primary font-bold mr-2">KSh {getActiveSalePrice(p)!.toLocaleString()}</span>
+                      <span className="text-muted-foreground line-through">KSh {p.price.toLocaleString()}</span>
+                    </p>
+                  ) : (
+                    <p className="text-primary font-bold text-sm">KSh {p.price.toLocaleString()}</p>
+                  )}
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                   {p.is_active ? 'Active' : 'Hidden'}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">{p.category}{p.subcategory ? ` · ${p.subcategory}` : ''} · Stock: {p.stock}</p>
+              {p.sale_price && getActiveSalePrice(p) === null && (
+                <p className="text-xs text-amber-700 mt-1">Sale scheduled or not active: KSh {p.sale_price.toLocaleString()}</p>
+              )}
               <div className="flex gap-2 mt-3">
                 <Button size="sm" variant="outline" onClick={() => handleEdit(p)} className="flex-1">
                   <Edit className="w-3 h-3 mr-1" /> Edit
