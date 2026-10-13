@@ -281,3 +281,13 @@ CREATE TABLE IF NOT EXISTS public.order_push_notifications (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (order_id, event_key, user_id)
 );
+
+-- Prevent duplicate sale-start and sale-ending browser pushes for one sale window.
+CREATE TABLE IF NOT EXISTS public.sale_push_notifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  event_key text NOT NULL,
+  window_key text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (product_id, event_key, window_key)
+);

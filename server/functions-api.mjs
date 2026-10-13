@@ -74,6 +74,26 @@ export async function sendPushBroadcast(pool, payload) {
   return { configured: true, total: tokens.length, sent, failed }
 }
 
+export async function sendPushSaleNotification(pool, product, eventKey = 'sale-start') {
+  if (!product?.id || !product?.sale_price || Number(product.sale_price) >= Number(product.price)) return { sent: 0, total: 0, skipped: true }
+  const windowKey = `${product.sale_price}|${product.sale_starts_at || ''}|${product.sale_ends_at || ''}`
+  const claim = await pool.query(
+    `INSERT INTO public.sale_push_notifications (product_id,event_key,window_key)
+     VALUES ($1,$2,$3) ON CONFLICT (product_id,event_key,window_key) DO NOTHING RETURNING id`,
+    [product.id, eventKey, windowKey],
+  )
+  if (!claim.rowCount) return { sent: 0, total: 0, skipped: true }
+  const result = await sendPushBroadcast(pool, {
+    title: eventKey === 'sale-start' ? 'Sale now live at Ushanga Chronicles' : 'Sale ending soon at Ushanga Chronicles',
+    body: eventKey === 'sale-start' ? `${product.name} is now on sale. Shop the special price today.` : `${product.name} sale ends soon. Shop before it ends.`,
+    url: '/shop',
+  })
+  if (!result.configured || result.sent === 0) {
+    await pool.query('DELETE FROM public.sale_push_notifications WHERE id=$1', [claim.rows[0].id]).catch(() => {})
+  }
+  return result
+}
+
 export async function queueNewProductNotifications(pool, product) {
   if (!product?.id || !product?.is_active) return 0
   const recipients = (await pool.query(
@@ -180,7 +200,6 @@ async function queueOrderPushNotification(pool, order, status) {
 
 export async function processScheduledSaleNotifications(pool) {
   const subscribers = (await pool.query('SELECT email FROM public.newsletter_subscribers')).rows
-  if (!subscribers.length) return 0
   const products = (await pool.query(
     `SELECT id,name,price,sale_price,sale_starts_at,sale_ends_at
      FROM public.products
@@ -194,7 +213,7 @@ export async function processScheduledSaleNotifications(pool) {
     const events = []
     if (product.sale_starts_at && new Date(product.sale_starts_at) <= new Date()) events.push(['sale-start', `Sale now live: ${product.name}`])
     if (product.sale_ends_at && new Date(product.sale_ends_at) > new Date() && new Date(product.sale_ends_at) <= new Date(Date.now() + 24 * 60 * 60 * 1000)) events.push(['sale-ending', `Sale ends soon: ${product.name}`])
-    for (const [eventKey, subject] of events) {
+      for (const [eventKey, subject] of events) {
       const claim = await pool.query(
         `INSERT INTO public.sale_email_notifications (product_id,event_key,window_key)
          VALUES ($1,$2,$3) ON CONFLICT (product_id,event_key,window_key) DO NOTHING RETURNING id`,
@@ -203,11 +222,12 @@ export async function processScheduledSaleNotifications(pool) {
       if (!claim.rowCount) continue
       const endText = product.sale_ends_at ? new Date(product.sale_ends_at).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'while stocks last'
       const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1a1a1a"><h2 style="color:#b8860b">${escapeHtml(eventKey === 'sale-start' ? 'A special price is now live' : 'Sale ending soon')}</h2><h3>${escapeHtml(product.name)}</h3><p><strong>${money(product.sale_price)}</strong> <span style="text-decoration:line-through;color:#777">${money(product.price)}</span></p><p>${eventKey === 'sale-start' ? 'Enjoy this special price while it lasts.' : `The sale ends ${escapeHtml(endText)}.`}</p><p><a href="https://ushangachronicles.com/shop" style="background:#b8860b;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px">Shop now</a></p></div>`
-      for (const subscriber of subscribers) {
-        await queueEmail(pool, { to: subscriber.email, subject, html, label: `sale-${eventKey}` })
-        queued += 1
+        for (const subscriber of subscribers) {
+          await queueEmail(pool, { to: subscriber.email, subject, html, label: `sale-${eventKey}` })
+          queued += 1
+        }
+        sendPushSaleNotification(pool, product, eventKey).catch(error => console.error('scheduled sale push failed:', error.message))
       }
-    }
   }
   if (queued) drainOutbox(pool).catch(() => {})
   return queued

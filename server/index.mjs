@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleDb, handleFiles, handleSignedUrl, handleRealtime } from './db-api.mjs'
-import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, queueOrderStatusNotification, queueNewProductNotifications, sendPushBroadcast, processScheduledSaleNotifications } from './functions-api.mjs'
+import { handleFunction, handleMpesaCallback, handleRpc, drainOutbox, queueEmail, queueOrderConfirmation, queueOrderStatusNotification, queueNewProductNotifications, sendPushBroadcast, sendPushSaleNotification, processScheduledSaleNotifications } from './functions-api.mjs'
 import { createGoogleOAuthRoutes } from './google-oauth.mjs'
 import { handleWhatsAppWebhook } from './whatsapp.mjs'
 import { handleAdminCustomers } from './admin-customer-api.mjs'
@@ -229,7 +229,7 @@ async function handle(req, res, url) {
       return json(res, 201, product)
     }
     const match = url.pathname.match(/^\/api\/admin\/products\/([^/]+)$/)
-    if (match && req.method === 'PATCH') { const b = await body(req); const allowed = ['name','description','price','price_min','price_max','category','subcategory','stock','image_url','image_urls','is_active','is_preorder','preorder_label','low_stock_threshold','sale_price','sale_starts_at','sale_ends_at']; const sets=[]; const vals=[]; for (const k of allowed) if (b[k] !== undefined) { vals.push(b[k]); sets.push(`${k}=$${vals.length}`) } if (!sets.length) return json(res, 400, { error:'No fields' }); vals.push(match[1]); let r; try { r=await pool.query(`UPDATE products SET ${sets.join(',')},updated_at=now() WHERE id=$${vals.length} RETURNING ${productFields}`,vals) } catch (error) { console.error('product update failed:', error.message); return json(res,400,{error:error.message}) } return r.rowCount ? json(res,200,productDto(r.rows[0])) : json(res,404,{error:'Product not found'}) }
+    if (match && req.method === 'PATCH') { const b = await body(req); const allowed = ['name','description','price','price_min','price_max','category','subcategory','stock','image_url','image_urls','is_active','is_preorder','preorder_label','low_stock_threshold','sale_price','sale_starts_at','sale_ends_at']; const sets=[]; const vals=[]; for (const k of allowed) if (b[k] !== undefined) { vals.push(b[k]); sets.push(`${k}=$${vals.length}`) } if (!sets.length) return json(res, 400, { error:'No fields' }); vals.push(match[1]); let r; try { r=await pool.query(`UPDATE products SET ${sets.join(',')},updated_at=now() WHERE id=$${vals.length} RETURNING ${productFields}`,vals) } catch (error) { console.error('product update failed:', error.message); return json(res,400,{error:error.message}) } if (!r.rowCount) return json(res,404,{error:'Product not found'}); const product = productDto(r.rows[0]); if (product.is_active && product.sale_price && Number(product.sale_price) < Number(product.price)) sendPushSaleNotification(pool, product, 'sale-start').catch(error => console.error('sale update push failed:', error.message)); return json(res,200,product) }
     if (match && req.method === 'DELETE') {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(match[1])) return json(res,400,{error:'Invalid product id'})
       try {
