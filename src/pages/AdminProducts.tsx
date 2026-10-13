@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/dbClient'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { uploadToR2 } from '@/lib/storage'
 import { toDatetimeLocal, toIsoTimestamp } from '@/lib/salePrice'
-import { Plus, Trash2, Edit, X, Upload, Layers, GripVertical } from 'lucide-react'
+import { Plus, Trash2, Edit, X, Upload, Layers, GripVertical, Search, SlidersHorizontal } from 'lucide-react'
 import { apiUrl } from '@/lib/apiBase'
 
 interface Product {
@@ -61,6 +60,10 @@ export default function AdminProducts() {
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('All')
+  const [subcategoryFilter, setSubcategoryFilter] = useState('All')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'hidden' | 'out' | 'low' | 'preorder'>('all')
   const [form, setForm] = useState({
     name: '', description: '', price: '', sale_price: '', sale_starts_at: '', sale_ends_at: '', price_min: '', price_max: '', category: '', subcategory: '', stock: '', image_urls: [] as string[], is_active: true, is_preorder: false, preorder_label: ''
   })
@@ -78,11 +81,11 @@ export default function AdminProducts() {
 
   const fetchTaxonomy = async () => {
     const [c, s] = await Promise.all([
-      supabase.from('categories').select('id,name').order('display_order'),
-      supabase.from('subcategories').select('id,category_id,name').order('display_order'),
+      adminApi('/api/db/categories?select=id,name&order=display_order.asc'),
+      adminApi('/api/db/subcategories?select=id,category_id,name&order=display_order.asc'),
     ])
-    if (c.data) setCategories(c.data)
-    if (s.data) setSubcategories(s.data)
+    setCategories(c)
+    setSubcategories(s)
   }
 
   const fetchVariants = async (productId: string) => {
@@ -226,6 +229,28 @@ export default function AdminProducts() {
 
   const variantProduct = products.find(p => p.id === variantProductId)
 
+  const filteredProducts = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return products.filter(product => {
+      const matchesSearch = !term || [product.name, product.description, product.category, product.subcategory]
+        .filter(Boolean)
+        .some(value => String(value).toLowerCase().includes(term))
+      const matchesCategory = categoryFilter === 'All' || product.category === categoryFilter
+      const matchesSubcategory = subcategoryFilter === 'All' || product.subcategory === subcategoryFilter
+      const matchesStatus = statusFilter === 'all'
+        || (statusFilter === 'active' && product.is_active)
+        || (statusFilter === 'hidden' && !product.is_active)
+        || (statusFilter === 'out' && !product.is_preorder && product.stock <= 0)
+        || (statusFilter === 'low' && !product.is_preorder && product.stock > 0 && product.stock <= 3)
+        || (statusFilter === 'preorder' && product.is_preorder)
+      return matchesSearch && matchesCategory && matchesSubcategory && matchesStatus
+    })
+  }, [products, search, categoryFilter, subcategoryFilter, statusFilter])
+
+  const filterSubcategories = categoryFilter === 'All'
+    ? subcategories
+    : subcategories.filter(sub => categories.find(category => category.name === categoryFilter)?.id === sub.category_id)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -365,9 +390,42 @@ export default function AdminProducts() {
         </div>
       )}
 
+      <div className="bg-card border border-border rounded-lg p-4 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <SlidersHorizontal className="w-4 h-4 text-primary" />
+          <h2 className="text-sm font-semibold">Find products</h2>
+          <span className="text-xs text-muted-foreground">Showing {filteredProducts.length} of {products.length}</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="relative lg:col-span-2">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Search name, description, category…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <select value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setSubcategoryFilter('All') }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="All">All categories</option>
+            {categories.map(category => <option key={category.id} value={category.name}>{category.name}</option>)}
+          </select>
+          <select value={subcategoryFilter} onChange={e => setSubcategoryFilter(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="All">All subcategories</option>
+            {filterSubcategories.map(subcategory => <option key={subcategory.id} value={subcategory.name}>{subcategory.name}</option>)}
+          </select>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="all">All statuses</option>
+            <option value="active">Active / visible</option>
+            <option value="hidden">Hidden</option>
+            <option value="out">Out of stock</option>
+            <option value="low">Low stock (1–3)</option>
+            <option value="preorder">Pre-order</option>
+          </select>
+          {(search || categoryFilter !== 'All' || subcategoryFilter !== 'All' || statusFilter !== 'all') && (
+            <Button type="button" variant="outline" onClick={() => { setSearch(''); setCategoryFilter('All'); setSubcategoryFilter('All'); setStatusFilter('all') }} className="h-10">Clear filters</Button>
+          )}
+        </div>
+      </div>
+
       {/* Products Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {products.map(p => (
+        {filteredProducts.map(p => (
           <div key={p.id} className="bg-card border border-border rounded-lg overflow-hidden">
             {p.image_url ? (
               <img src={p.image_url} alt={p.name} className="w-full h-40 object-cover" />
@@ -384,7 +442,7 @@ export default function AdminProducts() {
                   {p.is_active ? 'Active' : 'Hidden'}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">{p.category} · Stock: {p.stock}</p>
+              <p className="text-xs text-muted-foreground mt-1">{p.category}{p.subcategory ? ` · ${p.subcategory}` : ''} · Stock: {p.stock}</p>
               <div className="flex gap-2 mt-3">
                 <Button size="sm" variant="outline" onClick={() => handleEdit(p)} className="flex-1">
                   <Edit className="w-3 h-3 mr-1" /> Edit
@@ -399,9 +457,9 @@ export default function AdminProducts() {
             </div>
           </div>
         ))}
-        {products.length === 0 && (
+        {filteredProducts.length === 0 && (
           <div className="col-span-full text-center py-16 text-muted-foreground">
-            No products yet. Click "Add Product" to get started.
+            {products.length === 0 ? 'No products yet. Click "Add Product" to get started.' : 'No products match the current search and filters.'}
           </div>
         )}
       </div>

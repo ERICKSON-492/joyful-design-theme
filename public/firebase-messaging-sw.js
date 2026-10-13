@@ -2,6 +2,9 @@
 importScripts('https://www.gstatic.com/firebasejs/12.4.0/firebase-app-compat.js')
 importScripts('https://www.gstatic.com/firebasejs/12.4.0/firebase-messaging-compat.js')
 
+self.addEventListener('install', event => event.waitUntil(self.skipWaiting()))
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()))
+
 firebase.initializeApp({
   apiKey: '__VITE_FIREBASE_API_KEY__',
   authDomain: '__VITE_FIREBASE_AUTH_DOMAIN__',

@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
-import { getMessaging, getToken, isSupported, onMessage, type Messaging } from 'firebase/messaging'
+import { deleteToken, getMessaging, getToken, isSupported, onMessage, type Messaging } from 'firebase/messaging'
 import { apiUrl } from './apiBase'
 
 const config = {
@@ -29,12 +29,34 @@ export async function enablePushNotifications() {
   if (!client || !('Notification' in window) || !('serviceWorker' in navigator)) throw new Error('Push notifications are not supported in this browser.')
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('Browser notification permission was not granted.')
-  await navigator.serviceWorker.register('/firebase-messaging-sw.js')
-  // Registration resolves before the worker is necessarily active. Waiting
-  // for ready prevents PushManager.subscribe from failing with "no active
-  // Service Worker" on the first opt-in attempt.
-  const registration = await navigator.serviceWorker.ready
-  const token = await getToken(client, { vapidKey, serviceWorkerRegistration: registration })
+  let registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' })
+  await registration.update().catch(() => {})
+  // Registration can resolve while the worker is still installing. Use the
+  // exact Firebase worker registration rather than an unrelated ready worker.
+  if (!registration.active) {
+    await new Promise<void>((resolve, reject) => {
+      const worker = registration.installing || registration.waiting
+      if (!worker) { reject(new Error('Firebase service worker did not activate.')); return }
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'activated') resolve()
+        if (worker.state === 'redundant') reject(new Error('Firebase service worker became inactive.'))
+      })
+    })
+  }
+  let token: string
+  try {
+    token = await getToken(client, { vapidKey, serviceWorkerRegistration: registration })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : ''
+    if (code !== 'messaging/token-subscribe-failed' && !message.toLowerCase().includes('push service error')) throw error
+    // A token created with an older Firebase/VAPID configuration can make
+    // Chrome reject the next subscription. Remove it and retry once.
+    await deleteToken(client).catch(() => {})
+    registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' })
+    await registration.update().catch(() => {})
+    token = await getToken(client, { vapidKey, serviceWorkerRegistration: registration })
+  }
   if (!token) throw new Error('Firebase did not return a browser token.')
   const response = await fetch(apiUrl('/api/push/register'), {
     method: 'POST',
