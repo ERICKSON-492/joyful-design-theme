@@ -2,6 +2,13 @@
 -- Apply after server/neon-schema.sql and server/auth-schema.sql.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Existing Neon databases may have been created before scheduled sale fields
+-- were introduced. Keep this repair in the migration file because CREATE TABLE
+-- IF NOT EXISTS does not alter an already-existing products table.
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_price numeric;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_starts_at timestamptz;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_ends_at timestamptz;
+
 CREATE TABLE IF NOT EXISTS public.categories (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL, slug text NOT NULL UNIQUE,
