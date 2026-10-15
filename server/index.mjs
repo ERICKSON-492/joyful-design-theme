@@ -33,6 +33,18 @@ const productFields = 'id,name,description,price,price_min,price_max,category,su
 const variantFields = 'id,product_id,variant_label,size,color,price,stock,is_active,created_at,updated_at'
 const productDto = (p) => ({ ...p, price: Number(p.price), price_min: p.price_min == null ? null : Number(p.price_min), price_max: p.price_max == null ? null : Number(p.price_max), sale_price: p.sale_price == null ? null : Number(p.sale_price) })
 const variantDto = (v) => ({ ...v, price: Number(v.price) })
+const merchantFeedValue = (value = '') => String(value ?? '').replace(/[\t\r\n]+/g, ' ').trim()
+const merchantFeedUrl = value => { const url = String(value || '').trim(); return url.startsWith('/') ? `https://www.ushangachronicles.com${url}` : url }
+const merchantFeedPrice = value => `${Number(value || 0).toFixed(2)} KES`
+function merchantFeed(products) {
+  const headers = ['id', 'title', 'description', 'link', 'image_link', 'additional_image_link', 'availability', 'condition', 'price', 'sale_price', 'brand', 'identifier_exists', 'product_type']
+  const rows = products.map(product => {
+    const sale = activeSalePrice(product)
+    const images = [product.image_url, ...(Array.isArray(product.image_urls) ? product.image_urls : [])].map(merchantFeedUrl).filter(Boolean).filter((url, index, all) => all.indexOf(url) === index)
+    return [product.id, product.name, product.description || `Handcrafted ${product.name} from Ushanga Chronicles.`, `https://www.ushangachronicles.com/product/${encodeURIComponent(product.id)}`, images[0] || '', images.slice(1).join(','), Number(product.stock || 0) > 0 ? 'in_stock' : 'out_of_stock', 'new', merchantFeedPrice(product.price), sale ? merchantFeedPrice(sale) : '', 'Ushanga Chronicles', 'no', product.category || 'Handmade products'].map(merchantFeedValue).join('\t')
+  })
+  return `${headers.join('\t')}\n${rows.join('\n')}\n`
+}
 const activeSalePrice = (p) => {
   const sale = Number(p.sale_price); const original = Number(p.price); const now = Date.now()
   if (!Number.isFinite(sale) || !Number.isFinite(original) || sale <= 0 || sale >= original) return null
@@ -130,6 +142,11 @@ function queryFilters(url) {
 async function handle(req, res, url) {
   if (await handleGoogleOAuth(req, res, url)) return
   if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true })
+  if (req.method === 'GET' && url.pathname === '/api/merchant-feed.tsv') {
+    const r = await pool.query(`SELECT ${productFields} FROM public.products WHERE is_active=true ORDER BY created_at DESC`)
+    res.writeHead(200, { 'content-type': 'text/tab-separated-values; charset=utf-8', 'content-disposition': 'inline; filename="ushanga-products.tsv"', 'cache-control': 'public, max-age=300', 'x-robots-tag': 'noindex' })
+    return res.end(merchantFeed(r.rows))
+  }
   if (url.pathname === '/api/analytics/visit') return handleVisitorEvent({ pool, req, res, json, body })
   if (url.pathname === '/api/admin/analytics/visitors') return handleVisitorReport({ pool, req, res, url, json, requireAdmin })
   if (req.method === 'POST' && url.pathname === '/api/push/register') {
