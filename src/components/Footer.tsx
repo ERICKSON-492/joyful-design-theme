@@ -18,7 +18,7 @@ export function Footer() {
           {/* Brand */}
           <div>
             <Link to="/" className="block mb-4">
-              <img src="/logo.jpeg" alt="Ushanga Chronicles" className="h-14 w-auto rounded-md" />
+              <img src="/logo.jpeg" alt="Ushanga Chronicles" width={320} height={320} className="h-14 w-auto rounded-md" />
             </Link>
             {brand?.title && <h3 className="text-white font-display font-semibold mb-2">{brand.title}</h3>}
             <p className="text-sm leading-relaxed mb-4">{brandDescription}</p>

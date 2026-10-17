@@ -249,7 +249,7 @@ export function HeroSection() {
             key={activeSlide.id}
             className="max-w-3xl"
             variants={textContainerVariants}
-            initial="hidden"
+            initial={false}
             animate="visible"
             exit="exit"
           >
