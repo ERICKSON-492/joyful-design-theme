@@ -21,7 +21,6 @@ const textItemVariants = {
 // ==========================================
 // 1. STATIC ASSET IMPORTS
 // ==========================================
-import heroTribeImg from '@/assets/hero/1781724309331.webp'
 import heroJewelryImg from '@/assets/hero/1781724828046.webp'
 import heroDecorImg from '@/assets/hero/1781965391751.webp'
 import variant3 from '@/assets/hero/1781724604664.webp'
@@ -46,7 +45,7 @@ const localSlides: Slide[] = [
 
     id: 'hero-tribe',
 
-    image_url: heroTribeImg,
+    image_url: '/hero-primary.webp',
 
     title: 'USHANGA CHRONICLES',
 

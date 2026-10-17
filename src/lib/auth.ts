@@ -7,6 +7,9 @@ export interface AuthUser {
   role: 'user' | 'admin'
 }
 
+type CurrentUserResponse = { user: AuthUser | null }
+let currentUserRequest: Promise<CurrentUserResponse> | null = null
+
 export async function authRequest<T = { user: AuthUser | null }>(path: string, payload?: unknown): Promise<T> {
   const response = await fetch(apiUrl(path), {
     method: payload === undefined ? 'GET' : 'POST',
@@ -19,9 +22,32 @@ export async function authRequest<T = { user: AuthUser | null }>(path: string, p
   return data as T
 }
 
-export const getCurrentUser = () => authRequest<{ user: AuthUser | null }>('/api/auth/me')
-export const login = (email: string, password: string) => authRequest<{ user: AuthUser }>('/api/auth/login', { email, password })
-export const signup = (email: string, password: string, displayName: string) => authRequest<{ user: AuthUser }>('/api/auth/signup', { email, password, displayName })
-export const logout = () => authRequest<{ ok: true }>('/api/auth/logout', {})
+export const getCurrentUser = () => {
+  if (!currentUserRequest) {
+    currentUserRequest = authRequest<CurrentUserResponse>('/api/auth/me').catch(error => {
+      currentUserRequest = null
+      throw error
+    })
+  }
+  return currentUserRequest
+}
+
+const clearCurrentUserCache = () => { currentUserRequest = null }
+
+export const login = async (email: string, password: string) => {
+  const result = await authRequest<{ user: AuthUser }>('/api/auth/login', { email, password })
+  clearCurrentUserCache()
+  return result
+}
+export const signup = async (email: string, password: string, displayName: string) => {
+  const result = await authRequest<{ user: AuthUser }>('/api/auth/signup', { email, password, displayName })
+  clearCurrentUserCache()
+  return result
+}
+export const logout = async () => {
+  const result = await authRequest<{ ok: true }>('/api/auth/logout', {})
+  clearCurrentUserCache()
+  return result
+}
 export const requestPasswordReset = (email: string) => authRequest<{ ok: true }>('/api/auth/forgot-password', { email })
 export const resetPassword = (token: string, password: string) => authRequest<{ ok: true }>('/api/auth/reset-password', { token, password })

@@ -49,6 +49,10 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
+    // KES is the default and already has a safe local fallback. Do not make
+    // an external request compete with the homepage's first render.
+    if (currency === 'KES') return () => { cancelled = true }
+
     // Try cached rates first
     try {
       const raw = localStorage.getItem(RATES_KEY)
@@ -62,7 +66,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       }
     } catch {}
 
-    fetch('https://open.er-api.com/v6/latest/KES')
+    const loadRates = () => fetch('https://open.er-api.com/v6/latest/KES')
       .then(r => r.json())
       .then(data => {
         if (cancelled || !data?.rates) return
@@ -78,8 +82,16 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {})
 
-    return () => { cancelled = true }
-  }, [])
+    const idleId = 'requestIdleCallback' in window
+      ? window.requestIdleCallback(loadRates, { timeout: 2500 })
+      : window.setTimeout(loadRates, 1500)
+
+    return () => {
+      cancelled = true
+      if ('cancelIdleCallback' in window && typeof idleId === 'number') window.cancelIdleCallback(idleId)
+      else window.clearTimeout(idleId)
+    }
+  }, [currency])
 
   const symbol = CURRENCIES.find(c => c.code === currency)?.symbol || 'KSh'
 
