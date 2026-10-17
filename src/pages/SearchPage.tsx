@@ -4,7 +4,6 @@ import { useCart } from '@/contexts/CartContext'
 import { ShoppingBag, Clock, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useCurrency } from '@/contexts/CurrencyContext'
-import { expandQuery } from '@/lib/searchTerms'
 import { getActiveSalePrice } from '@/lib/salePrice'
 import { productPath } from '@/lib/slug'
 
@@ -13,6 +12,7 @@ const categoryList = ['Wear It', 'Live With It', 'For Your Table', 'Collectibles
 interface Product {
   id: string
   name: string
+  description: string | null
   price: number
   sale_price: number | null
   sale_starts_at: string | null
@@ -22,6 +22,7 @@ interface Product {
   image_url: string | null
   stock: number
   category: string
+  subcategory: string | null
   is_preorder: boolean
   preorder_label: string | null
 }
@@ -86,31 +87,15 @@ export default function SearchPage() {
     setSearchParams(next, { replace: true })
   }, [activeQuery, selectedCats, minPrice, maxPrice, inStockOnly, sort, setSearchParams])
 
-  // Fetch products (server-filter by query + categories; refine the rest client-side)
+  // Fetch active products once, matching the reliable admin-side search flow.
+  // Search and filters are then applied locally so punctuation, spaces, and
+  // backend query-parser differences cannot break the storefront search.
   useEffect(() => {
     let mounted = true
     const load = async () => {
       setLoading(true)
       try {
-        let q = 'select=id,name,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,image_url,stock,category,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
-        if (activeQuery) {
-          // Match singular/plural variants too, so "belts" finds "belt".
-          const variants = expandQuery(activeQuery)
-          if (!variants.length) {
-            if (mounted) setAllProducts([])
-            setLoading(false)
-            return
-          }
-          const clauses = variants.flatMap(v => {
-            const t = encodeURIComponent(v)
-            return [`name.ilike.*${t}*`, `description.ilike.*${t}*`, `category.ilike.*${t}*`, `subcategory.ilike.*${t}*`]
-          })
-          q += `&or=(${clauses.join(',')})`
-        }
-        if (selectedCats.length) {
-          const list = selectedCats.map(c => `"${c}"`).join(',')
-          q += `&category=in.(${encodeURIComponent(list)})`
-        }
+        const q = 'select=id,name,description,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,image_url,stock,category,subcategory,is_preorder,preorder_label&is_active=eq.true&order=created_at.desc'
         const data = await fetchPublicTable<Product>('products', q)
         if (mounted) setAllProducts(data || [])
       } catch {
@@ -121,12 +106,18 @@ export default function SearchPage() {
     }
     load()
     return () => { mounted = false }
-  }, [activeQuery, selectedCats])
+  }, [])
 
   const products = useMemo(() => {
     const min = minPrice === '' ? 0 : Number(minPrice)
     const max = maxPrice === '' ? Infinity : Number(maxPrice)
+    const term = activeQuery.trim().toLowerCase()
     let list = allProducts.filter(p => {
+      const matchesSearch = !term || [p.name, p.description, p.category, p.subcategory]
+        .filter(Boolean)
+        .some(value => String(value).toLowerCase().includes(term))
+      if (!matchesSearch) return false
+      if (selectedCats.length && !selectedCats.includes(p.category)) return false
       const effective = getActiveSalePrice(p) ?? p.price_min ?? p.price
       const inStock = p.is_preorder || p.stock > 0
       if (inStockOnly && !inStock) return false
@@ -137,7 +128,7 @@ export default function SearchPage() {
     if (sort === 'price-asc') list = [...list].sort((a, b) => (getActiveSalePrice(a) ?? a.price_min ?? a.price) - (getActiveSalePrice(b) ?? b.price_min ?? b.price))
     else if (sort === 'price-desc') list = [...list].sort((a, b) => (getActiveSalePrice(b) ?? b.price_min ?? b.price) - (getActiveSalePrice(a) ?? a.price_min ?? a.price))
     return list
-  }, [allProducts, minPrice, maxPrice, inStockOnly, sort])
+  }, [allProducts, activeQuery, selectedCats, minPrice, maxPrice, inStockOnly, sort])
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
