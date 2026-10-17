@@ -152,24 +152,15 @@ export function HeroSection() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  // Preload every slide image up front using native Image objects, so the
-  // browser has fully decoded bytes in memory before the carousel ever
-  // tries to display them. This prevents the grey background from showing
-  // through a slide whose <img> src hasn't finished downloading yet.
+  // Preload only the next slide. Loading every hero image up front made the
+  // homepage compete with the first slide for bandwidth and delayed LCP.
   useEffect(() => {
-    localSlides.forEach((slide) => {
-      const preloadImg = new Image()
-      preloadImg.src = slide.image_url
-      preloadImg.onload = () => {
-        setImagesLoaded((prev) => ({ ...prev, [slide.id]: true }))
-      }
-      // If a slide image fails outright, mark it loaded anyway so the
-      // carousel doesn't stall forever waiting on a broken file.
-      preloadImg.onerror = () => {
-        setImagesLoaded((prev) => ({ ...prev, [slide.id]: true }))
-      }
-    })
-  }, [])
+    const next = localSlides[(current + 1) % localSlides.length]
+    const preloadImg = new Image()
+    preloadImg.src = next.image_url
+    preloadImg.onload = () => setImagesLoaded((prev) => ({ ...prev, [next.id]: true }))
+    preloadImg.onerror = () => setImagesLoaded((prev) => ({ ...prev, [next.id]: true }))
+  }, [current])
 
   // Slide advancement — skips over any slide whose image hasn't finished
   // preloading yet, so autoplay never lands on a blank/grey frame.
@@ -220,15 +211,19 @@ export function HeroSection() {
             key={slide.id}
             src={slide.image_url}
             alt={slide.subtitle || slide.title}
-            loading="eager"
+            loading={index === 0 ? 'eager' : 'lazy'}
             decoding="async"
             fetchPriority={index === 0 ? 'high' : 'auto'}
+            width={1200}
+            height={800}
             className="absolute inset-0 h-full w-full transition-opacity duration-700 ease-out object-cover"
             style={{
               zIndex: isActive ? 1 : 0,
               opacity: isActive && isLoaded ? 1 : 0,
               objectPosition: isMobile ? 'center 25%' : 'center center',
             }}
+            onLoad={() => setImagesLoaded((prev) => ({ ...prev, [slide.id]: true }))}
+            onError={() => setImagesLoaded((prev) => ({ ...prev, [slide.id]: true }))}
             // Slow, continuous "Ken Burns" breathing zoom. It runs
             // regardless of active state so there's never a visible jump
             // the moment a slide fades in — it's always mid-motion.
