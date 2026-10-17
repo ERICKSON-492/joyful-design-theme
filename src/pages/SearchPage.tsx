@@ -53,6 +53,25 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
+  // Keep the controlled form and active search synchronized when the URL
+  // changes in place, such as submitting a second search from the navbar
+  // while already on /search.
+  useEffect(() => {
+    const nextQuery = searchParams.get('q') || searchParams.get('search') || ''
+    const nextCats = (searchParams.get('cats') || '').split(',').filter(Boolean)
+    const nextMin = Number(searchParams.get('min') || 0)
+    const nextMax = Number(searchParams.get('max') || 0)
+    const nextStock = searchParams.get('stock') === '1'
+    const nextSort = (searchParams.get('sort') as SortKey) || 'relevance'
+    setQueryInput(nextQuery)
+    setActiveQuery(nextQuery)
+    setSelectedCats(nextCats)
+    setMinPrice(nextMin || '')
+    setMaxPrice(nextMax || '')
+    setInStockOnly(nextStock)
+    setSort(nextSort)
+  }, [searchParams])
+
   // Sync URL whenever filters change
   useEffect(() => {
     const next = new URLSearchParams()
