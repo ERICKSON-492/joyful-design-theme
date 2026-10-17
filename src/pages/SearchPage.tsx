@@ -52,17 +52,19 @@ export default function SearchPage() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const searchParamsKey = searchParams.toString()
 
   // Keep the controlled form and active search synchronized when the URL
   // changes in place, such as submitting a second search from the navbar
   // while already on /search.
   useEffect(() => {
-    const nextQuery = searchParams.get('q') || searchParams.get('search') || ''
-    const nextCats = (searchParams.get('cats') || '').split(',').filter(Boolean)
-    const nextMin = Number(searchParams.get('min') || 0)
-    const nextMax = Number(searchParams.get('max') || 0)
-    const nextStock = searchParams.get('stock') === '1'
-    const nextSort = (searchParams.get('sort') as SortKey) || 'relevance'
+    const params = new URLSearchParams(searchParamsKey)
+    const nextQuery = params.get('q') || params.get('search') || ''
+    const nextCats = (params.get('cats') || '').split(',').filter(Boolean)
+    const nextMin = Number(params.get('min') || 0)
+    const nextMax = Number(params.get('max') || 0)
+    const nextStock = params.get('stock') === '1'
+    const nextSort = (params.get('sort') as SortKey) || 'relevance'
     setQueryInput(nextQuery)
     setActiveQuery(nextQuery)
     setSelectedCats(nextCats)
@@ -70,7 +72,7 @@ export default function SearchPage() {
     setMaxPrice(nextMax || '')
     setInStockOnly(nextStock)
     setSort(nextSort)
-  }, [searchParams])
+  }, [searchParamsKey])
 
   // Sync URL whenever filters change
   useEffect(() => {
