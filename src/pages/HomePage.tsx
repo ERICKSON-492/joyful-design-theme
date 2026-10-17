@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { HeroSection } from '@/components/HeroSection'
 import { HomepageIntro } from '@/components/HomepageIntro'
 import { useSEO } from '@/hooks/useSEO'
@@ -15,6 +15,33 @@ function SectionFallback({ className = "min-h-[400px]" }: { className?: string }
   return <div className={className} />
 }
 
+function DeferredSection({ children, fallbackClassName }: { children: React.ReactNode; fallbackClassName: string }) {
+  const [shouldRender, setShouldRender] = useState(false)
+  const sectionRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const node = sectionRef.current
+    if (!node) return
+    if (!('IntersectionObserver' in window)) {
+      setShouldRender(true)
+      return
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return
+      setShouldRender(true)
+      observer.disconnect()
+    }, { rootMargin: '800px 0px' })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div ref={sectionRef}>
+      {shouldRender ? children : <SectionFallback className={fallbackClassName} />}
+    </div>
+  )
+}
+
 export default function HomePage() {
   useSEO(
     'Handcrafted African Jewelry & Home Decor',
@@ -25,24 +52,24 @@ export default function HomePage() {
     <>
       <HeroSection />
       <HomepageIntro />
-      <Suspense fallback={<SectionFallback className="min-h-[500px] md:min-h-[600px]" />}>
-        <ShopByCategory />
-      </Suspense>
-      <Suspense fallback={<SectionFallback className="min-h-[450px] md:min-h-[550px]" />}>
-        <FeaturedProducts />
-      </Suspense>
-      <Suspense fallback={<SectionFallback className="min-h-[500px] md:min-h-[650px]" />}>
-        <TheMaker />
-      </Suspense>
-      <Suspense fallback={<SectionFallback className="min-h-[400px] md:min-h-[500px]" />}>
-        <TribeLooksSection />
-      </Suspense>
-      <Suspense fallback={<SectionFallback className="min-h-[300px] md:min-h-[400px] bg-primary" />}>
-        <CustomOrderTeaser />
-      </Suspense>
-      <Suspense fallback={<SectionFallback className="min-h-[350px] md:min-h-[400px]" />}>
-        <JoinTheTribe />
-      </Suspense>
+      <DeferredSection fallbackClassName="min-h-[500px] md:min-h-[600px]">
+        <Suspense fallback={<SectionFallback className="min-h-[500px] md:min-h-[600px]" />}><ShopByCategory /></Suspense>
+      </DeferredSection>
+      <DeferredSection fallbackClassName="min-h-[450px] md:min-h-[550px]">
+        <Suspense fallback={<SectionFallback className="min-h-[450px] md:min-h-[550px]" />}><FeaturedProducts /></Suspense>
+      </DeferredSection>
+      <DeferredSection fallbackClassName="min-h-[500px] md:min-h-[650px]">
+        <Suspense fallback={<SectionFallback className="min-h-[500px] md:min-h-[650px]" />}><TheMaker /></Suspense>
+      </DeferredSection>
+      <DeferredSection fallbackClassName="min-h-[400px] md:min-h-[500px]">
+        <Suspense fallback={<SectionFallback className="min-h-[400px] md:min-h-[500px]" />}><TribeLooksSection /></Suspense>
+      </DeferredSection>
+      <DeferredSection fallbackClassName="min-h-[300px] md:min-h-[400px] bg-primary">
+        <Suspense fallback={<SectionFallback className="min-h-[300px] md:min-h-[400px] bg-primary" />}><CustomOrderTeaser /></Suspense>
+      </DeferredSection>
+      <DeferredSection fallbackClassName="min-h-[350px] md:min-h-[400px]">
+        <Suspense fallback={<SectionFallback className="min-h-[350px] md:min-h-[400px]" />}><JoinTheTribe /></Suspense>
+      </DeferredSection>
     </>
   )
 }
