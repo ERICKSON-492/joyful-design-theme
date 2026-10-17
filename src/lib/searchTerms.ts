@@ -23,7 +23,11 @@ export function expandTerm(raw: string): string[] {
 
 /** Expands a whole query into search variants (per word plus the full phrase). */
 export function expandQuery(query: string): string[] {
-  const cleaned = query.replace(/[%_*(),"']/g, ' ').replace(/\s+/g, ' ').trim()
+  const cleaned = query
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}\s-]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (!cleaned) return []
   const variants = new Set<string>([cleaned])
   for (const word of cleaned.split(' ')) {

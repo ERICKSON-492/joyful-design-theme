@@ -96,13 +96,16 @@ export default function SearchPage() {
         if (activeQuery) {
           // Match singular/plural variants too, so "belts" finds "belt".
           const variants = expandQuery(activeQuery)
-          if (variants.length) {
-            const clauses = variants.flatMap(v => {
-              const t = encodeURIComponent(v)
-              return [`name.ilike.*${t}*`, `description.ilike.*${t}*`, `category.ilike.*${t}*`, `subcategory.ilike.*${t}*`]
-            })
-            q += `&or=(${clauses.join(',')})`
+          if (!variants.length) {
+            if (mounted) setAllProducts([])
+            setLoading(false)
+            return
           }
+          const clauses = variants.flatMap(v => {
+            const t = encodeURIComponent(v)
+            return [`name.ilike.*${t}*`, `description.ilike.*${t}*`, `category.ilike.*${t}*`, `subcategory.ilike.*${t}*`]
+          })
+          q += `&or=(${clauses.join(',')})`
         }
         if (selectedCats.length) {
           const list = selectedCats.map(c => `"${c}"`).join(',')
