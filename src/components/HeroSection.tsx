@@ -178,7 +178,7 @@ export function HeroSection() {
   // Auto-play
   useEffect(() => {
     if (localSlides.length <= 1) return
-    const timer = window.setInterval(nextSlide, 4500)
+    const timer = window.setInterval(nextSlide, 8000)
     return () => window.clearInterval(timer)
   }, [nextSlide])
 
