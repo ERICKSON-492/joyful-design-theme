@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, X, Search, ShoppingBag, Shield, Facebook, Instagram, Youtube, MessageCircle, User, LogOut, Package, Home, BookOpen, Store, Palette, Users, Truck, ChevronDown, Sparkles, Gem } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCart } from '@/contexts/CartContext'
-import { getCurrentUser, logout } from '@/lib/auth'
+import { getCurrentUser, logout, type AuthUser } from '@/lib/auth'
 import { CurrencySwitcher } from './CurrencySwitcher'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { slugify } from '@/lib/slug'
@@ -24,7 +24,7 @@ export function Navbar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [shopOpen, setShopOpen] = useState(false)
   const [categories, setCategories] = useState<NavCategory[]>([])
   const [subcategories, setSubcategories] = useState<NavSubcategory[]>([])
@@ -34,21 +34,27 @@ export function Navbar() {
   const { totalItems, setIsOpen: setCartOpen } = useCart()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { user } = await getCurrentUser()
-      setUser(user)
-      setIsAdmin(user?.role === 'admin')
-    }
-    checkAuth().catch(() => { setUser(null); setIsAdmin(false) })
+    const timer = window.setTimeout(() => {
+      const checkAuth = async () => {
+        const { user } = await getCurrentUser()
+        setUser(user)
+        setIsAdmin(user?.role === 'admin')
+      }
+      checkAuth().catch(() => { setUser(null); setIsAdmin(false) })
+    }, 1500)
+    return () => window.clearTimeout(timer)
   }, [])
 
   useEffect(() => {
-    Promise.all([
-      fetchPublicTable<NavCategory>('categories', 'select=id,name&is_active=eq.true&order=display_order.asc'),
-      fetchPublicTable<NavSubcategory>('subcategories', 'select=id,category_id,name&is_active=eq.true&order=display_order.asc'),
-    ])
-      .then(([cats, subs]) => { setCategories(cats || []); setSubcategories(subs || []) })
-      .catch(() => {})
+    const timer = window.setTimeout(() => {
+      Promise.all([
+        fetchPublicTable<NavCategory>('categories', 'select=id,name&is_active=eq.true&order=display_order.asc'),
+        fetchPublicTable<NavSubcategory>('subcategories', 'select=id,category_id,name&is_active=eq.true&order=display_order.asc'),
+      ])
+        .then(([cats, subs]) => { setCategories(cats || []); setSubcategories(subs || []) })
+        .catch(() => {})
+    }, 1500)
+    return () => window.clearTimeout(timer)
   }, [])
 
   useEffect(() => {
