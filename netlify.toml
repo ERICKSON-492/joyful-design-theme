@@ -1,3 +1,12 @@
+ [build]
+   trailing_slash = "always"
+
+[[redirects]]
+  from = "https://www.ushangachronicles.com/*"
+  to = "https://ushangachronicles.com/:splat"
+  status = 301
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

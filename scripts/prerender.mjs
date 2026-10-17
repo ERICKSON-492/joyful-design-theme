@@ -10,6 +10,20 @@ const SITE = "https://ushangachronicles.com";
 const DIST = resolve("dist");
 const SHELL_PATH = resolve(DIST, "index.html");
 
+function canonicalUrl(path) {
+  const normalized = path === "/" ? "/" : `/${String(path).replace(/^\/+|\/+$/g, "")}/`;
+  return `${SITE}${normalized}`;
+}
+
+function xmlEscape(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 if (!existsSync(SHELL_PATH)) {
   console.warn("[prerender] dist/index.html not found — skipping.");
   process.exit(0);
@@ -213,7 +227,7 @@ function escapeAttr(s) {
 
 function renderRoute(route) {
   const fullTitle = `${route.title} | Ushanga Chronicles`;
-  const canonical = `${SITE}${route.path}`;
+  const canonical = canonicalUrl(route.path);
   let html = shell;
 
   // Replace <title>
@@ -305,7 +319,7 @@ function renderProduct(p) {
   const desc = (p.description || `${p.name} — handmade in Nairobi, Kenya by Ushanga Chronicles artisans. ${productPrice(p)}.`)
     .replace(/\s+/g, " ")
     .slice(0, 300);
-  const canonical = `${SITE}/products/${productSlug(p)}`;
+  const canonical = canonicalUrl(`/products/${productSlug(p)}`);
   const img = p.image_url || `${SITE}/logo.jpeg`;
   const priceNum = (p.sale_price && p.sale_price < p.price) ? p.sale_price : p.price;
   const productReviews = reviewsByProduct.get(p.id) || [];
@@ -393,6 +407,39 @@ for (const p of products) {
   catch (err) { console.error(`[prerender] product ${p.id} failed:`, err.message); }
 }
 console.log(`[prerender] wrote ${productCount} product page(s).`);
+
+function sitemapEntry(path, changefreq, priority, lastmod) {
+  const lastmodTag = lastmod ? `\n    <lastmod>${xmlEscape(lastmod)}</lastmod>` : "";
+  return `  <url>\n    <loc>${xmlEscape(canonicalUrl(path))}</loc>${lastmodTag}\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
+}
+
+function productLastModified(product) {
+  const raw = product.updated_at || product.created_at;
+  if (!raw) return "";
+  const timestamp = Date.parse(raw);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString().slice(0, 10) : "";
+}
+
+if (products.length) {
+  const staticEntries = routes.map((route) => sitemapEntry(
+    route.path,
+    route.path === "/shop" ? "daily" : "monthly",
+    route.path === "/" ? "1.0" : route.path === "/shop" ? "0.9" : "0.5",
+  ));
+  const productEntries = products
+    .filter((product) => product && product.id && product.name)
+    .map((product) => sitemapEntry(
+      `/products/${productSlug(product)}`,
+      "weekly",
+      "0.8",
+      productLastModified(product),
+    ));
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...staticEntries, ...productEntries].join("\n")}\n</urlset>\n`;
+  writeFileSync(resolve(DIST, "sitemap.xml"), sitemap, "utf8");
+  console.log(`[prerender] wrote sitemap.xml with ${staticEntries.length + productEntries.length} URL(s).`);
+} else {
+  console.warn("[prerender] no products returned; preserving the checked-in sitemap rather than publishing an incomplete product sitemap.");
+}
 
 // Enrich /shop/index.html and / (root) with a real product list so crawlers
 // see actual names + prices, not just navigation.

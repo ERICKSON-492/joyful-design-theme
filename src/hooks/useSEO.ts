@@ -24,6 +24,11 @@ export function upsertCanonical(href: string) {
   el.setAttribute('href', href)
 }
 
+function canonicalPath(path: string) {
+  if (path === '/') return '/'
+  return `/${path.replace(/^\/+|\/+$/g, '')}/`
+}
+
 /**
  * Sets a unique title, meta description, and canonical URL for the current
  * page. Without this, every route in this single-page app shares the same
@@ -44,8 +49,8 @@ export function useSEO(title: string, description?: string, path?: string, noind
     upsertMeta('property', 'og:title', document.title)
     upsertMeta('property', 'og:description', description || DEFAULT_DESCRIPTION)
 
-    const canonicalPath = path ?? window.location.pathname
-    upsertCanonical(`${SITE_URL}${canonicalPath === '/' ? '' : canonicalPath}`)
+    const requestedPath = path ?? window.location.pathname
+    upsertCanonical(`${SITE_URL}${canonicalPath(requestedPath)}`)
 
     let robotsEl = document.head.querySelector<HTMLMetaElement>('meta[name="robots"]')
     if (noindex) {
@@ -58,6 +63,5 @@ export function useSEO(title: string, description?: string, path?: string, noind
     } else if (robotsEl) {
       robotsEl.remove()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, description, path, noindex])
 }
