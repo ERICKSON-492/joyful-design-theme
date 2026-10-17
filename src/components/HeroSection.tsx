@@ -249,29 +249,32 @@ export function HeroSection() {
             key={activeSlide.id}
             className="max-w-3xl"
             variants={textContainerVariants}
-            initial={false}
+            initial={current === 0 ? false : 'hidden'}
             animate="visible"
             exit="exit"
           >
             <motion.h1
               variants={textItemVariants}
+              initial={current === 0 ? false : 'hidden'}
               className="font-display text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-3 sm:mb-4 leading-[1.1] tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
             >
               {activeSlide.title}
             </motion.h1>
             <motion.p
               variants={textItemVariants}
+              initial={current === 0 ? false : 'hidden'}
               className="text-[#F0D878] text-lg sm:text-xl md:text-2xl lg:text-3xl font-display italic mb-6 sm:mb-10 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]"
             >
               {activeSlide.subtitle}
             </motion.p>
             <motion.p
               variants={textItemVariants}
+              initial={current === 0 ? false : 'hidden'}
               className="text-white/90 text-sm sm:text-base md:text-lg max-w-2xl mx-auto mb-6 sm:mb-8 leading-relaxed drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
             >
               Handcrafted, heritage-inspired African jewelry, pet accessories, and home decor made by artisans in Nairobi.
             </motion.p>
-            <motion.div variants={textItemVariants}>
+            <motion.div variants={textItemVariants} initial={current === 0 ? false : 'hidden'}>
               <MotionLink
                 to={activeSlide.cta_link}
                 className="inline-block bg-primary hover:bg-primary/85 text-primary-foreground px-8 sm:px-10 py-3.5 sm:py-4 text-xs sm:text-sm font-bold tracking-widest uppercase transition-all duration-300 shadow-lg hover:shadow-xl"
