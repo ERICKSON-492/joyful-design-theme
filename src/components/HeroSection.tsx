@@ -218,7 +218,7 @@ export function HeroSection() {
             className="absolute inset-0 h-full w-full transition-opacity duration-700 ease-out object-cover"
             style={{
               zIndex: isActive ? 1 : 0,
-              opacity: isActive && isLoaded ? 1 : 0,
+              opacity: isActive && (isLoaded || index === 0) ? 1 : 0,
               objectPosition: isMobile ? 'center 25%' : 'center center',
             }}
             onLoad={() => setImagesLoaded((prev) => ({ ...prev, [slide.id]: true }))}
