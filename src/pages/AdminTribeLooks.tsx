@@ -5,7 +5,7 @@ import { deleteFromR2, uploadToR2 } from '@/lib/storage'
 import { storageKeyFromPublicUrl } from '@/lib/r2ObjectUrl'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Check, X, Trash2, Upload, Loader2, Plus, Download } from 'lucide-react'
+import { Check, X, Trash2, Upload, Loader2, Plus, Download, Edit2 } from 'lucide-react'
 import tribeTess from '@/assets/tribe-tess.jpeg'
 import tribeAnne from '@/assets/tribe-anne.jpeg'
 import tribeLuna from '@/assets/tribe-luna.jpeg'
@@ -342,6 +342,11 @@ export default function AdminTribeLooks() {
                 {editingId !== look.id && look.piece_name && <p className="text-xs text-muted-foreground mb-2">{look.piece_name}</p>}
                 <p className="text-xs text-muted-foreground mb-3">{new Date(look.created_at).toLocaleDateString()}</p>
                 <div className="flex gap-2">
+                  {editingId !== look.id && (
+                    <Button size="sm" variant="outline" onClick={() => startEdit(look)} className="flex-1">
+                      <Edit2 className="w-3 h-3 mr-1" /> Edit
+                    </Button>
+                  )}
                   {look.status !== 'approved' && (
                     <Button size="sm" variant="outline" onClick={() => updateStatus(look.id, 'approved')} className="flex-1 text-green-700">
                       <Check className="w-3 h-3 mr-1" /> Approve
