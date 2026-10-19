@@ -122,9 +122,9 @@ export async function handleDb({ pool, req, res, url, json, body, user, isAdmin,
     if (rule.read === READ_ADMIN && !isAdmin) return json(res, 403, { message: 'Admin access required', code: '42501' })
     const values = []
     const clauses = buildFilters(params, cols, values)
-    // Reviews are public only after moderation. Signed-in customers can also
-    // see their own pending/rejected review so the storefront can prevent a
-    // duplicate submission; administrators retain full moderation access.
+    // Public readers see approved reviews. Signed-in customers can also see
+    // their own non-approved review so the storefront can prevent duplicates;
+    // administrators retain full moderation access.
     if (name === 'product_reviews' && !isAdmin) {
       if (user) {
         values.push(user.id)
@@ -153,6 +153,11 @@ export async function handleDb({ pool, req, res, url, json, body, user, isAdmin,
     for (const row of rows) {
       const data = { ...row }
       if (rule.owner && !isAdmin && user) data[rule.owner] = user.id
+      if (name === 'product_reviews' && !isAdmin) {
+        data.status = 'approved'
+        data.is_verified_buyer = false
+        data.admin_response = null
+      }
       const keys = Object.keys(data).filter(k => cols.has(k))
       if (!keys.length) return json(res, 400, { message: 'No valid columns', code: '42703' })
       const values = keys.map(k => (data[k] !== null && typeof data[k] === 'object' && !Array.isArray(data[k]) ? JSON.stringify(data[k]) : data[k]))
@@ -178,6 +183,9 @@ export async function handleDb({ pool, req, res, url, json, body, user, isAdmin,
     const payload = await body(req)
     const values = []
     const keys = Object.keys(payload).filter(k => cols.has(k) && k !== 'id')
+    if (name === 'product_reviews' && !isAdmin && keys.some(k => ['status', 'is_verified_buyer', 'admin_response', 'user_id', 'product_id'].includes(k))) {
+      return json(res, 403, { message: 'Review moderation fields are admin-only', code: '42501' })
+    }
     if (!keys.length) return json(res, 400, { message: 'No valid columns', code: '42703' })
     const sets = keys.map(k => {
       values.push(payload[k] !== null && typeof payload[k] === 'object' && !Array.isArray(payload[k]) ? JSON.stringify(payload[k]) : payload[k])
