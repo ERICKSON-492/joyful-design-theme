@@ -121,14 +121,6 @@ INSERT INTO public.shipping_methods (id,name,type,provider,estimated_days,price,
 INSERT INTO public.payment_methods (id,name,provider,is_active,config,created_at,updated_at) VALUES ('ff830ef8-dcac-4545-9781-15a575fa5fd9','M-Pesa','mpesa',true,'{"mode":"sandbox"}'::jsonb,'2026-04-11T08:01:08.956086+00:00','2026-04-11T08:01:08.956086+00:00') ON CONFLICT DO NOTHING;
 INSERT INTO public.payment_methods (id,name,provider,is_active,config,created_at,updated_at) VALUES ('d4546675-03b5-46b5-a871-c01a6d1e1661','Cash on Delivery','cod',true,'{}'::jsonb,'2026-04-11T08:01:08.956086+00:00','2026-04-11T08:01:08.956086+00:00') ON CONFLICT DO NOTHING;
 
--- tribe_looks: 1 rows
-INSERT INTO public.tribe_looks (id,user_id,image_url,name,piece_name,status,created_at) VALUES ('ee97adab-17ae-45b1-932a-3cb5375fb780','3eee403e-6437-4b54-add2-378856735df1','https://hdzprvaypoylqpmuldfx.supabase.co/storage/v1/object/public/product-images/tribe-looks/1778170266052.jpg','Ushanga Chronicles','Custom item','approved','2026-05-07T16:11:23.878997+00:00') ON CONFLICT DO NOTHING;
-
--- Initial curated gallery: stable public assets, not customer-owned uploads.
-INSERT INTO public.tribe_looks (id,user_id,image_url,name,piece_name,status,created_at) VALUES ('d54b4876-a131-41ae-8d17-8c12de6711b1',NULL,'/media/tribe-looks/tess.jpeg','Tess','Beaded Dress','approved',now()) ON CONFLICT DO NOTHING;
-INSERT INTO public.tribe_looks (id,user_id,image_url,name,piece_name,status,created_at) VALUES ('cbab7d4f-6d94-4cbb-a39a-0fb205c71b8f',NULL,'/media/tribe-looks/anne.jpeg','Anne','Beaded Bracelet','approved',now()) ON CONFLICT DO NOTHING;
-INSERT INTO public.tribe_looks (id,user_id,image_url,name,piece_name,status,created_at) VALUES ('f77e0ad0-47ea-4b5d-9351-21e6e15d65e7',NULL,'/media/tribe-looks/luna.jpeg','Luna','Beaded Dog Collar','approved',now()) ON CONFLICT DO NOTHING;
-INSERT INTO public.tribe_looks (id,user_id,image_url,name,piece_name,status,created_at) VALUES ('c34d8b5e-83dc-46d9-84df-8d90a384f2c3',NULL,'/media/tribe-looks/amani.jpg','Amani K.','Layered Beaded Necklace','approved',now()) ON CONFLICT DO NOTHING;
 
 -- enquiry_messages: 12 rows
 INSERT INTO public.enquiry_messages (id,customer_name,customer_email,customer_phone,message,is_from_admin,conversation_id,is_read,created_at) VALUES ('67986d5e-6d4d-4632-861b-e09cd9b59c17','Admin',NULL,NULL,'how can i help you',true,'29628a2d-805d-4982-9c5a-d4c20fd6833d',true,'2026-05-07T16:28:27.504493+00:00') ON CONFLICT DO NOTHING;
