@@ -60,6 +60,9 @@ export default function AdminLayout() {
     navigate('/admin/login')
   }
 
+  const currentNavItem = navItems.find(item => item.href === location.pathname) || navItems[0]
+  const CurrentNavIcon = currentNavItem.icon
+
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><p className="text-muted-foreground">Loading...</p></div>
   if (!user) return null
 
@@ -103,19 +106,23 @@ export default function AdminLayout() {
       </aside>
 
       {/* Mobile header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <h2 className="font-display text-sm font-bold">USHANGA Admin</h2>
-        <div className="flex items-center gap-2">
-          {navItems.map(item => (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={`p-2 rounded-md ${location.pathname === item.href ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3">
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-sm font-bold shrink-0">USHANGA Admin</h2>
+          <div className="relative min-w-0 flex-1">
+            <select
+              aria-label="Admin navigation"
+              value={currentNavItem.href}
+              onChange={event => navigate(event.target.value)}
+              className="w-full appearance-none rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
-              <item.icon className="w-5 h-5" />
-            </Link>
-          ))}
-          <button onClick={handleLogout} className="p-2 text-destructive"><LogOut className="w-5 h-5" /></button>
+              {navItems.map(item => <option key={item.href} value={item.href}>{item.label}</option>)}
+            </select>
+            <CurrentNavIcon aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
+          <button onClick={handleLogout} aria-label="Sign out" className="shrink-0 rounded-md p-2 text-destructive hover:bg-destructive/10">
+            <LogOut className="h-5 w-5" />
+          </button>
         </div>
       </div>
 
