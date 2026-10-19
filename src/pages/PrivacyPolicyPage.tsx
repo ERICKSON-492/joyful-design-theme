@@ -63,7 +63,10 @@ export default function PrivacyPolicyPage() {
             </p>
             <Button variant="outline" className="mt-3 min-h-11 text-base" onClick={() => {
               try { localStorage.removeItem(COOKIE_CONSENT_KEY) } catch { /* Storage may be blocked. */ }
-              try { document.cookie = `${COOKIE_CONSENT_KEY}=; Max-Age=0; Path=/; SameSite=Lax` } catch { /* Cookies may be blocked. */ }
+              try {
+                document.cookie = `${COOKIE_CONSENT_KEY}=; Max-Age=0; Path=/; SameSite=Lax; Domain=.ushangachronicles.com`
+                document.cookie = `${COOKIE_CONSENT_KEY}=; Max-Age=0; Path=/; SameSite=Lax`
+              } catch { /* Cookies may be blocked. */ }
               // Reload removes any optional scripts already running before a new choice.
               window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_EVENT, { detail: null }))
               window.location.reload()

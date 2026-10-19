@@ -2,6 +2,14 @@ export const COOKIE_CONSENT_KEY = 'ushanga-cookie-consent'
 const COOKIE_CONSENT_MAX_AGE = 60 * 60 * 24 * 365
 export const COOKIE_CONSENT_EVENT = 'ushanga-cookie-consent-changed'
 export type CookieConsent = 'accepted' | 'declined'
+const COOKIE_DOMAIN = 'Domain=.ushangachronicles.com'
+
+function consentCookieSuffix() {
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('ushangachronicles.com')) {
+    return `; ${COOKIE_DOMAIN}`
+  }
+  return ''
+}
 
 export function parseCookieConsent(value: string | null): CookieConsent | null {
   return value === 'accepted' || value === 'declined' ? value : null
@@ -17,9 +25,10 @@ export function getCookieConsent(): CookieConsent | null {
 
   try {
     const cookie = document.cookie
-      .split('; ')
-      .find((entry) => entry.startsWith(`${COOKIE_CONSENT_KEY}=`))
-      ?.split('=')[1]
+      .split(';')
+      .map(entry => entry.trim())
+      .find(entry => entry.startsWith(`${COOKIE_CONSENT_KEY}=`))
+      ?.slice(COOKIE_CONSENT_KEY.length + 1)
     const stored = parseCookieConsent(cookie ? decodeURIComponent(cookie) : null)
     if (stored) {
       try { window.localStorage.setItem(COOKIE_CONSENT_KEY, stored) } catch { /* cookie remains the fallback */ }
@@ -37,7 +46,7 @@ export function setCookieConsent(choice: CookieConsent) {
     // A blocked storage setting must not prevent a visitor from declining.
   }
   try {
-    document.cookie = `${COOKIE_CONSENT_KEY}=${encodeURIComponent(choice)}; Max-Age=${COOKIE_CONSENT_MAX_AGE}; Path=/; SameSite=Lax`
+    document.cookie = `${COOKIE_CONSENT_KEY}=${encodeURIComponent(choice)}; Max-Age=${COOKIE_CONSENT_MAX_AGE}; Path=/; SameSite=Lax${consentCookieSuffix()}`
   } catch {
     // Ignore blocked cookies; localStorage remains the primary persistence.
   }
