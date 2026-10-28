@@ -9,6 +9,9 @@ import { resolve, dirname } from "node:path";
 const SITE = "https://ushangachronicles.com";
 const DIST = resolve("dist");
 const SHELL_PATH = resolve(DIST, "index.html");
+const legacyProductAliases = JSON.parse(
+  readFileSync(resolve("src/data/legacy-product-aliases.json"), "utf8")
+);
 
 function canonicalUrl(path) {
   const normalized = path === "/" ? "/" : `/${String(path).replace(/^\/+|\/+$/g, "")}/`;
@@ -304,6 +307,44 @@ console.log(`[prerender] wrote ${count} static route(s).`);
 // -------------------------------------------------------------
 const [products, approvedReviews] = await Promise.all([fetchProducts(), fetchApprovedReviews()]);
 console.log(`[prerender] fetched ${products.length} product(s) from backend.`);
+
+// Redirect old product URLs directly to the current, trailing-slash canonical
+// route. This avoids serving the SPA shell (and its not-found noindex state)
+// for live products whose names/slugs have changed.
+function writeProductRedirects() {
+  const lines = new Set();
+  const addRedirect = (from, to) => {
+    if (from !== to) lines.add(`${from} ${to} 301`);
+  };
+
+  for (const product of products) {
+    if (!product?.id || !product?.name) continue;
+    const target = `/products/${productSlug(product)}/`;
+    const idPath = `/product/${product.id}`;
+    addRedirect(idPath, target);
+    addRedirect(`${idPath}/`, target);
+  }
+
+  const productsById = new Map(products.filter(product => product?.id).map(product => [product.id, product]));
+  for (const [legacySlug, productId] of Object.entries(legacyProductAliases)) {
+    const product = productsById.get(productId);
+    if (!product?.name) {
+      console.warn(`[prerender] skipping legacy product alias without an active product: ${legacySlug}`);
+      continue;
+    }
+    const target = `/products/${productSlug(product)}/`;
+    const oldPath = `/products/${legacySlug}`;
+    addRedirect(oldPath, target);
+    addRedirect(`${oldPath}/`, target);
+  }
+
+  const output = [...lines].join("\n");
+  writeFileSync(resolve(DIST, "_redirects"), output ? `${output}\n` : "", "utf8");
+  console.log(`[prerender] wrote ${lines.size} permanent product redirect(s).`);
+}
+
+writeProductRedirects();
+
 const reviewsByProduct = new Map();
 for (const review of approvedReviews) {
   const rating = Number(review.rating);

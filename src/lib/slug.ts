@@ -19,5 +19,5 @@ export function productSlug(product: { id: string; name?: string | null } | stri
 }
 
 export function productPath(product: { id: string; name?: string | null } | string): string {
-  return `/products/${productSlug(product)}`
+  return `/products/${productSlug(product)}/`
 }
