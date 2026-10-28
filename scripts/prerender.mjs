@@ -312,7 +312,9 @@ console.log(`[prerender] fetched ${products.length} product(s) from backend.`);
 // route. This avoids serving the SPA shell (and its not-found noindex state)
 // for live products whose names/slugs have changed.
 function writeProductRedirects() {
-  const lines = new Set();
+  const lines = new Set([
+    "https://www.ushangachronicles.com/* https://ushangachronicles.com/:splat 301!",
+  ]);
   const addRedirect = (from, to) => {
     if (from !== to) lines.add(`${from} ${to} 301`);
   };
@@ -340,7 +342,7 @@ function writeProductRedirects() {
 
   const output = [...lines].join("\n");
   writeFileSync(resolve(DIST, "_redirects"), output ? `${output}\n` : "", "utf8");
-  console.log(`[prerender] wrote ${lines.size} permanent product redirect(s).`);
+  console.log(`[prerender] wrote ${lines.size} permanent product and hostname redirect(s).`);
 }
 
 writeProductRedirects();
