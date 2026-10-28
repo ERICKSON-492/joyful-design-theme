@@ -11,6 +11,7 @@ import { useCurrency } from '@/contexts/CurrencyContext'
 import { useSEO } from '@/hooks/useSEO'
 import { getActiveSalePrice } from '@/lib/salePrice'
 import { productPath, productSlug } from '@/lib/slug'
+import legacyProductAliases from '@/data/legacy-product-aliases.json'
 
 interface Product {
   id: string
@@ -84,8 +85,10 @@ export default function ProductDetailPage() {
   }, [product, trackView])
 
   useEffect(() => {
-    if (product && id) navigate(productPath(product), { replace: true })
-  }, [product, id, navigate])
+    if (!product) return
+    const canonicalPath = productPath(product)
+    if (window.location.pathname !== canonicalPath) navigate(canonicalPath, { replace: true })
+  }, [product, routeKey, navigate])
 
   // Inject Product JSON-LD structured data for search engines
   useEffect(() => {
@@ -145,7 +148,8 @@ export default function ProductDetailPage() {
       setLoading(true)
       try {
         const products = await fetchPublicTable<Product>('products', 'select=*&is_active=eq.true&limit=500')
-        const match = products.find(p => p.id === routeKey || productSlug(p) === routeKey)
+        const legacyProductId = (legacyProductAliases as Record<string, string>)[routeKey]
+        const match = products.find(p => p.id === routeKey || productSlug(p) === routeKey || p.id === legacyProductId)
         if (match) {
           const variantsData = await fetchPublicTable<Variant>('product_variants', `select=*&product_id=eq.${match.id}&is_active=eq.true&order=price.asc`)
           setProduct(match)
