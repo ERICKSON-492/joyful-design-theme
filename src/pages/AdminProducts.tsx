@@ -25,6 +25,7 @@ interface Product {
   is_active: boolean
   is_preorder: boolean
   preorder_label: string | null
+  preorder_available_date: string | null
 }
 
 interface Variant {
@@ -65,7 +66,7 @@ export default function AdminProducts() {
   const [subcategoryFilter, setSubcategoryFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'hidden' | 'out' | 'low' | 'preorder'>('all')
   const [form, setForm] = useState({
-    name: '', description: '', price: '', sale_price: '', sale_starts_at: '', sale_ends_at: '', price_min: '', price_max: '', category: '', subcategory: '', stock: '', image_urls: [] as string[], is_active: true, is_preorder: false, preorder_label: ''
+    name: '', description: '', price: '', sale_price: '', sale_starts_at: '', sale_ends_at: '', price_min: '', price_max: '', category: '', subcategory: '', stock: '', image_urls: [] as string[], is_active: true, is_preorder: false, preorder_label: '', preorder_available_date: ''
   })
 
   // Variant management
@@ -96,7 +97,7 @@ export default function AdminProducts() {
   useEffect(() => { fetchProducts(); fetchTaxonomy() }, [])
 
   const resetForm = () => {
-    setForm({ name: '', description: '', price: '', sale_price: '', sale_starts_at: '', sale_ends_at: '', price_min: '', price_max: '', category: categories[0]?.name || '', subcategory: '', stock: '', image_urls: [], is_active: true, is_preorder: false, preorder_label: '' })
+    setForm({ name: '', description: '', price: '', sale_price: '', sale_starts_at: '', sale_ends_at: '', price_min: '', price_max: '', category: categories[0]?.name || '', subcategory: '', stock: '', image_urls: [], is_active: true, is_preorder: false, preorder_label: '', preorder_available_date: '' })
     setEditId(null)
     setShowForm(false)
   }
@@ -144,6 +145,10 @@ export default function AdminProducts() {
       toast.error('Sale end must be after sale start')
       return
     }
+    if (form.is_preorder && !form.preorder_available_date) {
+      toast.error('Add the expected availability date for preorder products')
+      return
+    }
     setLoading(true)
     const payload = {
       name: form.name, description: form.description || null,
@@ -156,6 +161,7 @@ export default function AdminProducts() {
       image_url: form.image_urls[0] || null,
       image_urls: form.image_urls,
       is_active: form.is_active, is_preorder: form.is_preorder, preorder_label: form.preorder_label || null,
+      preorder_available_date: form.is_preorder ? form.preorder_available_date || null : null,
     }
     if (!payload.name.trim()) { setLoading(false); toast.error('Please enter a product name'); return }
     if (!payload.category) { setLoading(false); toast.error('Please choose a category'); return }
@@ -182,6 +188,7 @@ export default function AdminProducts() {
       category: p.category, subcategory: p.subcategory || '',
       stock: String(p.stock), image_urls: urls,
       is_active: p.is_active, is_preorder: p.is_preorder, preorder_label: p.preorder_label || '',
+      preorder_available_date: p.preorder_available_date ? String(p.preorder_available_date).slice(0, 10) : '',
     })
     setEditId(p.id); setShowForm(true)
   }
@@ -272,7 +279,7 @@ export default function AdminProducts() {
               <button onClick={resetForm}><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div><label className="text-sm font-medium block mb-1">Name</label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required /></div>
+              <div><label className="text-sm font-medium block mb-1">Name</label><Input value={form.name} maxLength={150} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required /><p className="text-xs text-muted-foreground mt-1">Maximum 150 characters for Google product listings.</p></div>
               <div><label className="text-sm font-medium block mb-1">Description</label>
                 <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px]" />
               </div>
@@ -339,7 +346,14 @@ export default function AdminProducts() {
                 <label htmlFor="preorder" className="text-sm">Pre-Order</label>
               </div>
               {form.is_preorder && (
-                <div><label className="text-sm font-medium block mb-1">Pre-Order Label</label><Input value={form.preorder_label} onChange={e => setForm(p => ({ ...p, preorder_label: e.target.value }))} placeholder="Made to order - 2 weeks" /></div>
+                <div className="space-y-3">
+                  <div><label className="text-sm font-medium block mb-1" htmlFor="preorder-label">Pre-Order Label</label><Input id="preorder-label" value={form.preorder_label} onChange={e => setForm(p => ({ ...p, preorder_label: e.target.value }))} placeholder="Made to order - 2 weeks" /></div>
+                  <div>
+                    <label className="text-sm font-medium block mb-1" htmlFor="preorder-available-date">Expected ship date</label>
+                    <Input id="preorder-available-date" type="date" required value={form.preorder_available_date} onChange={e => setForm(p => ({ ...p, preorder_available_date: e.target.value }))} />
+                    <p className="text-xs text-muted-foreground mt-1">Shown to customers and sent to Google for preorder listings.</p>
+                  </div>
+                </div>
               )}
               <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold">
                 {loading ? 'Saving...' : editId ? 'Update Product' : 'Add Product'}

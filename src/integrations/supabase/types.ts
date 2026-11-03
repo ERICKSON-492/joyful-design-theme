@@ -621,6 +621,7 @@ export type Database = {
           low_stock_threshold: number
           name: string
           preorder_label: string | null
+          preorder_available_date: string | null
           price: number
           price_max: number | null
           price_min: number | null
@@ -640,6 +641,7 @@ export type Database = {
           low_stock_threshold?: number
           name: string
           preorder_label?: string | null
+          preorder_available_date?: string | null
           price: number
           price_max?: number | null
           price_min?: number | null
@@ -659,6 +661,7 @@ export type Database = {
           low_stock_threshold?: number
           name?: string
           preorder_label?: string | null
+          preorder_available_date?: string | null
           price?: number
           price_max?: number | null
           price_min?: number | null

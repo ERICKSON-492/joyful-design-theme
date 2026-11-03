@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS public.products (
   price_min numeric, price_max numeric, is_preorder boolean NOT NULL DEFAULT false,
   preorder_label text, image_urls text[] NOT NULL DEFAULT '{}', subcategory text,
   low_stock_threshold integer NOT NULL DEFAULT 5, sale_price numeric,
-  sale_starts_at timestamptz, sale_ends_at timestamptz
+  sale_starts_at timestamptz, sale_ends_at timestamptz,
+  preorder_available_date date
 );
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_price numeric;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS description text;
@@ -25,6 +26,7 @@ ALTER TABLE public.products ALTER COLUMN created_at SET DEFAULT now();
 ALTER TABLE public.products ALTER COLUMN updated_at SET DEFAULT now();
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_starts_at timestamptz;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_ends_at timestamptz;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS preorder_available_date date;
 CREATE TABLE IF NOT EXISTS public.product_variants (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), product_id uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   variant_label text NOT NULL, size text, color text, price numeric NOT NULL DEFAULT 0,

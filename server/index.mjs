@@ -14,6 +14,7 @@ import { createGoogleOAuthRoutes } from './google-oauth.mjs'
 import { handleWhatsAppWebhook } from './whatsapp.mjs'
 import { handleAdminCustomers } from './admin-customer-api.mjs'
 import { handleVisitorEvent, handleVisitorReport, processWeeklyVisitorReport } from './analytics-api.mjs'
+import { buildMerchantFeed } from './merchant-feed.mjs'
 
 const { Pool } = pg
 const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } })
@@ -29,21 +30,18 @@ const r2 = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.
 const publicR2MediaPrefixes = new Set(['product-images', 'site_images', 'site-images', 'review-photos', 'category-images', 'custom-orders', 'tribe-looks'])
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(body === undefined ? '' : JSON.stringify(body)) }
 const body = async (req) => { let raw = ''; for await (const chunk of req) raw += chunk; return raw ? JSON.parse(raw) : {} }
-const productFields = 'id,name,description,price,price_min,price_max,category,subcategory,image_url,image_urls,stock,is_active,is_preorder,preorder_label,low_stock_threshold,sale_price,sale_starts_at,sale_ends_at,created_at,updated_at'
+const productFields = 'id,name,description,price,price_min,price_max,category,subcategory,image_url,image_urls,stock,is_active,is_preorder,preorder_label,preorder_available_date,low_stock_threshold,sale_price,sale_starts_at,sale_ends_at,created_at,updated_at'
 const variantFields = 'id,product_id,variant_label,size,color,price,stock,is_active,created_at,updated_at'
 const productDto = (p) => ({ ...p, price: Number(p.price), price_min: p.price_min == null ? null : Number(p.price_min), price_max: p.price_max == null ? null : Number(p.price_max), sale_price: p.sale_price == null ? null : Number(p.sale_price) })
 const variantDto = (v) => ({ ...v, price: Number(v.price) })
-const merchantFeedValue = (value = '') => String(value ?? '').replace(/[\t\r\n]+/g, ' ').trim()
-const merchantFeedUrl = value => { const url = String(value || '').trim(); return url.startsWith('/') ? `https://www.ushangachronicles.com${url}` : url }
-const merchantFeedPrice = value => `${Number(value || 0).toFixed(2)} KES`
-function merchantFeed(products) {
-  const headers = ['id', 'title', 'description', 'link', 'image_link', 'additional_image_link', 'availability', 'condition', 'price', 'sale_price', 'brand', 'identifier_exists', 'product_type']
-  const rows = products.map(product => {
-    const sale = activeSalePrice(product)
-    const images = [product.image_url, ...(Array.isArray(product.image_urls) ? product.image_urls : [])].map(merchantFeedUrl).filter(Boolean).filter((url, index, all) => all.indexOf(url) === index)
-    return [product.id, product.name, product.description || `Handcrafted ${product.name} from Ushanga Chronicles.`, `https://www.ushangachronicles.com/product/${encodeURIComponent(product.id)}`, images[0] || '', images.slice(1).join(','), Number(product.stock || 0) > 0 ? 'in_stock' : 'out_of_stock', 'new', merchantFeedPrice(product.price), sale ? merchantFeedPrice(sale) : '', 'Ushanga Chronicles', 'no', product.category || 'Handmade products'].map(merchantFeedValue).join('\t')
-  })
-  return `${headers.join('\t')}\n${rows.join('\n')}\n`
+function preorderDateInput(value, isPreorder) {
+  if (isPreorder && !value) return { error: 'Preorder products require an expected availability date' }
+  if (value == null || value === '') return { value: null }
+  const date = String(value).slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Preorder availability date must use YYYY-MM-DD' }
+  const parsed = new Date(`${date}T00:00:00.000Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return { error: 'Preorder availability date is invalid' }
+  return { value: date }
 }
 const activeSalePrice = (p) => {
   const sale = Number(p.sale_price); const original = Number(p.price); const now = Date.now()
@@ -142,10 +140,10 @@ function queryFilters(url) {
 async function handle(req, res, url) {
   if (await handleGoogleOAuth(req, res, url)) return
   if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true })
-  if (req.method === 'GET' && url.pathname === '/api/merchant-feed.tsv') {
+  if (req.method === 'GET' && ['/api/merchant-feed.tsv', '/feeds/google-merchant-center.tsv'].includes(url.pathname)) {
     const r = await pool.query(`SELECT ${productFields} FROM public.products WHERE is_active=true ORDER BY created_at DESC`)
     res.writeHead(200, { 'content-type': 'text/tab-separated-values; charset=utf-8', 'content-disposition': 'inline; filename="ushanga-products.tsv"', 'cache-control': 'public, max-age=300', 'x-robots-tag': 'noindex' })
-    return res.end(merchantFeed(r.rows))
+    return res.end(buildMerchantFeed(r.rows, { activeSalePrice }))
   }
   if (url.pathname === '/api/analytics/visit') return handleVisitorEvent({ pool, req, res, json, body })
   if (url.pathname === '/api/admin/analytics/visitors') return handleVisitorReport({ pool, req, res, url, json, requireAdmin })
@@ -238,15 +236,18 @@ async function handle(req, res, url) {
     if (req.method === 'POST' && url.pathname === '/api/admin/products') {
       const b = await body(req)
       if (!String(b.name||'').trim() || !Number.isFinite(Number(b.price))) return json(res, 400, { error: 'Product name and a valid price are required' })
+      if ([...String(b.name).trim()].length > 150) return json(res, 400, { error: 'Product titles must be 150 characters or fewer' })
+      const preorderDate = preorderDateInput(b.preorder_available_date, b.is_preorder === true)
+      if (preorderDate.error) return json(res, 400, { error: preorderDate.error })
       let r
-      try { r = await pool.query(`INSERT INTO products (name,description,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,category,subcategory,stock,image_url,image_urls,is_active,is_preorder,preorder_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING ${productFields}`, [b.name,b.description||null,b.price,b.sale_price??null,b.sale_starts_at||null,b.sale_ends_at||null,b.price_min??null,b.price_max??null,b.category||'',b.subcategory||null,b.stock||0,b.image_url||null,b.image_urls||[],b.is_active!==false,b.is_preorder||false,b.preorder_label||null]) }
+      try { r = await pool.query(`INSERT INTO products (name,description,price,sale_price,sale_starts_at,sale_ends_at,price_min,price_max,category,subcategory,stock,image_url,image_urls,is_active,is_preorder,preorder_label,preorder_available_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING ${productFields}`, [b.name,b.description||null,b.price,b.sale_price??null,b.sale_starts_at||null,b.sale_ends_at||null,b.price_min??null,b.price_max??null,b.category||'',b.subcategory||null,b.stock||0,b.image_url||null,b.image_urls||[],b.is_active!==false,b.is_preorder||false,b.preorder_label||null,preorderDate.value]) }
       catch (error) { console.error('product insert failed:', error.message); return json(res, 400, { error: error.message }) }
       const product = productDto(r.rows[0])
       if (product.is_active) queueNewProductNotifications(pool, product).catch(error => console.error('new-product notification queue failed:', error.message))
       return json(res, 201, product)
     }
     const match = url.pathname.match(/^\/api\/admin\/products\/([^/]+)$/)
-    if (match && req.method === 'PATCH') { const b = await body(req); const allowed = ['name','description','price','price_min','price_max','category','subcategory','stock','image_url','image_urls','is_active','is_preorder','preorder_label','low_stock_threshold','sale_price','sale_starts_at','sale_ends_at']; const sets=[]; const vals=[]; for (const k of allowed) if (b[k] !== undefined) { vals.push(b[k]); sets.push(`${k}=$${vals.length}`) } if (!sets.length) return json(res, 400, { error:'No fields' }); vals.push(match[1]); let r; try { r=await pool.query(`UPDATE products SET ${sets.join(',')},updated_at=now() WHERE id=$${vals.length} RETURNING ${productFields}`,vals) } catch (error) { console.error('product update failed:', error.message); return json(res,400,{error:error.message}) } if (!r.rowCount) return json(res,404,{error:'Product not found'}); const product = productDto(r.rows[0]); if (product.is_active && product.sale_price && Number(product.sale_price) < Number(product.price)) sendPushSaleNotification(pool, product, 'sale-start').catch(error => console.error('sale update push failed:', error.message)); return json(res,200,product) }
+    if (match && req.method === 'PATCH') { const b = await body(req); if (b.name !== undefined && [...String(b.name).trim()].length > 150) return json(res,400,{error:'Product titles must be 150 characters or fewer'}); if (b.preorder_available_date !== undefined || b.is_preorder === true) { const preorderDate = preorderDateInput(b.preorder_available_date, b.is_preorder === true); if (preorderDate.error) return json(res,400,{error:preorderDate.error}); b.preorder_available_date = preorderDate.value } const allowed = ['name','description','price','price_min','price_max','category','subcategory','stock','image_url','image_urls','is_active','is_preorder','preorder_label','preorder_available_date','low_stock_threshold','sale_price','sale_starts_at','sale_ends_at']; const sets=[]; const vals=[]; for (const k of allowed) if (b[k] !== undefined) { vals.push(b[k]); sets.push(`${k}=$${vals.length}`) } if (!sets.length) return json(res, 400, { error:'No fields' }); vals.push(match[1]); let r; try { r=await pool.query(`UPDATE products SET ${sets.join(',')},updated_at=now() WHERE id=$${vals.length} RETURNING ${productFields}`,vals) } catch (error) { console.error('product update failed:', error.message); return json(res,400,{error:error.message}) } if (!r.rowCount) return json(res,404,{error:'Product not found'}); const product = productDto(r.rows[0]); if (product.is_active && product.sale_price && Number(product.sale_price) < Number(product.price)) sendPushSaleNotification(pool, product, 'sale-start').catch(error => console.error('sale update push failed:', error.message)); return json(res,200,product) }
     if (match && req.method === 'DELETE') {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(match[1])) return json(res,400,{error:'Invalid product id'})
       try {

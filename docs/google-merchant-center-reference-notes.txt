@@ -1,0 +1,8 @@
+Official Google Merchant Center implementation references checked 2026-11-03:
+
+- Availability date [availability_date]: https://support.google.com/merchants/answer/6324470?hl=en
+  Required when availability is preorder or backorder. Format is ISO 8601 date-time/timezone: YYYY-MM-DDThh:mm[±hhmm] or YYYY-MM-DDThh:mmZ. Google recommends specifying time and timezone; if omitted, it defaults to midnight UTC. Date should also be shown on the product landing page. Google recommends an estimated date, not a range, when an exact date is not yet known.
+- Supported Merchant Center file formats: https://support.google.com/merchants/answer/12631822?hl=en-GB
+  Supported text feed extensions include .txt (tab-delimited) and .tsv; XML is also supported. Tab-delimited files need attribute headers in the first row, with one product per row.
+- Add products from a file / scheduled URL: https://support.google.com/merchants/answer/12158380?hl=en
+  Hosted file URL must start with http://, https://, or sftp:// and point directly to an accessible data-source file; scheduled fetch cadence can be adjusted.
