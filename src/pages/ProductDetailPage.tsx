@@ -29,6 +29,7 @@ interface Product {
   subcategory?: string | null
   is_preorder: boolean
   preorder_label: string | null
+  preorder_available_date: string | null
 }
 
 interface Variant {
@@ -41,6 +42,15 @@ interface Variant {
 }
 
 const NO_PRODUCT_REVIEWS: ProductReview[] = []
+
+function formatPreorderDate(value: string | null | undefined) {
+  if (!value) return null
+  const date = String(value).slice(0, 10)
+  const [year, month, day] = date.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Intl.DateTimeFormat('en-KE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year, month - 1, day)))
+}
 
 export default function ProductDetailPage() {
   const { id, slug } = useParams<{ id?: string; slug?: string }>()
@@ -111,6 +121,9 @@ export default function ProductDetailPage() {
         availability: product.is_preorder
           ? 'https://schema.org/PreOrder'
           : (product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'),
+        ...(product.is_preorder && product.preorder_available_date ? {
+          availabilityStarts: `${product.preorder_available_date.slice(0, 10)}T00:00:00+03:00`,
+        } : {}),
         url: typeof window !== 'undefined' ? window.location.href : undefined,
       },
       ...(reviews.length > 0 ? {
@@ -393,6 +406,11 @@ export default function ProductDetailPage() {
             {product.is_preorder && product.preorder_label && (
               <p className="text-foreground text-sm font-medium flex items-center gap-1">
                 <Clock className="w-4 h-4 text-muted-foreground" /> {product.preorder_label}
+              </p>
+            )}
+            {product.is_preorder && formatPreorderDate(product.preorder_available_date) && (
+              <p className="text-foreground text-sm font-medium">
+                Expected to ship by {formatPreorderDate(product.preorder_available_date)}
               </p>
             )}
 

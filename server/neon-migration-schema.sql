@@ -8,6 +8,44 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_price numeric;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_starts_at timestamptz;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS sale_ends_at timestamptz;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS preorder_available_date date;
+
+-- The owner confirmed these existing active preorder products are expected to
+-- be available for shipment by 1 December 2026. Record the backfill once only;
+-- future preorder products must get their own date through the admin form.
+CREATE TABLE IF NOT EXISTS public.app_data_migrations (
+  migration_key text PRIMARY KEY,
+  applied_at timestamptz NOT NULL DEFAULT now()
+);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.app_data_migrations
+    WHERE migration_key = '20261103_preorder_available_date_backfill'
+  ) THEN
+    UPDATE public.products
+    SET preorder_available_date = DATE '2026-12-01'
+    WHERE id IN (
+      '221eeb78-b952-4cc9-ada9-a12fedab8150', 'cb89d0de-9766-48a4-90c4-98caf4ff877f',
+      '1705c02a-c452-4a32-8bd6-fcffe7ff32fa', 'e6d0c83c-ec99-48e3-aa26-d7edafef0c1f',
+      '7b7a8a87-15fa-4842-b0aa-3b1948221266', '2f28f88f-550f-4fb9-87c2-949e36fec79f',
+      '7789a43b-48f1-47cb-9eff-18be212a7dcf', '5f53eb31-cd33-4503-956a-bc048fe41ee6',
+      '26fc3698-f1cd-4775-af13-44b15153b67f', '78455ba6-5e76-4176-ae4a-15051150d3a6',
+      'c957f34d-4a8e-4f97-afe2-03a6cfb12a98', '2e88ad42-91cf-4a50-bdec-fe57d481074a',
+      '6aad57e7-66af-45b5-9cb1-fffcf44127af', 'abf3a288-faa4-4d41-8f3c-da91679a4c45',
+      '9f1e914c-4856-4d97-901e-d6ce37d1d499', '6c90bd00-7d87-4962-ad21-6a265b0e3720',
+      '5811861e-27b6-4ff5-84da-e06d7b5dcd80', 'e8b1b1cd-a95c-4cbc-8ffe-396725ffb2f9',
+      '912fbeab-3f2d-4bfa-a150-0f97926eff28', '52757aa1-d511-461a-9733-3f00a2ad1035',
+      'fe90a09b-3778-4769-a796-654c3bf4aed8', '6097aa18-6ac3-432f-8cc5-4657b1052566',
+      'e82d848e-6025-4161-afab-debda70b3d73', 'fd654c3b-eebe-4ef0-984c-b9ad7ed8dda0',
+      '80ac0d4a-93d5-49c3-9a10-585d0c2fbf3d', '01d5c802-76aa-42ae-a9ee-e5dd56522fc0',
+      '05e9830d-3c02-405c-ada3-576afcfd660a'
+    ) AND is_active = true AND is_preorder = true AND preorder_available_date IS NULL;
+
+    INSERT INTO public.app_data_migrations (migration_key)
+    VALUES ('20261103_preorder_available_date_backfill');
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.categories (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

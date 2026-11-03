@@ -351,6 +351,7 @@ function renderProduct(p) {
       priceCurrency: "KES",
       price: priceNum,
       availability: p.is_preorder ? "https://schema.org/PreOrder" : (p.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"),
+      ...(p.is_preorder && p.preorder_available_date ? { availabilityStarts: `${String(p.preorder_available_date).slice(0, 10)}T00:00:00+03:00` } : {}),
       url: canonical,
     },
     ...(productReviews.length > 0 ? {
@@ -388,7 +389,7 @@ function renderProduct(p) {
       ${p.image_url ? `<p><img src="${escapeAttr(p.image_url)}" alt="${escapeAttr(p.name)}" style="max-width:100%;height:auto;" /></p>` : ""}
       <p><strong>Price:</strong> ${escapeAttr(productPrice(p))}</p>
       ${p.category ? `<p><strong>Category:</strong> ${escapeAttr(p.category)}</p>` : ""}
-      ${p.is_preorder ? `<p><strong>Pre-order</strong></p>` : ""}
+      ${p.is_preorder ? `<p><strong>Pre-order</strong></p>${p.preorder_available_date ? `<p><strong>Expected to ship by:</strong> ${escapeAttr(new Date(`${String(p.preorder_available_date).slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }))}</p>` : ""}` : ""}
       ${p.description ? `<p>${escapeAttr(p.description)}</p>` : `<p>Handmade in Nairobi, Kenya by Ushanga Chronicles artisans. Every piece tells a story.</p>`}
       ${reviewsBody}
       <p><a href="/shop">Shop more from Ushanga Chronicles</a> · <a href="/custom-order">Create your own custom piece</a></p>
