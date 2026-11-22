@@ -15,14 +15,6 @@ const PUBLIC_MEDIA_PREFIXES = new Set([
   'tribe-looks',
 ])
 
-// These two legacy seed URLs were not present in the source bucket listing
-// during the migration. Leave them on their original host instead of creating
-// broken R2 links; replace/remove these exceptions after the assets are copied.
-const NOT_MIGRATED_KEYS = new Set([
-  'product-images/categories/wear-it-1781032558106.jpg',
-  'product-images/hero/1780565881534.jpg',
-])
-
 const PUBLIC_OBJECT_PATH = /^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/
 const configuredPublicBase = String(import.meta.env.VITE_R2_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')
 const SUPABASE_FALLBACK_MARKER = '#supabase-fallback'
@@ -66,7 +58,6 @@ export function migratedStorageUrl(value: string | null | undefined): string | u
     return value
   }
   if (!PUBLIC_MEDIA_PREFIXES.has(bucket)) return value
-  if (NOT_MIGRATED_KEYS.has(`${bucket}/${objectPath}`)) return value
 
   const rewritten = r2ObjectUrl(`${bucket}/${objectPath}`)
   return rewritten ? `${rewritten}${parsed.search}${parsed.hash}` : value
