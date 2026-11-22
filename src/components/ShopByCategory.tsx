@@ -4,7 +4,6 @@ import { ScrollReveal, StaggerContainer, StaggerItem } from './ScrollReveal'
 import { motion } from 'framer-motion'
 import { fetchPublicTable } from '@/lib/publicContent'
 import { useSiteContent } from '@/hooks/useSiteContent'
-import { handleImageFallback } from '@/lib/imageUrl'
 
 const MotionLink = motion(Link)
 
@@ -107,7 +106,6 @@ export function ShopByCategory() {
                   loading="lazy"
                   width={600}
                   height={600}
-                  onError={(e) => handleImageFallback(e, dbImages[cat.dbKey])}
                   whileHover={{ scale: 1.08 }}
                   transition={{ duration: 0.6, ease: 'easeOut' }}
                 />
