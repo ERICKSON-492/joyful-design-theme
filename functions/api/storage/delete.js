@@ -1,4 +1,4 @@
-import { cors, currentUser, isAdmin, objectKey, options, r2Client, responses } from '../../../_r2.js'
+import { cors, currentUser, isAdmin, objectKey, options, r2Client, responses } from '../../_r2.js'
 
 const ADMIN_FOLDERS = new Set(['product-images', 'site-images', 'custom-orders', 'tribe-looks'])
 

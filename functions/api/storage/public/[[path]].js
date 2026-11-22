@@ -1,4 +1,4 @@
-import { cors, objectKey, options, r2Client, responses, PUBLIC_PREFIXES } from '../../../../_r2.js'
+import { cors, objectKey, options, r2Client, responses, PUBLIC_PREFIXES } from '../../../_r2.js'
 
 export async function onRequest(context) {
   const { request, env, params } = context

@@ -1,4 +1,4 @@
-import { cors, currentUser, isAdmin, objectKey, options, presignedUrl, responses } from '../../../_r2.js'
+import { cors, currentUser, isAdmin, objectKey, options, presignedUrl, responses } from '../../_r2.js'
 
 const MAX_BYTES = 15 * 1024 * 1024
 const ADMIN_FOLDERS = new Set(['product-images', 'site-images', 'custom-orders', 'tribe-looks'])
