@@ -25,6 +25,7 @@ const NOT_MIGRATED_KEYS = new Set([
 
 const PUBLIC_OBJECT_PATH = /^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/
 const configuredPublicBase = String(import.meta.env.VITE_R2_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')
+const configuredSupabaseBase = String(import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '')
 const SUPABASE_FALLBACK_MARKER = '#supabase-fallback'
 
 function encodeKey(key: string): string {
@@ -40,6 +41,45 @@ export function r2ObjectUrl(key: string): string {
   return configuredPublicBase
     ? `${configuredPublicBase}/${encodedKey}`
     : apiUrl(`/api/storage/public/${encodedKey}`)
+}
+
+/** Rebuild the legacy public Supabase URL for an R2-backed media URL. */
+export function supabaseStorageFallbackUrl(value: string | null | undefined): string | undefined {
+  if (!value || !configuredSupabaseBase) return undefined
+
+  let parsed: URL
+  try {
+    parsed = new URL(value, typeof window === 'undefined' ? 'https://local.invalid' : window.location.origin)
+  } catch {
+    return undefined
+  }
+
+  const proxyMatch = parsed.pathname.match(/^\/api\/storage\/public\/([^/]+)\/(.+)$/)
+  let directMatch: string | null = null
+  if (configuredPublicBase) {
+    try {
+      const base = new URL(configuredPublicBase)
+      const basePath = base.pathname.replace(/\/+$/, '')
+      if (parsed.origin === base.origin && parsed.pathname.startsWith(`${basePath}/`)) {
+        directMatch = parsed.pathname.slice(basePath.length + 1)
+      }
+    } catch {
+      directMatch = null
+    }
+  }
+  const rawKey = proxyMatch ? `${proxyMatch[1]}/${proxyMatch[2]}` : directMatch
+  if (!rawKey) return undefined
+
+  let key: string
+  try {
+    key = rawKey.split('/').map(part => decodeURIComponent(part)).join('/')
+  } catch {
+    return undefined
+  }
+  const [bucket, ...parts] = key.split('/')
+  if (!PUBLIC_MEDIA_PREFIXES.has(bucket) || parts.length === 0) return undefined
+  const encodedKey = [bucket, ...parts].map(encodeURIComponent).join('/')
+  return `${configuredSupabaseBase}/storage/v1/object/public/${encodedKey}`
 }
 
 /** Redirect legacy Supabase public Storage URLs to the matching migrated R2 key. */

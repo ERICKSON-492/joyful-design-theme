@@ -14,7 +14,7 @@
  * URL untouched, which always works.
  */
 
-import { migratedStorageUrl } from './r2ObjectUrl'
+import { migratedStorageUrl, supabaseStorageFallbackUrl } from './r2ObjectUrl'
 
 const TRANSFORMS_ENABLED = false
 
@@ -73,7 +73,12 @@ export function handleImageFallback(
 ) {
   const img = e.currentTarget
   const original = originalImageUrl(originalUrl)
-  if (original && img.src !== original && !img.dataset.fallbackApplied) {
+  const supabaseFallback = supabaseStorageFallbackUrl(original)
+  if (supabaseFallback && img.src !== supabaseFallback && !img.dataset.fallbackApplied) {
+    img.dataset.fallbackApplied = 'true'
+    img.srcset = ''
+    img.src = supabaseFallback
+  } else if (original && img.src !== original && !img.dataset.fallbackApplied) {
     img.dataset.fallbackApplied = 'true'
     img.srcset = ''
     img.src = original
