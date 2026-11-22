@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { getCurrentUser, login, signup, requestPasswordReset } from '@/lib/auth'
+import { getCurrentUser, login, signup, requestPasswordReset, loginWithGoogle } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Mail, Lock, User, Loader2 } from 'lucide-react'
 import { useSEO } from '@/hooks/useSEO'
@@ -164,10 +164,14 @@ export default function AuthPage() {
     }
   }
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setGoogleLoading(true)
-    const query = new URLSearchParams({ return_to: returnTo })
-    window.location.assign(`/api/auth/google?${query.toString()}`)
+    try {
+      await loginWithGoogle(returnTo)
+    } catch (err: unknown) {
+      setGoogleLoading(false)
+      toast.error(errorMessage(err, 'Google sign-in is not available right now'))
+    }
   }
 
   return (

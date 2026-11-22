@@ -1,4 +1,4 @@
-import { supabase as legacySupabase } from '@/integrations/supabase/client'
+import { supabase } from '@/integrations/supabase/client'
 import { apiUrl } from './apiBase'
 import { r2ObjectUrl } from './r2ObjectUrl'
 
@@ -7,9 +7,6 @@ export interface R2UploadResult {
   publicUrl: string
 }
 
-const LEGACY_BUCKET = 'product-images'
-const FALLBACK_MARKER = '#supabase-fallback'
-const ALLOW_LEGACY_FALLBACK = true
 const MAX_IMAGE_UPLOAD_BYTES = 1_500_000
 const MAX_IMAGE_EDGE = 1800
 const OPTIMIZABLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
@@ -38,27 +35,9 @@ function webpObjectKey(key: string) {
   return /\.[a-z0-9]+$/i.test(key) ? key.replace(/\.[^.]+$/, '.webp') : `${key}.webp`
 }
 
-function legacyStorageKey(folder: string, key: string) {
-  const prefix = folder === 'site-images' ? 'site-content' : folder
-  return `${prefix.replace(/^\/+|\/+$/g, '')}/${key.replace(/^\/+/, '')}`
-}
-
-async function uploadToLegacySupabase(folder: string, file: Blob, key: string, contentType: string): Promise<R2UploadResult> {
-  const storageKey = legacyStorageKey(folder, key)
-  const { error } = await legacySupabase.storage.from(LEGACY_BUCKET).upload(storageKey, file, {
-    cacheControl: '3600',
-    contentType,
-    upsert: true,
-  })
-  if (error) throw new Error(error.message || 'Supabase image upload failed')
-  const { data } = legacySupabase.storage.from(LEGACY_BUCKET).getPublicUrl(storageKey)
-  // The fragment is preserved in the database but is not sent with image requests.
-  // It prevents legacy-URL mapping from redirecting this fallback object to R2.
-  return { key: storageKey, publicUrl: `${data.publicUrl}${FALLBACK_MARKER}` }
-}
-
-function canFallback(folder: string) {
-  return ALLOW_LEGACY_FALLBACK && folder !== 'order-receipts'
+async function authHeaders() {
+  const { data } = await supabase.auth.getSession()
+  return data.session?.access_token ? { authorization: `Bearer ${data.session.access_token}` } : {}
 }
 
 export async function uploadToR2(folder: string, file: Blob, key: string, contentType = file.type || 'application/octet-stream'): Promise<R2UploadResult> {
@@ -78,19 +57,12 @@ export async function uploadToR2(folder: string, file: Blob, key: string, conten
   try {
     signResponse = await fetch(apiUrl('/api/storage/upload-url'), {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({ folder, key, contentType, size: uploadFile.size }),
     })
     signed = await signResponse.json().catch(() => ({}))
-  } catch (error) {
-    if (canFallback(folder)) return uploadToLegacySupabase(folder, uploadFile, key, contentType)
-    throw error
-  }
+  } catch (error) { throw error }
   if (!signResponse.ok) {
-    if (signResponse.status >= 500 && canFallback(folder)) {
-      return uploadToLegacySupabase(folder, uploadFile, key, contentType)
-    }
     throw new Error(typeof signed.error === 'string' ? signed.error : 'Could not prepare the upload')
   }
 
@@ -105,14 +77,8 @@ export async function uploadToR2(folder: string, file: Blob, key: string, conten
       headers: { 'content-type': contentType },
       body: uploadFile,
     })
-  } catch (error) {
-    if (canFallback(folder)) return uploadToLegacySupabase(folder, uploadFile, key, contentType)
-    throw error
-  }
+  } catch (error) { throw error }
   if (!uploadResponse.ok) {
-    if (uploadResponse.status >= 500 && canFallback(folder)) {
-      return uploadToLegacySupabase(folder, uploadFile, key, contentType)
-    }
     throw new Error('Cloudflare R2 upload failed')
   }
 
@@ -122,25 +88,13 @@ export async function uploadToR2(folder: string, file: Blob, key: string, conten
 }
 
 export async function deleteFromR2(key: string): Promise<void> {
-  if (key.endsWith(FALLBACK_MARKER)) {
-    const { error } = await legacySupabase.storage.from(LEGACY_BUCKET).remove([key.slice(0, -FALLBACK_MARKER.length)])
-    if (error) throw new Error(error.message || 'Could not delete the fallback image')
-    return
-  }
-
   const response = await fetch(apiUrl('/api/storage/delete'), {
     method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({ key }),
   })
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
-    if (response.status === 503 && !key.includes('order-receipts/')) {
-      const sourcePath = key.replace(/^product-images\//, '')
-      const { error } = await legacySupabase.storage.from(LEGACY_BUCKET).remove([sourcePath])
-      if (!error) return
-    }
     throw new Error(data.error || 'Could not delete the file')
   }
 }
@@ -148,8 +102,7 @@ export async function deleteFromR2(key: string): Promise<void> {
 export async function uploadReceiptToR2(orderId: string, file: Blob): Promise<string> {
   const response = await fetch(apiUrl('/api/storage/receipt-upload-url'), {
     method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({ orderId }),
   })
   const signed = await response.json().catch(() => ({}))

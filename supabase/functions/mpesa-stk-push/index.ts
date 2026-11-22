@@ -64,7 +64,8 @@ Deno.serve(async (req) => {
     const queryUrl = isProd ? PROD_QUERY_URL : SANDBOX_QUERY_URL;
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || "push";
+    const requestBody = await req.json();
+    const action = url.searchParams.get("action") || requestBody.action || "push";
 
     // Get OAuth token
     const authRes = await fetch(authUrl, {
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
     const accessToken = authData.access_token;
 
     if (action === "query") {
-      const { checkout_request_id } = await req.json();
+      const { checkout_request_id } = requestBody;
       if (!checkout_request_id) {
         return new Response(JSON.stringify({ error: "checkout_request_id is required" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -124,7 +125,7 @@ Deno.serve(async (req) => {
     }
 
     // STK Push
-    const { phone, amount, order_id } = await req.json();
+    const { phone, amount, order_id, orderId } = requestBody;
     if (!phone || !amount) {
       return new Response(JSON.stringify({ error: "phone and amount are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -160,7 +161,7 @@ Deno.serve(async (req) => {
     });
     const stkData = await stkRes.json();
 
-    if (stkData.ResponseCode === "0" && order_id) {
+    if (stkData.ResponseCode === "0" && (order_id || orderId)) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
@@ -168,10 +169,10 @@ Deno.serve(async (req) => {
       await supabase
         .from("orders")
         .update({ mpesa_checkout_request_id: stkData.CheckoutRequestID })
-        .eq("id", order_id);
+        .eq("id", order_id || orderId);
     }
 
-    return new Response(JSON.stringify(stkData), {
+    return new Response(JSON.stringify({ success: stkData.ResponseCode === "0", mpesa_response: stkData, ...stkData }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

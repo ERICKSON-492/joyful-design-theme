@@ -1,4 +1,4 @@
-import { apiUrl } from './apiBase'
+import { supabase } from '@/integrations/supabase/client'
 
 export interface AuthUser {
   id: string
@@ -10,21 +10,28 @@ export interface AuthUser {
 type CurrentUserResponse = { user: AuthUser | null }
 let currentUserRequest: Promise<CurrentUserResponse> | null = null
 
-export async function authRequest<T = { user: AuthUser | null }>(path: string, payload?: unknown): Promise<T> {
-  const response = await fetch(apiUrl(path), {
-    method: payload === undefined ? 'GET' : 'POST',
-    credentials: 'include',
-    headers: payload === undefined ? undefined : { 'content-type': 'application/json' },
-    body: payload === undefined ? undefined : JSON.stringify(payload),
-  })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.error || 'Authentication request failed')
-  return data as T
+function getRole(user: { app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown> }): 'user' | 'admin' {
+  return user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin' ? 'admin' : 'user'
+}
+
+function mapUser(user: { id: string; email?: string | null; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> }): AuthUser {
+  return {
+    id: user.id,
+    email: user.email || '',
+    displayName: (user.user_metadata?.full_name as string | undefined) || (user.user_metadata?.name as string | undefined) || null,
+    role: getRole(user),
+  }
+}
+
+async function getCurrentUserUncached(): Promise<CurrentUserResponse> {
+  const { data, error } = await supabase.auth.getUser()
+  if (error) throw error
+  return { user: data.user ? mapUser(data.user) : null }
 }
 
 export const getCurrentUser = () => {
   if (!currentUserRequest) {
-    currentUserRequest = authRequest<CurrentUserResponse>('/api/auth/me').catch(error => {
+    currentUserRequest = getCurrentUserUncached().catch(error => {
       currentUserRequest = null
       throw error
     })
@@ -35,19 +42,62 @@ export const getCurrentUser = () => {
 const clearCurrentUserCache = () => { currentUserRequest = null }
 
 export const login = async (email: string, password: string) => {
-  const result = await authRequest<{ user: AuthUser }>('/api/auth/login', { email, password })
+  const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
+  if (error) throw error
   clearCurrentUserCache()
-  return result
+  return { user: data.user ? mapUser(data.user) : null }
 }
+
 export const signup = async (email: string, password: string, displayName: string) => {
-  const result = await authRequest<{ user: AuthUser }>('/api/auth/signup', { email, password, displayName })
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim().toLowerCase(),
+    password,
+    options: { data: { full_name: displayName.trim(), name: displayName.trim() } },
+  })
+  if (error) throw error
+
+  if (data.user) {
+    const { error: profileError } = await supabase.from('profiles').upsert({
+      user_id: data.user.id,
+      email: data.user.email,
+      display_name: displayName.trim(),
+    }, { onConflict: 'user_id' })
+    if (profileError) console.warn('[Auth] Profile sync skipped:', profileError.message)
+  }
+
   clearCurrentUserCache()
-  return result
+  return { user: data.session && data.user ? mapUser(data.user) : null, needsEmailConfirmation: !data.session }
 }
+
 export const logout = async () => {
-  const result = await authRequest<{ ok: true }>('/api/auth/logout', {})
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
   clearCurrentUserCache()
-  return result
+  return { ok: true as const }
 }
-export const requestPasswordReset = (email: string) => authRequest<{ ok: true }>('/api/auth/forgot-password', { email })
-export const resetPassword = (token: string, password: string) => authRequest<{ ok: true }>('/api/auth/reset-password', { token, password })
+
+export const loginWithGoogle = async (returnTo = '/') => {
+  const safePath = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/'
+  const redirectTo = `${window.location.origin}${safePath}`
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo },
+  })
+  if (error) throw error
+}
+
+export const requestPasswordReset = async (email: string) => {
+  const redirectTo = `${window.location.origin}/reset-password`
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo })
+  if (error) throw error
+  return { ok: true as const }
+}
+
+export const resetPassword = async (_token: string, password: string) => {
+  const { error } = await supabase.auth.updateUser({ password })
+  if (error) throw error
+  clearCurrentUserCache()
+  return { ok: true as const }
+}
+
+supabase.auth.onAuthStateChange(() => clearCurrentUserCache())

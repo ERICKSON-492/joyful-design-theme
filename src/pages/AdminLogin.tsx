@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login } from '@/lib/auth'
+import { login, loginWithGoogle } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
@@ -26,8 +26,13 @@ export default function AdminLogin() {
   }
 
   const handleGoogleLogin = async () => {
-    setLoading(false)
-    toast.info('Google sign-in will be available after the authentication migration is complete.')
+    setLoading(true)
+    try {
+      await loginWithGoogle('/admin')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Google sign-in failed')
+      setLoading(false)
+    }
   }
 
   return (

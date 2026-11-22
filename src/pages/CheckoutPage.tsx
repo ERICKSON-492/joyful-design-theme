@@ -7,7 +7,6 @@ import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import { ShoppingBag, Loader2, CheckCircle, XCircle, ArrowLeft, MapPin, Minus, Plus, Trash2, ShieldCheck, Truck, CreditCard, Navigation, Search } from 'lucide-react'
 import { fetchPublicTable } from '@/lib/publicContent'
-import { apiUrl } from '@/lib/apiBase'
 import { generateAndUploadReceipt } from '@/lib/orderReceipt'
 import { useSEO } from '@/hooks/useSEO'
 import { Button } from '@/components/ui/button'
@@ -426,26 +425,25 @@ export default function CheckoutPage() {
 
     setError(''); setStatus('creating')
     try {
-      const orderData = {
-        phone, customer_name: name, email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost, total_amount: grandTotal,
-        items: items.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: i.quantity })),
-        status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
-        user_id: userId, latitude: coordinates.lat, longitude: coordinates.lon,
-        shipping_address: {
+      const shippingAddress = {
           location: selectedLocation, postal_code: postalCode, country,
           email, shipping_method: selectedShipping?.name, shipping_cost: shippingCost,
           building_name: buildingName || null, floor_number: floorNumber || null, house_number: houseNumber || null,
           coupon_code: appliedCoupon?.code || null, discount_amount: discountAmount || null,
-        }
       }
-      const orderResponse = await fetch(apiUrl('/api/orders'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(orderData),
+      const { data: orderPayload, error: orderError } = await supabase.rpc('create_order_secure', {
+        p_phone: phone,
+        p_customer_name: name,
+        p_email: email,
+        p_items: items.map(i => ({ id: i.id, quantity: i.quantity })),
+        p_shipping_method_id: selectedShipping?.id || null,
+        p_shipping_address: shippingAddress,
+        p_coupon_code: appliedCoupon?.code || null,
+        p_status: selectedPayment === 'cod' ? 'confirmed' : 'pending',
+        p_latitude: coordinates.lat,
+        p_longitude: coordinates.lon,
       })
-      const orderPayload = await orderResponse.json().catch(() => ({}))
-      if (!orderResponse.ok) throw new Error(orderPayload.error || 'Unable to create order')
+      if (orderError) throw new Error(orderError.message || 'Unable to create order')
       const order = orderPayload.order
       const serverTotal = Number(orderPayload.total ?? order.total_amount)
 
@@ -463,7 +461,7 @@ export default function CheckoutPage() {
       }
 
       setStatus('pushing')
-      const responsePayload = await invokeFunction<any>('mpesa-stk-push', { phone, amount: serverTotal, orderId: order.id })
+      const responsePayload = await invokeFunction<any>('mpesa-stk-push', { phone, amount: serverTotal, order_id: order.id })
       if (!responsePayload?.success) throw new Error(responsePayload?.error || 'M-Pesa request failed.')
 
       const checkoutRequestId = responsePayload.mpesa_response?.CheckoutRequestID || responsePayload?.checkoutRequestId

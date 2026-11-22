@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { uploadToR2 } from '@/lib/storage'
 import { getActiveSalePrice, toDatetimeLocal, toIsoTimestamp } from '@/lib/salePrice'
 import { Plus, Trash2, Edit, X, Upload, Layers, GripVertical, Search, SlidersHorizontal } from 'lucide-react'
-import { apiUrl } from '@/lib/apiBase'
+import { supabase } from '@/integrations/supabase/client'
 
 interface Product {
   id: string
@@ -41,17 +41,6 @@ interface Variant {
 interface Category { id: string; name: string }
 interface Subcategory { id: string; category_id: string; name: string }
 
-async function adminApi(path: string, init: RequestInit = {}) {
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    credentials: 'include',
-    headers: { 'content-type': 'application/json', ...(init.headers || {}) },
-  })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload.error || 'Admin request failed')
-  return payload
-}
-
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -75,22 +64,26 @@ export default function AdminProducts() {
   const [editVariantId, setEditVariantId] = useState<string | null>(null)
 
   const fetchProducts = async () => {
-    const data = await adminApi('/api/admin/products')
-    setProducts(data.products || data)
+    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false })
+    if (error) throw error
+    setProducts((data || []) as Product[])
   }
 
   const fetchTaxonomy = async () => {
-    const [c, s] = await Promise.all([
-      adminApi('/api/db/categories?select=id,name&order=display_order.asc'),
-      adminApi('/api/db/subcategories?select=id,category_id,name&order=display_order.asc'),
+    const [categoriesResult, subcategoriesResult] = await Promise.all([
+      supabase.from('categories').select('id,name').order('display_order', { ascending: true }),
+      supabase.from('subcategories').select('id,category_id,name').order('display_order', { ascending: true }),
     ])
-    setCategories(c)
-    setSubcategories(s)
+    if (categoriesResult.error) throw categoriesResult.error
+    if (subcategoriesResult.error) throw subcategoriesResult.error
+    setCategories(categoriesResult.data || [])
+    setSubcategories(subcategoriesResult.data || [])
   }
 
   const fetchVariants = async (productId: string) => {
-    const data = await adminApi(`/api/product-variants?product_id=eq.${productId}&order=price.asc`)
-    setVariants(data)
+    const { data, error } = await supabase.from('product_variants').select('*').eq('product_id', productId).order('price', { ascending: true })
+    if (error) throw error
+    setVariants((data || []) as Variant[])
   }
 
   useEffect(() => { fetchProducts(); fetchTaxonomy() }, [])
@@ -161,7 +154,11 @@ export default function AdminProducts() {
     if (!payload.category) { setLoading(false); toast.error('Please choose a category'); return }
     if (!Number.isFinite(payload.price)) { setLoading(false); toast.error('Please enter a valid price'); return }
     try {
-      const savedProduct = await adminApi(editId ? `/api/admin/products/${editId}` : '/api/admin/products', { method: editId ? 'PATCH' : 'POST', body: JSON.stringify(payload) })
+      const query = editId
+        ? supabase.from('products').update(payload).eq('id', editId).select('*').single()
+        : supabase.from('products').insert(payload).select('*').single()
+      const { data: savedProduct, error } = await query
+      if (error || !savedProduct) throw error || new Error('Product save failed')
       toast.success(editId ? 'Product updated!' : 'Product added!')
       if (editId) setProducts(prev => prev.map(product => product.id === editId ? savedProduct : product))
       else setProducts(prev => [savedProduct, ...prev])
@@ -189,8 +186,9 @@ export default function AdminProducts() {
   const handleDelete = async (id: string) => {
     if (!confirm('Permanently delete this product and its variants and reviews? Past orders are not affected.')) return
     try {
-      const result = await adminApi(`/api/admin/products/${id}`, { method: 'DELETE' })
-      toast.success(result?.archived ? 'Product hidden (it could not be fully deleted)' : 'Product deleted')
+      const { error } = await supabase.from('products').delete().eq('id', id)
+      if (error) throw error
+      toast.success('Product deleted')
       setProducts(prev => prev.filter(p => p.id !== id))
       fetchProducts()
     }
@@ -217,7 +215,14 @@ export default function AdminProducts() {
       size: variantForm.size || null, color: variantForm.color || null,
       price: parseFloat(variantForm.price) || 0, stock: parseInt(variantForm.stock) || 0,
     }
-    try { await adminApi(editVariantId ? `/api/admin/variants/${editVariantId}` : '/api/admin/variants', { method: editVariantId ? 'PATCH' : 'POST', body: JSON.stringify(payload) }); toast.success(editVariantId ? 'Variant updated!' : 'Variant added!') }
+    try {
+      const query = editVariantId
+        ? supabase.from('product_variants').update(payload).eq('id', editVariantId)
+        : supabase.from('product_variants').insert(payload)
+      const { error } = await query
+      if (error) throw error
+      toast.success(editVariantId ? 'Variant updated!' : 'Variant added!')
+    }
     catch (error) { toast.error(error instanceof Error ? error.message : 'Variant save failed') }
     resetVariantForm()
     fetchVariants(variantProductId)
@@ -225,7 +230,11 @@ export default function AdminProducts() {
 
   const handleDeleteVariant = async (id: string) => {
     if (!variantProductId) return
-    try { await adminApi(`/api/admin/variants/${id}`, { method: 'DELETE' }); toast.success('Variant archived') }
+    try {
+      const { error } = await supabase.from('product_variants').update({ is_active: false }).eq('id', id)
+      if (error) throw error
+      toast.success('Variant archived')
+    }
     catch (error) { toast.error(error instanceof Error ? error.message : 'Variant archive failed') }
     fetchVariants(variantProductId)
   }

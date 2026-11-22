@@ -14,7 +14,9 @@ export default function ResetPasswordPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    setIsRecovery(Boolean(searchParams.get('token')))
+    // Supabase recovery links establish a browser session and normally return
+    // access/refresh tokens in the hash rather than a custom `token` query.
+    setIsRecovery(Boolean(searchParams.get('token')) || window.location.hash.includes('access_token='))
   }, [searchParams])
 
   const handleReset = async (e: React.FormEvent) => {
@@ -29,7 +31,7 @@ export default function ResetPasswordPage() {
     }
     setLoading(true)
     try {
-      const token = searchParams.get('token')
+      const token = searchParams.get('token') || window.location.hash
       if (!token) throw new Error('This reset link is invalid or has expired.')
       await resetPassword(token, password)
       setSuccess(true)

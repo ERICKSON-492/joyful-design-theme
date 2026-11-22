@@ -2,33 +2,36 @@
 
 The `ushanga` R2 bucket contains the migrated Supabase Storage objects. Object keys retain their original bucket as the first path segment, for example `product-images/products/example.webp` and `order-receipts/<order-id>/receipt.pdf`.
 
-The app uses the Render API to issue short-lived presigned upload URLs. Browser clients upload directly to R2; the R2 secret is never exposed to the browser. Legacy public Supabase Storage URLs for allowed media buckets are translated to the matching R2 object key by the app. By default, public media is served through the API's read-only `/api/storage/public/` proxy, so a public R2 domain is not required.
+The app uses Cloudflare Pages Functions to issue short-lived presigned upload URLs. Browser clients upload directly to R2; the R2 secret is never exposed to the browser. Legacy public Supabase Storage URLs for allowed media buckets are translated to the matching R2 object key by the app. By default, public media is served through the Pages read-only `/api/storage/public/` function, so a public R2 domain is not required.
 
 Two image URLs found in repository seed data were not present in the source bucket listing and are deliberately left pointing at their original Supabase URLs to avoid broken images: `product-images/categories/wear-it-1781032558106.jpg` and `product-images/hero/1780565881534.jpg`. Remove the corresponding exceptions in `src/lib/r2ObjectUrl.ts` once those objects are copied or the references are retired.
 
 For faster catalog delivery, the 53 legacy product images above 750 KB have WebP copies under `public/media/product-images/`. `server/optimized-product-images.json` maps their original R2-backed URLs to those static CDN paths; startup updates matching primary and gallery references only. The original objects remain untouched in R2, and future eligible uploads are compressed by the shared upload helper.
 
-## 1. Configure the Render API environment
+## 1. Configure Cloudflare Pages
 
-Set these server-only variables on the Node API service:
+Add an R2 bucket binding named `R2_BUCKET` for the `ushanga` bucket, then add these server-side Pages variables/secrets:
 
 ```env
 R2_ACCOUNT_ID=your_cloudflare_account_id
 R2_ACCESS_KEY_ID=your_r2_access_key_id
 R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
 R2_BUCKET_NAME=ushanga
+SUPABASE_URL=https://qokwavhqqqzjbmyshhfo.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
-The R2 API token needs **Object Read & Write** access to the `ushanga` bucket. Keep the access key and secret only in server-side environment variables (for example, Render); do not add them to the frontend `.env` or a `VITE_` variable.
+The R2 API token needs **Object Read & Write** access to the `ushanga` bucket. Keep the access key, secret, and Supabase service-role key only in server-side Pages secrets; do not add them to the frontend `.env` or a `VITE_` variable.
 
-The API exposes:
+The Pages Functions expose:
 
 - `POST /api/storage/upload-url` — authenticated users receive a URL valid for 10 minutes.
 - `GET /api/storage/public/<key>` — serves only allowlisted public-media prefixes from R2; `order-receipts` is explicitly excluded.
 - `POST /api/storage/delete` — authenticated users can delete objects they are authorized to manage.
 - `POST /api/storage/receipt-upload-url` — an order owner or admin receives a private upload URL and a seven-day signed download URL for that order's PDF receipt.
 
-Administrative folders (`product-images`, `site-images`, `custom-orders`, and `tribe-looks`) require a Neon user with the `admin` role. Review photos require a signed-in user. Receipts are restricted to the order owner or an admin.
+Administrative folders (`product-images`, `site-images`, `custom-orders`, and `tribe-looks`) require a Supabase user with the `admin` role. Review photos require a signed-in user. Receipts are restricted to the order owner or an admin.
 
 ## 2. Public image delivery and receipt privacy
 
@@ -82,8 +85,8 @@ Store `publicUrl` in Neon. The browser first calls the API for a signed URL, the
 
 ## 5. Verification checklist
 
-1. Set the four Render variables above and redeploy the API.
-2. Confirm `GET /api/health` returns `200`.
+1. Add the Pages binding and server-side variables above, then deploy the Pages project.
+2. Confirm `GET /api/storage/public/<known-key>` returns `200` for a migrated public object.
 3. Open a migrated `product-images/...` URL in the app; with the default configuration it should resolve through `/api/storage/public/`.
 4. Sign in through the site and upload an admin image. Confirm the browser sends `PUT` directly to the R2 signed URL and receives `200`.
 5. Confirm the returned image URL renders.

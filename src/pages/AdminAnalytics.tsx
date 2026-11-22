@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/dbClient'
-import { apiUrl } from '@/lib/apiBase'
+import { invokeFunction } from '@/lib/functions'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { TrendingUp, TrendingDown, ShoppingBag, Users, Wallet, Eye, Globe2, AlertTriangle, Trophy, Filter, Smartphone } from 'lucide-react'
 
@@ -123,8 +123,7 @@ export default function AdminAnalytics() {
         supabase.from('orders').select('id, created_at, status, total_amount, items').order('created_at', { ascending: true }),
         supabase.from('products').select('id, name, category, stock, low_stock_threshold, is_active'),
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        fetch(apiUrl(`/api/admin/analytics/visitors?days=${days}`), { credentials: 'include' })
-          .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Visitor numbers could not be loaded'); return j as VisitorReport })
+        invokeFunction<VisitorReport>('admin-analytics', { days })
           .catch(e => (e instanceof Error ? e : new Error('Visitor numbers could not be loaded'))),
       ])
       if (o.error) setError(o.error.message); else setOrders((o.data || []) as unknown as OrderRow[])

@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.handle-email-suppression]
 verify_jwt = false
+
+[functions.track-visitor]
+verify_jwt = false
+
+[functions.admin-customers]
+verify_jwt = true
+
+[functions.admin-analytics]
+verify_jwt = true

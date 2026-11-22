@@ -1,5 +1,6 @@
 import { getCookieConsent } from './cookieConsent'
-import { apiUrl } from './apiBase'
+
+const visitorEndpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/track-visitor`
 
 declare global {
   interface Window {
@@ -50,7 +51,7 @@ function sendFirstPartyPageView(path: string) {
     utmMedium: params.get('utm_medium'),
     utmCampaign: params.get('utm_campaign'),
   })
-  const endpoint = apiUrl('/api/analytics/visit')
+  const endpoint = visitorEndpoint
   try {
     // text/plain avoids a preflight when the storefront and Render API have different origins.
     const sent = navigator.sendBeacon?.(endpoint, new Blob([payload], { type: 'text/plain;charset=UTF-8' }))
@@ -67,7 +68,7 @@ function sendEngagement(path: string, durationSeconds: number) {
   if (duration <= lastEngagementSeconds) return
   lastEngagementSeconds = duration
   const payload = JSON.stringify({ eventType: 'engagement', sessionKey: visitorSessionKey(), path: path.split('?')[0] || '/', durationSeconds: duration })
-  const endpoint = apiUrl('/api/analytics/visit')
+  const endpoint = visitorEndpoint
   try {
     const sent = navigator.sendBeacon?.(endpoint, new Blob([payload], { type: 'text/plain;charset=UTF-8' }))
     if (sent) return

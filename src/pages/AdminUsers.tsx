@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Archive, Mail, Phone, RotateCcw, Search, Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { apiUrl } from '@/lib/apiBase'
+import { invokeFunction } from '@/lib/functions'
 
 interface Customer {
   user_id: string
@@ -16,17 +16,6 @@ interface Customer {
 
 type CustomerView = 'active' | 'archived' | 'all'
 
-async function adminApi<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    credentials: 'include',
-    headers: { 'content-type': 'application/json', ...(init.headers || {}) },
-  })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload.error || 'Admin request failed')
-  return payload as T
-}
-
 export default function AdminUsers() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,7 +28,7 @@ export default function AdminUsers() {
     setLoading(true)
     setLoadError(null)
     try {
-      const result = await adminApi<{ customers: Customer[] }>('/api/admin/customers')
+      const result = await invokeFunction<{ customers: Customer[] }>('admin-customers', { action: 'list' })
       setCustomers(result.customers || [])
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load customers'
@@ -73,10 +62,7 @@ export default function AdminUsers() {
 
     setBusyId(customer.user_id)
     try {
-      await adminApi(`/api/admin/customers/${encodeURIComponent(customer.user_id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ action }),
-      })
+      await invokeFunction('admin-customers', { action, id: customer.user_id })
       setCustomers(prev => prev.map(item => item.user_id === customer.user_id ? { ...item, is_active: !archived } : item))
       toast.success(archived ? 'Customer account archived' : 'Customer account restored')
     } catch (error) {
@@ -96,7 +82,7 @@ export default function AdminUsers() {
 
     setBusyId(customer.user_id)
     try {
-      await adminApi(`/api/admin/customers/${encodeURIComponent(customer.user_id)}`, { method: 'DELETE' })
+      await invokeFunction('admin-customers', { id: customer.user_id })
       setCustomers(prev => prev.filter(item => item.user_id !== customer.user_id))
       toast.success('Customer account removed and linked personal details anonymized')
     } catch (error) {
