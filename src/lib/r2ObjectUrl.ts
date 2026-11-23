@@ -18,7 +18,6 @@ const PUBLIC_MEDIA_PREFIXES = new Set([
 const PUBLIC_OBJECT_PATH = /^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/
 const PUBLIC_PROXY_PATH = /^\/api\/storage\/public\/([^/]+)\/(.+)$/
 const configuredPublicBase = String(import.meta.env.VITE_R2_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')
-const SUPABASE_FALLBACK_MARKER = '#supabase-fallback'
 
 function encodeKey(key: string): string {
   return key.split('/').map((segment) => encodeURIComponent(segment)).join('/')
@@ -40,13 +39,11 @@ export function migratedStorageUrl(value: string | null | undefined): string | u
   if (!value) return undefined
   let parsed: URL
   try {
-    parsed = new URL(value)
+    parsed = new URL(value, 'https://local.invalid')
   } catch {
     return value
   }
 
-  // Supabase fallback uploads keep their original URL; fragments are not sent in HTTP.
-  if (parsed.hash === SUPABASE_FALLBACK_MARKER) return value
   const match = parsed.pathname.match(PUBLIC_OBJECT_PATH)
   const proxyMatch = parsed.pathname.match(PUBLIC_PROXY_PATH)
   if (!match && !proxyMatch) return value
@@ -60,10 +57,12 @@ export function migratedStorageUrl(value: string | null | undefined): string | u
   } catch {
     return value
   }
-  if (!PUBLIC_MEDIA_PREFIXES.has(bucket)) return value
+  // Never return a Supabase Storage URL or an unknown storage bucket to the browser.
+  if (!PUBLIC_MEDIA_PREFIXES.has(bucket)) return undefined
 
   const rewritten = r2ObjectUrl(`${bucket}/${objectPath}`)
-  return rewritten ? `${rewritten}${parsed.search}${parsed.hash}` : value
+  if (!rewritten) return undefined
+  return `${rewritten}${parsed.search}`
 }
 
 /** Extract a storage key from a Supabase, API-proxy, or direct R2 media URL. */
@@ -74,7 +73,6 @@ export function storageKeyFromPublicUrl(value: string): string | null {
   } catch {
     return null
   }
-  const fallback = parsed.hash === SUPABASE_FALLBACK_MARKER
   const supabaseMatch = parsed.pathname.match(PUBLIC_OBJECT_PATH)
   if (supabaseMatch) {
     let bucket: string
@@ -86,7 +84,7 @@ export function storageKeyFromPublicUrl(value: string): string | null {
       return null
     }
     if (!PUBLIC_MEDIA_PREFIXES.has(bucket)) return null
-    return fallback ? `${objectPath}${SUPABASE_FALLBACK_MARKER}` : `${bucket}/${objectPath}`
+    return `${bucket}/${objectPath}`
   }
 
   const proxyMatch = parsed.pathname.match(/^\/api\/storage\/public\/(.+)$/)

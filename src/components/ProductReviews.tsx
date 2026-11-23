@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/dbClient'
 import { getCurrentUser, type AuthUser } from '@/lib/auth'
 import { uploadToR2 } from '@/lib/storage'
+import { migrateStorageUrls, migratedStorageUrl } from '@/lib/r2ObjectUrl'
 import { Star, BadgeCheck, Upload, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -72,7 +73,7 @@ export function ProductReviews({ productId, onReviewsChange }: { productId: stri
         .eq('product_id', productId)
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
-      const approvedReviews = (data as ProductReview[]) || []
+      const approvedReviews = migrateStorageUrls((data as ProductReview[]) || [])
       setReviews(approvedReviews)
       onReviewsChange?.(productId, approvedReviews)
 
@@ -273,9 +274,15 @@ export function ProductReviews({ productId, onReviewsChange }: { productId: stri
               {r.photo_urls && r.photo_urls.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">
                   {r.photo_urls.map((url, i) => (
-                    <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 rounded overflow-hidden border border-border hover:opacity-80 transition-opacity">
-                      <img src={url} alt={`Review photo ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
-                    </a>
+                    (() => {
+                      const r2Url = migratedStorageUrl(url)
+                      if (!r2Url) return null
+                      return (
+                        <a key={i} href={r2Url} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 rounded overflow-hidden border border-border hover:opacity-80 transition-opacity">
+                          <img src={r2Url} alt={`Review photo ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                        </a>
+                      )
+                    })()
                   ))}
                 </div>
               )}
