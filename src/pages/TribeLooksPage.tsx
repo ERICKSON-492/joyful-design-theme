@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Camera, Upload, Loader2, CheckCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { fetchPublicTable } from '@/lib/publicContent'
+import { migratedStorageUrl } from '@/lib/r2ObjectUrl'
 import { useSEO } from '@/hooks/useSEO'
 import { getCurrentUser } from '@/lib/auth'
 import { uploadToR2 } from '@/lib/storage'
@@ -178,7 +179,7 @@ export default function TribeLooksPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 max-w-5xl mx-auto">
               {allLooks.map((look, i) => (
                 <div key={i} className="group relative overflow-hidden rounded-lg">
-                  <img src={look.image} alt={`${look.name} wearing ${look.piece}`}
+                  <img src={migratedStorageUrl(look.image) || look.image} alt={`${look.name} wearing ${look.piece}`}
                     className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                     <p className="text-white font-semibold text-sm">{look.name}</p>
