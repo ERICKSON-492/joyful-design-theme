@@ -180,7 +180,9 @@ export default function TribeLooksPage() {
               {allLooks.map((look, i) => (
                 <div key={i} className="group relative overflow-hidden rounded-lg">
                   <img src={migratedStorageUrl(look.image) || look.image} alt={`${look.name} wearing ${look.piece}`}
-                    className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                    className="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-105"
+                    width={600} height={600} loading={i < 3 ? 'eager' : 'lazy'} decoding="async"
+                    fetchPriority={i < 3 ? 'high' : 'auto'} />
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                     <p className="text-white font-semibold text-sm">{look.name}</p>
                     {look.piece && <p className="text-white/80 text-xs">{look.piece}</p>}

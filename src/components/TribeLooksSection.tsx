@@ -99,7 +99,9 @@ export function TribeLooksSection() {
                   src={look.image}
                   alt={`${look.name} wearing ${look.piece}`}
                   className="w-full aspect-[3/4] object-cover transition-transform duration-700 group-hover:scale-110"
-                  loading="lazy"
+                  loading={i < 4 ? 'eager' : 'lazy'}
+                  decoding="async"
+                  fetchPriority={i < 4 ? 'high' : 'auto'}
                   width={600}
                   height={800}
                 />
