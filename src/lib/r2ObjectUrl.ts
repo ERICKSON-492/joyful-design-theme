@@ -16,6 +16,7 @@ const PUBLIC_MEDIA_PREFIXES = new Set([
 ])
 
 const PUBLIC_OBJECT_PATH = /^\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/
+const PUBLIC_PROXY_PATH = /^\/api\/storage\/public\/([^/]+)\/(.+)$/
 const configuredPublicBase = String(import.meta.env.VITE_R2_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')
 const SUPABASE_FALLBACK_MARKER = '#supabase-fallback'
 
@@ -47,13 +48,15 @@ export function migratedStorageUrl(value: string | null | undefined): string | u
   // Supabase fallback uploads keep their original URL; fragments are not sent in HTTP.
   if (parsed.hash === SUPABASE_FALLBACK_MARKER) return value
   const match = parsed.pathname.match(PUBLIC_OBJECT_PATH)
-  if (!match) return value
+  const proxyMatch = parsed.pathname.match(PUBLIC_PROXY_PATH)
+  if (!match && !proxyMatch) return value
 
   let bucket: string
   let objectPath: string
   try {
-    bucket = decodeURIComponent(match[1])
-    objectPath = match[2].split('/').map((part) => decodeURIComponent(part)).join('/')
+    const source = match || proxyMatch!
+    bucket = decodeURIComponent(source[1])
+    objectPath = source[2].split('/').map((part) => decodeURIComponent(part)).join('/')
   } catch {
     return value
   }
