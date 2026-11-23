@@ -27,7 +27,8 @@ export async function onRequest(context) {
       return responses.json({ error: 'Use the receipt upload endpoint' }, 400, cors(request))
     }
 
-    const uploadUrl = await presignedUrl(env, key, 'PUT', contentType, 600)
+    const cacheControl = 'public, max-age=31536000, immutable'
+    const uploadUrl = await presignedUrl(env, key, 'PUT', contentType, 600, cacheControl)
     return responses.json({ uploadUrl, key, expiresIn: 600 }, 200, cors(request))
   } catch (error) {
     return responses.json({ error: error instanceof Error ? error.message : 'Could not prepare upload' }, 500, cors(request))

@@ -198,7 +198,7 @@ export default function ShopPage() {
             <p className="text-center text-muted-foreground py-16">No products found. Check back soon!</p>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
-              {products.map((product) => (
+              {products.map((product, index) => (
                 <div key={product.id} className="group">
                   <Link to={productPath(product)} className="product-image-frame block mb-4">
                     {product.image_url && !failedImages.has(product.id) ? (
@@ -206,7 +206,8 @@ export default function ShopPage() {
                         srcSet={productSrcSet(product.image_url)}
                         sizes={GRID_SIZES}
                         width={400} height={400}
-                        className="product-image" loading="lazy" decoding="async"
+                        className="product-image" loading={index < 4 ? 'eager' : 'lazy'} decoding="async"
+                        fetchPriority={index < 4 ? 'high' : 'auto'}
                         onLoad={(e) => e.currentTarget.classList.add('product-image-loaded')}
                         onError={(e) => {
                           handleImageFallback(e, product.image_url)

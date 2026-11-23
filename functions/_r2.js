@@ -36,13 +36,16 @@ export function r2Client(env) {
   }
 }
 
-export async function presignedUrl(env, key, method, contentType, expiresIn = 600) {
+export async function presignedUrl(env, key, method, contentType, expiresIn = 600, cacheControl) {
   const { client, endpoint } = r2Client(env)
   const url = `${endpoint}/${key.split('/').map(encodeURIComponent).join('/')}`
+  const headers = {}
+  if (contentType) headers['content-type'] = contentType
+  if (cacheControl) headers['cache-control'] = cacheControl
   const signed = await client.sign(url, {
     method,
     aws: { signQuery: true, expires: expiresIn },
-    headers: contentType ? { 'content-type': contentType } : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
   })
   return signed.url
 }

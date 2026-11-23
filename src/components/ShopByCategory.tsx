@@ -103,7 +103,9 @@ export function ShopByCategory() {
                   src={dbImages[cat.dbKey]}
                   alt={cat.name}
                   className={isBanner ? 'w-full h-auto block md:h-full md:object-cover' : 'w-full h-full object-cover'}
-                  loading="lazy"
+                  loading={i === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
+                  fetchPriority={i === 0 ? 'high' : 'auto'}
                   width={600}
                   height={600}
                   whileHover={{ scale: 1.08 }}

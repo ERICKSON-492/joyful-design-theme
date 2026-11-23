@@ -7,8 +7,10 @@ export interface R2UploadResult {
   publicUrl: string
 }
 
-const MAX_IMAGE_UPLOAD_BYTES = 1_500_000
-const MAX_IMAGE_EDGE = 1800
+// Keep public catalog media small enough for mobile connections. Existing R2
+// originals are not rewritten automatically; every new upload is optimized.
+const MAX_IMAGE_UPLOAD_BYTES = 0
+const MAX_IMAGE_EDGE = 1400
 const OPTIMIZABLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
 
 async function optimizeImageUpload(file: Blob): Promise<Blob> {
@@ -74,7 +76,10 @@ export async function uploadToR2(folder: string, file: Blob, key: string, conten
   try {
     uploadResponse = await fetch(uploadUrl, {
       method: 'PUT',
-      headers: { 'content-type': contentType },
+      headers: {
+        'content-type': contentType,
+        'cache-control': 'public, max-age=31536000, immutable',
+      },
       body: uploadFile,
     })
   } catch (error) { throw error }
