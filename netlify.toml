@@ -8,6 +8,18 @@
   force = true
 
 [[redirects]]
+  from = "/books"
+  to = "https://ushangabooks-m4jy4icc.manus.space/books"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/books/*"
+  to = "https://ushangabooks-m4jy4icc.manus.space/books/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
