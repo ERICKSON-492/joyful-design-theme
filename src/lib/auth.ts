@@ -78,6 +78,10 @@ export const logout = async () => {
 
 export const loginWithGoogle = async (returnTo = '/') => {
   const safePath = returnTo.startsWith('/') && !returnTo.startsWith('//') && !returnTo.includes('\\') ? returnTo : '/'
+  if (window.location.hostname === 'www.ushangachronicles.com') {
+    window.location.assign(`https://ushangachronicles.com/auth?return_to=${encodeURIComponent(safePath)}`)
+    return
+  }
   try {
     sessionStorage.setItem('ushanga-auth-return-to', safePath)
   } catch {
