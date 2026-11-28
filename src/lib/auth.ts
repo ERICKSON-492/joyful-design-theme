@@ -77,13 +77,21 @@ export const logout = async () => {
 }
 
 export const loginWithGoogle = async (returnTo = '/') => {
-  const safePath = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/'
+  const safePath = returnTo.startsWith('/') && !returnTo.startsWith('//') && !returnTo.includes('\\') ? returnTo : '/'
+  try {
+    sessionStorage.setItem('ushanga-auth-return-to', safePath)
+  } catch {
+    // Continue with the provider redirect even when sessionStorage is unavailable.
+  }
   const redirectTo = `${window.location.origin}${safePath}`
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo },
   })
-  if (error) throw error
+  if (error) {
+    try { sessionStorage.removeItem('ushanga-auth-return-to') } catch {}
+    throw error
+  }
 }
 
 export const requestPasswordReset = async (email: string) => {

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, useLocation } from 'react-router-dom'
+import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom'
 import { Navbar } from './components/Navbar'
 import { TopBar } from './components/TopBar'
 import { Footer } from './components/Footer'
@@ -7,6 +7,7 @@ import { AnimatedRoutes } from './components/AnimatedRoutes'
 import { CartProvider } from './contexts/CartContext'
 import { CurrencyProvider } from './contexts/CurrencyContext'
 import { Toaster } from 'sonner'
+import { supabase } from './integrations/supabase/client'
 
 const ChatWidget = lazy(() => import('./components/ChatWidget').then(m => ({ default: m.ChatWidget })))
 const CartDrawer = lazy(() => import('./components/CartDrawer').then(m => ({ default: m.CartDrawer })))
@@ -52,8 +53,37 @@ function ScrollToTop() {
 
 function AppContent() {
   const location = useLocation()
+  const navigate = useNavigate()
   const isAdmin = location.pathname.startsWith('/admin')
   const isBooks = location.pathname.startsWith('/books')
+
+  useEffect(() => {
+    let pending: string | null = null
+    try { pending = sessionStorage.getItem('ushanga-auth-return-to') } catch {}
+    if (!pending) return
+
+    let target: URL
+    try {
+      if (!pending.startsWith('/') || pending.startsWith('//') || pending.includes('\\')) throw new Error('invalid return path')
+      target = new URL(pending, window.location.origin)
+      if (target.origin !== window.location.origin || target.pathname === '/auth') throw new Error('invalid return path')
+    } catch {
+      try { sessionStorage.removeItem('ushanga-auth-return-to') } catch {}
+      return
+    }
+
+    let cancelled = false
+    void (async () => {
+      const { data } = await supabase.auth.getSession()
+      if (cancelled || !data.session) return
+      const targetPath = `${target.pathname}${target.search}${target.hash}`
+      const currentPath = `${location.pathname}${location.search}${location.hash}`
+      try { sessionStorage.removeItem('ushanga-auth-return-to') } catch {}
+      if (currentPath !== targetPath) navigate(targetPath, { replace: true })
+    })()
+
+    return () => { cancelled = true }
+  }, [location.hash, location.pathname, location.search, navigate])
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col isolation-isolate">
