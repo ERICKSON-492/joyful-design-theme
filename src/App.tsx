@@ -53,15 +53,16 @@ function ScrollToTop() {
 function AppContent() {
   const location = useLocation()
   const isAdmin = location.pathname.startsWith('/admin')
+  const isBooks = location.pathname.startsWith('/books')
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col isolation-isolate">
       <ScrollToTop />
-      {!isAdmin && <TopBar />}
-      {!isAdmin && <Navbar />}
+      {!isAdmin && !isBooks && <TopBar />}
+      {!isAdmin && !isBooks && <Navbar />}
       <main className="flex-1 flex flex-col min-h-[75vh] w-full relative"><AnimatedRoutes /></main>
-      {!isAdmin && <Footer />}
-      {!isAdmin && <DeferredPublicFeatures />}
+      {!isAdmin && !isBooks && <Footer />}
+      {!isAdmin && !isBooks && <DeferredPublicFeatures />}
       <Toaster position="top-center" richColors closeButton />
     </div>
   )

@@ -37,7 +37,15 @@ export default function Catalogue() {
   const copyCustomerLink = async () => {
     const token = shareQuery.data?.token ?? (await shareQuery.refetch()).data?.token;
     if (!token) return;
-    await navigator.clipboard?.writeText(`${window.location.origin}${booksPath("catalogue/view")}?token=${token}`);
+    const requestedOrigin = new URLSearchParams(window.location.search).get("shareOrigin");
+    let shareOrigin = window.location.origin;
+    try {
+      const parsed = requestedOrigin ? new URL(requestedOrigin) : null;
+      if (parsed && (parsed.protocol === "https:" || parsed.hostname === "localhost")) shareOrigin = parsed.origin;
+    } catch {
+      // Fall back to the current origin when an embed hint is invalid.
+    }
+    await navigator.clipboard?.writeText(`${shareOrigin}${booksPath("catalogue/view")}?token=${token}`);
     setCustomerCopied(true);
     window.setTimeout(() => setCustomerCopied(false), 1800);
   };

@@ -44,6 +44,7 @@ const UnsubscribePage = lazy(() => import('../pages/UnsubscribePage'))
 const FAQPage = lazy(() => import('../pages/FAQPage'))
 const PrivacyPolicyPage = lazy(() => import('../pages/PrivacyPolicyPage'))
 const ShippingReturnsPage = lazy(() => import('../pages/ShippingReturnsPage'))
+const BooksPortalPage = lazy(() => import('../pages/BooksPortalPage'))
 
 function RouteLoader() {
   return (
@@ -101,6 +102,7 @@ export function AnimatedRoutes() {
     <Suspense fallback={<RouteLoader />}>
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
+          <Route path="/books/*" element={<BooksPortalPage />} />
           <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
           <Route path="/about-us" element={<PageTransition><TheChronicle /></PageTransition>} />
           <Route path="/shop" element={<PageTransition><ShopPage /></PageTransition>} />
