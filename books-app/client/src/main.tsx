@@ -7,9 +7,11 @@ import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
 import { booksApiPath } from "./paths";
+import { getStorefrontAccessToken, setupStorefrontAuthRelay } from "./storefrontAuth";
 import "./index.css";
 
 const queryClient = new QueryClient();
+setupStorefrontAuthRelay();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
@@ -44,6 +46,11 @@ const trpcClient = trpc.createClient({
       url: booksApiPath("trpc"),
       transformer: superjson,
       headers() {
+        const storefrontToken = getStorefrontAccessToken();
+        if (storefrontToken) {
+          return { Authorization: `Bearer ${storefrontToken}` };
+        }
+
         // Preview auto-login fallback: when the browser blocks iframe cookies
         // (Safari ITP / private browsing / WebView), the runtime mirrors the
         // session into sessionStorage so we can forward it as a Bearer token.

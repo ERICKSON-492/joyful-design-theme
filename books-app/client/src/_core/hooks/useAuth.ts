@@ -1,7 +1,8 @@
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { isUsingStorefrontAuth, requestStorefrontLogout, storefrontAuthReady } from "@/storefrontAuth";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -15,10 +16,16 @@ export function useAuth(options?: UseAuthOptions) {
   // desync it from an in-flight login's `state`.
   const { redirectOnUnauthenticated = false, redirectPath } = options ?? {};
   const utils = trpc.useUtils();
+  const [authRelayReady, setAuthRelayReady] = useState(false);
+
+  useEffect(() => {
+    storefrontAuthReady().then(() => setAuthRelayReady(true));
+  }, []);
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
+    enabled: authRelayReady,
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -28,6 +35,13 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logout = useCallback(async () => {
+    if (isUsingStorefrontAuth()) {
+      requestStorefrontLogout();
+      utils.auth.me.setData(undefined, null);
+      await utils.auth.me.invalidate();
+      return;
+    }
+
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {

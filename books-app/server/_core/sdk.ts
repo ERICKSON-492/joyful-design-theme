@@ -258,6 +258,9 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<AuthenticatedUser> {
+    const storefrontUser = await this.authenticateStorefrontUser(req);
+    if (storefrontUser) return storefrontUser;
+
     // 1. Prefer the session cookie (regular OAuth login).
     const cookies = this.parseCookies(req.headers.cookie);
     let sessionToken = cookies.get(COOKIE_NAME);
@@ -324,6 +327,50 @@ class SDKServer {
     });
 
     return user;
+  }
+
+  private async authenticateStorefrontUser(req: Request): Promise<AuthenticatedUser | null> {
+    const authHeader = req.headers.authorization;
+    const accessToken = typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7).trim()
+      : "";
+    const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, "");
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!accessToken || !supabaseUrl || !serviceRoleKey) return null;
+
+    try {
+      const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      if (!response.ok) return null;
+      const user = await response.json() as {
+        id?: string;
+        email?: string | null;
+        user_metadata?: Record<string, unknown>;
+        app_metadata?: Record<string, unknown>;
+      };
+      if (!user.id) return null;
+
+      const role = user.app_metadata?.role === "admin" || user.user_metadata?.role === "admin" ? "admin" : "user";
+      const now = new Date();
+      return {
+        id: 0,
+        openId: `supabase:${user.id}`,
+        name: (user.user_metadata?.full_name as string | undefined) || (user.user_metadata?.name as string | undefined) || null,
+        email: user.email ?? null,
+        loginMethod: "supabase",
+        role,
+        createdAt: now,
+        updatedAt: now,
+        lastSignedIn: now,
+      } as AuthenticatedUser;
+    } catch (error) {
+      console.warn("[Auth] Storefront Supabase token validation failed:", error instanceof Error ? error.message : "unknown error");
+      return null;
+    }
   }
 }
 
