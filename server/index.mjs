@@ -119,6 +119,10 @@ async function authUser(req) {
 }
 async function storefrontAdminForSupabaseUser(user) {
   if (!user) return false
+  if (supabaseAdmin) {
+    const { data, error } = await supabaseAdmin.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle()
+    if (!error && data) return true
+  }
   const byId = await pool.query('SELECT 1 FROM public.admin_users WHERE user_id=$1', [user.id])
   if (byId.rowCount) return true
   if (!user.email) return false
