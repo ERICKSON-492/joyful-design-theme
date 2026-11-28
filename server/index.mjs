@@ -117,13 +117,20 @@ async function authUser(req) {
   const { data } = await supabaseAdmin.auth.getUser(token)
   return data.user || null
 }
+async function storefrontAdminForSupabaseUser(user) {
+  if (!user) return false
+  const byId = await pool.query('SELECT 1 FROM public.admin_users WHERE user_id=$1', [user.id])
+  if (byId.rowCount) return true
+  if (!user.email) return false
+  const byEmail = await pool.query("SELECT 1 FROM auth_users WHERE lower(email)=lower($1) AND (role='admin' OR EXISTS (SELECT 1 FROM public.admin_users a WHERE a.user_id=auth_users.id))", [user.email])
+  return Boolean(byEmail.rowCount)
+}
 async function requireAdmin(req) {
   const sessionUser = await neonUser(req)
   if (sessionUser?.role === 'admin') return sessionUser
   const user = await authUser(req)
   if (!user) return null
-  const { rowCount } = await pool.query('SELECT 1 FROM public.admin_users WHERE user_id=$1', [user.id])
-  return rowCount ? user : null
+  return await storefrontAdminForSupabaseUser(user) ? user : null
 }
 function queryFilters(url) {
   const p = url.searchParams
@@ -166,7 +173,14 @@ async function handle(req, res, url) {
     if (token) await pool.query('UPDATE public.fcm_tokens SET enabled=false,last_seen_at=now() WHERE token=$1', [token])
     return json(res, 204)
   }
-  if (req.method === 'GET' && url.pathname === '/api/auth/me') { const user = await neonUser(req); return authJson(res, 200, { user: user ? safeUser(user) : null }) }
+  if (req.method === 'GET' && url.pathname === '/api/auth/me') {
+    const sessionUser = await neonUser(req)
+    if (sessionUser) return authJson(res, 200, { user: safeUser(sessionUser) })
+    const supabaseUser = await authUser(req)
+    if (!supabaseUser) return authJson(res, 200, { user: null })
+    const isAdmin = supabaseUser.app_metadata?.role === 'admin' || supabaseUser.user_metadata?.role === 'admin' || await storefrontAdminForSupabaseUser(supabaseUser)
+    return authJson(res, 200, { user: { id: supabaseUser.id, email: supabaseUser.email || '', displayName: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || null, role: isAdmin ? 'admin' : 'user' } })
+  }
   if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
     const b = await body(req); const email = String(b.email || '').trim().toLowerCase(); const password = String(b.password || ''); const displayName = String(b.displayName || b.name || '').trim()
     if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 6 || password.length > 128) return authJson(res, 400, { error: 'Use a valid email and a password of at least 6 characters.' })

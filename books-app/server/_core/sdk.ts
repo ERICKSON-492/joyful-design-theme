@@ -354,7 +354,19 @@ class SDKServer {
       };
       if (!user.id) return null;
 
-      const role = user.app_metadata?.role === "admin" || user.user_metadata?.role === "admin" ? "admin" : "user";
+      let role: "admin" | "user" = user.app_metadata?.role === "admin" || user.user_metadata?.role === "admin" ? "admin" : "user";
+      const storefrontUrl = (process.env.STOREFRONT_URL || "https://ushangachronicles.com").replace(/\/$/, "");
+      try {
+        const roleResponse = await fetch(`${storefrontUrl}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (roleResponse.ok) {
+          const rolePayload = await roleResponse.json() as { user?: { role?: string } | null };
+          if (rolePayload.user?.role === "admin") role = "admin";
+        }
+      } catch (error) {
+        console.warn("[Auth] Storefront admin-role lookup failed:", error instanceof Error ? error.message : "unknown error");
+      }
       const now = new Date();
       return {
         id: 0,
