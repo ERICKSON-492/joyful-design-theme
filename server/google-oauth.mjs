@@ -57,12 +57,23 @@ function cookieValue(req, name) {
   return null
 }
 
-function setOAuthCookie(name, value, maxAge = OAUTH_COOKIE_MAX_AGE) {
-  return `${name}=${encodeURIComponent(value)}; Path=${GOOGLE_CALLBACK_PATH}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`
+function sharedCookieDomain(siteOrigin) {
+  try {
+    const hostname = new URL(siteOrigin).hostname
+    return hostname === 'ushangachronicles.com' || hostname === 'www.ushangachronicles.com'
+      ? '; Domain=.ushangachronicles.com'
+      : ''
+  } catch {
+    return ''
+  }
 }
 
-function clearOAuthCookies() {
-  return OAUTH_COOKIE_NAMES.map(name => setOAuthCookie(name, '', 0))
+function setOAuthCookie(name, value, maxAge = OAUTH_COOKIE_MAX_AGE, domain = '') {
+  return `${name}=${encodeURIComponent(value)}; Path=${GOOGLE_CALLBACK_PATH}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax${domain}`
+}
+
+function clearOAuthCookies(domain = '') {
+  return OAUTH_COOKIE_NAMES.map(name => setOAuthCookie(name, '', 0, domain))
 }
 
 function sameSecret(left, right) {
@@ -174,16 +185,17 @@ export function createGoogleOAuthRoutes({
         prompt: 'select_account',
       })
       const returnCookie = Buffer.from(returnTo).toString('base64url')
+      const cookieDomain = sharedCookieDomain(config.siteOrigin)
       redirect(res, authorizationUrl, [
-        setOAuthCookie(STATE_COOKIE, state),
-        setOAuthCookie(NONCE_COOKIE, nonce),
-        setOAuthCookie(VERIFIER_COOKIE, codeVerifier),
-        setOAuthCookie(RETURN_TO_COOKIE, returnCookie),
+        setOAuthCookie(STATE_COOKIE, state, OAUTH_COOKIE_MAX_AGE, cookieDomain),
+        setOAuthCookie(NONCE_COOKIE, nonce, OAUTH_COOKIE_MAX_AGE, cookieDomain),
+        setOAuthCookie(VERIFIER_COOKIE, codeVerifier, OAUTH_COOKIE_MAX_AGE, cookieDomain),
+        setOAuthCookie(RETURN_TO_COOKIE, returnCookie, OAUTH_COOKIE_MAX_AGE, cookieDomain),
       ])
       return true
     }
 
-    const clearCookies = clearOAuthCookies()
+    const clearCookies = clearOAuthCookies(sharedCookieDomain(config.siteOrigin))
     const returnTo = decodeReturnTo(cookieValue(req, RETURN_TO_COOKIE))
     const state = url.searchParams.get('state')
     if (!sameSecret(state, cookieValue(req, STATE_COOKIE))) {

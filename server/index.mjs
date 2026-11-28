@@ -23,6 +23,14 @@ const supabaseAdmin = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_R
 const port = Number(process.env.PORT || 3001)
 const sessionTtlSeconds = Number(process.env.SESSION_TTL_SECONDS || 2592000)
 const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'ushanga_session'
+const sharedCookieDomain = (() => {
+  try {
+    const hostname = new URL(String(process.env.PUBLIC_SITE_URL || 'https://ushangachronicles.com').split(',')[0].trim()).hostname
+    return hostname === 'ushangachronicles.com' || hostname === 'www.ushangachronicles.com' ? '; Domain=.ushangachronicles.com' : ''
+  } catch {
+    return ''
+  }
+})()
 const r2 = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME
   ? new S3Client({ region: 'auto', endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY } })
   : null
@@ -60,7 +68,7 @@ const tokenHash = (token) => crypto.createHash('sha256').update(token).digest('h
 const safeUser = (u) => ({ id: u.id, email: u.email, displayName: u.display_name, role: u.role })
 // The browser app is served from a different origin than this API, so the
 // session cookie must be SameSite=None (which requires Secure).
-const cookie = (token, maxAge = sessionTtlSeconds) => `${sessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=None; Partitioned; Path=/; Max-Age=${maxAge}`
+const cookie = (token, maxAge = sessionTtlSeconds) => `${sessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=None; Partitioned; Path=/; Max-Age=${maxAge}${sharedCookieDomain}`
 
 const extraOrigins = String(process.env.ALLOWED_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean)
 function allowedOrigin(origin) {
